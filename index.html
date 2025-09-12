@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Life RPG</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='100%25' height='100%25' fill='%230a7cff'/%3E%3Ctext x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-size='280' fill='white'%3EL%3C/text%3E%3C/svg%3E" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; }
+    body { -webkit-tap-highlight-color: transparent; }
+    .tab { display: none; }
+    .tab.active { display: block; }
+    /* Hinweis: @apply wird im CDN-Setup nicht unterstützt. Daher hier nur minimaler Custom-CSS. */
+    .btn { border-radius: 1rem; padding: .5rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); border: 1px solid rgb(226 232 240); }
+    .card { border-radius: 1rem; padding: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); border: 1px solid rgb(226 232 240); background: #fff; }
+    .chip { font-size: .75rem; padding: .125rem .5rem; border-radius: 9999px; background: rgb(241 245 249); }
+    .input { width: 100%; border-radius: .75rem; border: 1px solid rgb(203 213 225); padding: .5rem .75rem; }
+    .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background:#111827; color:#fff; padding:.5rem .75rem; border-radius:.75rem; font-size:.875rem; opacity:0; transition:opacity .2s ease; z-index:50; }
+    .toast.show { opacity: .95; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-xl mx-auto min-h-full flex flex-col">
+    <!-- Header -->
+    <header class="px-4 pt-6 pb-3 sticky top-0 bg-slate-50/80 backdrop-blur z-10">
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Life RPG</h1>
+        <button id="btnExport" class="btn">Export</button>
+      </div>
+      <p class="text-sm text-slate-500 mt-1">Gamified Alltag: Punkte → Level → Belohnungen → Sparschwein 💰</p>
+    </header>
+
+    <!-- Tabs -->
+    <main class="flex-1 px-4 pb-28 space-y-4">
+      <!-- Dashboard -->
+      <section id="tab-dashboard" class="tab active space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="card">
+            <div class="text-xs text-slate-500">Gesamtpunkte</div>
+            <div class="text-3xl font-semibold" id="totalPoints">0</div>
+          </div>
+          <div class="card">
+            <div class="text-xs text-slate-500">Aktuelles Level</div>
+            <div class="text-3xl font-semibold" id="currentLevel">1</div>
+          </div>
+          <div class="card">
+            <div class="text-xs text-slate-500">Sparstand (€)</div>
+            <div class="text-3xl font-semibold" id="savingsTotal">0.00</div>
+          </div>
+          <div class="card">
+            <div class="text-xs text-slate-500">Woche (Mo–So)</div>
+            <div class="text-3xl font-semibold" id="weekPoints">0</div>
+          </div>
+        </div>
+
+        <div class="card space-y-2">
+          <div class="font-semibold">Schnell hinzufügen</div>
+          <div class="flex gap-2">
+            <select id="quickQuest" class="input"></select>
+            <button id="btnQuickAdd" class="btn bg-blue-600 text-white border-blue-600">+ Log</button>
+          </div>
+          <div class="text-xs text-slate-500">Heute wird mit heutigem Datum geloggt. Bonus greift, wenn der Event-Quest gewählt ist.</div>
+        </div>
+
+        <div class="card space-y-3">
+          <div class="font-semibold">Achievements</div>
+          <div id="achievements" class="grid grid-cols-1 gap-2"></div>
+        </div>
+
+        <div class="card space-y-3">
+          <div class="font-semibold">Rewards</div>
+          <div id="rewards" class="grid grid-cols-1 gap-2"></div>
+        </div>
+      </section>
+
+      <!-- Log -->
+      <section id="tab-log" class="tab space-y-4">
+        <div class="card space-y-3">
+          <div class="font-semibold">Neuer Eintrag</div>
+          <div class="grid grid-cols-1 gap-3">
+            <input type="date" id="logDate" class="input" />
+            <select id="logQuest" class="input"></select>
+            <input type="text" id="logNote" class="input" placeholder="Notiz (optional)" />
+            <button id="btnAddEntry" class="btn bg-blue-600 text-white border-blue-600">Eintragen</button>
+          </div>
+          <div class="text-xs text-slate-500">Punkte & Bonus werden automatisch berechnet.</div>
+        </div>
+
+        <div class="card">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">Einträge</div>
+            <button id="btnClearLog" class="btn">Log leeren</button>
+          </div>
+          <div id="logList" class="divide-y divide-slate-200"></div>
+        </div>
+      </section>
+
+      <!-- Catalog -->
+      <section id="tab-catalog" class="tab space-y-4">
+        <div class="card space-y-3">
+          <div class="font-semibold">Neue Quest</div>
+          <div class="grid grid-cols-1 gap-2">
+            <input id="qName" class="input" placeholder="Name (z. B. 'Kein Essen bestellt (heute)')" />
+            <div class="grid grid-cols-2 gap-2">
+              <input id="qCategory" class="input" placeholder="Kategorie (z. B. Gesundheit)" />
+              <select id="qType" class="input">
+                <option>1%</option>
+                <option>Bigger</option>
+                <option>Special</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="qPoints" type="number" class="input" placeholder="Basis-Punkte" />
+              <select id="qBoss" class="input"><option>Nein</option><option>Ja</option></select>
+            </div>
+            <input id="qDesc" class="input" placeholder="Beschreibung (optional)" />
+            <button id="btnAddQuest" class="btn bg-blue-600 text-white border-blue-600">Zur Liste hinzufügen</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">Quest-Katalog</div>
+            <button id="btnClearCatalog" class="btn">Katalog zurücksetzen</button>
+          </div>
+          <div id="catalogList" class="divide-y divide-slate-200"></div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="tab-settings" class="tab space-y-4">
+        <div class="card space-y-2">
+          <div class="font-semibold">Allgemein</div>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-sm">€ pro Punkt<input id="sEuro" type="number" step="0.01" class="input" /></label>
+            <label class="text-sm">Event-Bonus<input id="sEventBonus" type="number" class="input" /></label>
+          </div>
+          <label class="text-sm">Aktiver Event-Quest<input id="sEventQuest" class="input" placeholder="exakt wie im Katalog" /></label>
+        </div>
+        <div class="card space-y-2">
+          <div class="font-semibold">Level-Progression</div>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-sm">Basis-Inkrement<input id="sBaseInc" type="number" class="input" /></label>
+            <label class="text-sm">Steigerung (%)<input id="sGrowth" type="number" step="0.01" class="input" /></label>
+          </div>
+          <div id="levelsPreview" class="text-xs text-slate-600"></div>
+        </div>
+        <div class="card space-y-2">
+          <div class="font-semibold">Rewards</div>
+          <div id="rewardsEditor" class="space-y-2"></div>
+          <button id="btnAddReward" class="btn">+ Reward</button>
+        </div>
+        <div class="card space-y-2">
+          <div class="font-semibold">Backup</div>
+          <div class="flex gap-2">
+            <button id="btnImport" class="btn">Import</button>
+            <button id="btnWipe" class="btn">Alles löschen</button>
+          </div>
+          <input type="file" id="fileImport" accept="application/json" class="hidden" />
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Nav -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200">
+      <div class="max-w-xl mx-auto grid grid-cols-4 text-center">
+        <button data-tab="dashboard" class="py-3 font-medium text-blue-600">Dashboard</button>
+        <button data-tab="log" class="py-3 font-medium">Log</button>
+        <button data-tab="catalog" class="py-3 font-medium">Katalog</button>
+        <button data-tab="settings" class="py-3 font-medium">Einstellungen</button>
+      </div>
+    </nav>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script>
+  // --------- Helpers & Ready ---------
+  const el = sel => document.querySelector(sel);
+  const els = sel => Array.from(document.querySelectorAll(sel));
+  const on = (sel, evt, fn) => { const node = el(sel); if (!node) { console.warn('Missing element for', sel); return; } node.addEventListener(evt, fn); };
+  const fmt = n => new Intl.NumberFormat('de-DE').format(n);
+  const fmtE = n => new Intl.NumberFormat('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const ready = (fn) => { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); };
+  const toast = (msg) => { const t = el('#toast'); if(!t) return; t.textContent = msg; t.hidden = false; t.classList.add('show'); setTimeout(()=>{ t.classList.remove('show'); t.hidden = true; }, 1800); };
+
+  // --------- State & Storage ---------
+  const SKEY = 'lifeRPG_v1';
+  const defaultState = {
+    settings: { euroPerPoint: 0.1, eventQuest: 'Kein Essen bestellt (heute)', eventBonus: 5, baseInc: 100, growth: 0.10 },
+    catalog: [
+      { name: 'Prepmymeal gegessen', category: 'Gesundheit', type: '1%', points: 5, boss: false, desc: 'Geplante gesunde Mahlzeit' },
+      { name: 'Kein Essen bestellt (heute)', category: 'Gesundheit', type: '1%', points: 10, boss: false, desc: 'Kein Lieferdienst genutzt' },
+      { name: '10 Min. Bewegung/Spaziergang', category: 'Gesundheit', type: '1%', points: 5, boss: false, desc: 'Kurz rausgehen' },
+      { name: '30 Min. Sport/Schwitzen', category: 'Gesundheit', type: 'Bigger', points: 20, boss: false, desc: 'Training' },
+      { name: 'Kein Kiffen (heute)', category: 'Gesundheit', type: '1%', points: 15, boss: false, desc: 'Konsumfrei (Cannabis)' },
+      { name: '1 Alkoholfreier Probentag', category: 'Gesundheit', type: 'Bigger', points: 20, boss: false, desc: 'Probe ohne Alkohol' },
+      { name: '15 Min. Aufräumen', category: 'Ordnung', type: '1%', points: 10, boss: false, desc: 'Schnelle Ordnungseinheit' },
+      { name: 'Küche gründlich sauber', category: 'Ordnung', type: 'Bigger', points: 25, boss: false, desc: 'Intensive Reinigung' },
+      { name: 'Wäsche waschen & falten', category: 'Ordnung', type: 'Bigger', points: 20, boss: false, desc: 'Kompletter Zyklus' },
+      { name: 'Keller aufräumen (Dungeon)', category: 'Ordnung', type: 'Special', points: 50, boss: true, desc: 'Großprojekt' },
+      { name: 'Lampen anbringen', category: 'Ordnung', type: 'Special', points: 30, boss: true, desc: 'Handwerk' },
+      { name: 'Wand streichen', category: 'Ordnung', type: 'Special', points: 40, boss: true, desc: 'Renovierung' },
+      { name: 'Budget eingehalten (heute)', category: 'Finanzen', type: '1%', points: 10, boss: false, desc: 'Nur Bargeldbudget' },
+      { name: 'Wochenbudget geplant', category: 'Finanzen', type: 'Bigger', points: 15, boss: false, desc: 'Plan erstellt' },
+      { name: 'Offenes Gespräch mit Freundin', category: 'Beziehung', type: 'Bigger', points: 15, boss: false, desc: 'Ehrlich & ruhig' },
+      { name: '30 Min. Quality Time', category: 'Beziehung', type: '1%', points: 10, boss: false, desc: 'Gemeinsame Zeit' },
+      { name: '5–10 Min. Singen/Üben', category: 'Musik', type: '1%', points: 5, boss: false, desc: 'Kurz üben' },
+      { name: 'Probe gut vorbereitet', category: 'Musik', type: 'Bigger', points: 15, boss: false, desc: 'Set/Equipment' }
+    ],
+    rewards: [
+      { level: 5, text: 'Essen bestellen (Favorit)', cost: 25 },
+      { level: 10, text: 'Kleines Technikteil / Shirt', cost: 50 },
+      { level: 15, text: 'Konzert / Kurztrip (1 Tag)', cost: 100 },
+      { level: 20, text: 'Instrument-/Studio-Upgrade', cost: 300 },
+      { level: 25, text: 'Wochenendtrip', cost: 400 },
+      { level: 30, text: 'Große Anschaffung (Traumteil)', cost: 800 }
+    ],
+    log: []
+  };
+  const load = () => { try { return JSON.parse(localStorage.getItem(SKEY)) || structuredClone(defaultState); } catch { return structuredClone(defaultState); } };
+  const save = () => localStorage.setItem(SKEY, JSON.stringify(state));
+  let state = load();
+
+  // --------- Core logic ---------
+  function weeklyRange(d=new Date()){
+    const dt = new Date(d); const day = (dt.getDay()+6)%7; const start = new Date(dt); start.setDate(dt.getDate()-day); start.setHours(0,0,0,0); const end = new Date(start); end.setDate(start.getDate()+6); end.setHours(23,59,59,999); return [start,end];
+  }
+  function progressiveThresholds(maxLevel, baseInc, growth){ const levels=[0]; for(let lv=2; lv<=maxLevel; lv++){ const inc=Math.round(baseInc*Math.pow(1+growth,(lv-2))); levels[lv-1]=levels[lv-2]+inc; } return levels; }
+  function levelForPoints(points, baseInc, growth){ const MAXL=60; const thr=progressiveThresholds(MAXL, baseInc, growth); let lvl=1; for(let i=0;i<thr.length;i++){ if(points>=thr[i]) lvl=i+1; else break; } return {lvl,thr}; }
+  function currentTotals(){ let totalPts=0, totalSavings=0; for(const e of state.log){ totalPts+=e.points; totalSavings+=e.savings; } return { totalPts, totalSavings }; }
+  function addLogEntry(dateISO, questName, note=''){
+    const q = state.catalog.find(x=>x.name===questName);
+    if(!q) return alert('Quest nicht gefunden.');
+    const base=Number(q.points)||0; const bonus=(questName===state.settings.eventQuest)?Number(state.settings.eventBonus||0):0; const pts=base+bonus; const euro=Number(state.settings.euroPerPoint||0); const savings=pts*euro;
+    state.log.push({ date: dateISO, quest: questName, category: q.category, type: q.type, base, bonus, points: pts, note, savings }); save(); renderAll(); toast('Eingetragen: +'+pts+' Punkte');
+  }
+  const deleteLogIndex = (idx)=>{ state.log.splice(idx,1); save(); renderAll(); toast('Eintrag gelöscht'); };
+  const clearLog = ()=>{ if(confirm('Alle Log-Einträge löschen?')){ state.log=[]; save(); renderAll(); } };
+  const resetCatalog = ()=>{ if(confirm('Katalog auf Standard zurücksetzen?')){ state.catalog=structuredClone(defaultState.catalog); save(); renderAll(); } };
+  const exportJSON = ()=>{ const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`life_rpg_backup_${Date.now()}.json`; a.click(); };
+  function importJSON(file){ const reader=new FileReader(); reader.onload=()=>{ try{ const incoming=JSON.parse(reader.result); if(!incoming.settings||!incoming.catalog||!incoming.log) throw new Error('Ungültige Datei'); state=incoming; save(); renderAll(); toast('Import OK'); }catch(e){ alert('Import fehlgeschlagen: '+e.message); } }; reader.readAsText(file); }
+  function achievementsStatus(){ const now=new Date(); const last30=new Date(now); last30.setDate(now.getDate()-30); const last7=new Date(now); last7.setDate(now.getDate()-7); const c1=state.log.filter(e=>new Date(e.date)>=last30 && e.quest==='Kein Essen bestellt (heute)').length; const c2=state.log.filter(e=>new Date(e.date)>=last7 && e.quest==='15 Min. Aufräumen').length; const bosses=state.catalog.filter(q=>q.boss).map(q=>q.name); const doneBosses=new Set(state.log.filter(e=>bosses.includes(e.quest)).map(e=>e.quest)); return [ {key:'fastfood',title:'Fast-Food-Free',desc:'≥20× in 30 Tagen: Kein Essen bestellt',ok:c1>=20}, {key:'ordnung',title:'Ordnungshüter',desc:'≥7× in 7 Tagen: 15 Min. Aufräumen',ok:c2>=7}, {key:'boss',title:'Boss-Slayer',desc:'Jede Bossquest mind. 1× geschafft',ok:doneBosses.size===bosses.length && bosses.length>0} ]; }
+  function weeklyPoints(){ const [start,end]=weeklyRange(new Date()); return state.log.filter(e=>{ const d=new Date(e.date); return d>=start && d<=end; }).reduce((s,e)=>s+e.points,0); }
+
+  // --------- Renderers ---------
+  function renderDashboard(){ const { totalPts, totalSavings } = currentTotals(); const { lvl } = levelForPoints(totalPts, Number(state.settings.baseInc||100), Number(state.settings.growth||0)); el('#totalPoints').textContent = fmt(totalPts); el('#currentLevel').textContent = lvl; el('#savingsTotal').textContent = fmtE(totalSavings); el('#weekPoints').textContent = fmt(weeklyPoints()); const ach=achievementsStatus(); el('#achievements').innerHTML = ach.map(a=>`<div class="flex items-center justify-between p-3 rounded-xl border ${a.ok?'border-green-300 bg-green-50':'border-slate-200 bg-slate-50'}"><div><div class="font-medium">${a.title}</div><div class="text-xs text-slate-500">${a.desc}</div></div><div class="chip ${a.ok?'bg-green-200 text-green-800':'bg-slate-200 text-slate-700'}">${a.ok?'Erreicht':'Offen'}</div></div>`).join(''); const unlockedLvl=lvl; el('#rewards').innerHTML = state.rewards.map(r=>{ const unlocked = unlockedLvl >= Number(r.level||0); return `<div class="flex items-center justify-between p-3 rounded-xl border ${unlocked?'border-amber-300 bg-amber-50':'border-slate-200 bg-white'}"><div><div class="font-medium">Level ${r.level}: ${r.text}</div><div class="text-xs text-slate-500">~€${fmtE(Number(r.cost||0))}</div></div><div class="chip ${unlocked?'bg-amber-200 text-amber-800':'bg-slate-200 text-slate-700'}">${unlocked?'Freigeschaltet':'Gesperrt'}</div></div>`; }).join(''); const qq = el('#quickQuest'); if (qq) qq.innerHTML = state.catalog.map(q=>`<option>${q.name}</option>`).join(''); }
+  function renderLog(){ const rows=[...state.log].sort((a,b)=> new Date(b.date)-new Date(a.date)); const html = rows.map(e=>`<div class="py-3 flex items-start gap-3"><div class="w-16 text-xs text-slate-500">${e.date}</div><div class="flex-1"><div class="font-medium">${e.quest}</div><div class="text-xs text-slate-500">${e.category} • ${e.type} • Base ${e.base} ${e.bonus? '+ Bonus '+e.bonus:''}</div>${e.note? `<div class='text-xs mt-1'>📝 ${e.note}</div>`:''}</div><div class="text-right"><div class="font-semibold">+${e.points}</div><div class="text-xs text-slate-500">€${fmtE(e.savings)}</div><button class="text-xs text-red-600 mt-1" data-del="${state.log.indexOf(e)}">Löschen</button></div></div>`).join(''); el('#logList').innerHTML = html || '<div class="py-6 text-center text-slate-400">Noch keine Einträge.</div>'; els('#logList [data-del]').forEach(btn=> btn.addEventListener('click', ()=> deleteLogIndex(Number(btn.getAttribute('data-del'))))); const sel = el('#logQuest'); if(sel) sel.innerHTML = state.catalog.map(q=>`<option>${q.name}</option>`).join(''); const d = el('#logDate'); if(d) d.value = todayISO(); }
+  function renderCatalog(){ const list = state.catalog.map((q,i)=>`<div class="py-3 flex items-start gap-3"><div class="flex-1"><div class="font-medium">${q.name}</div><div class="text-xs text-slate-500">${q.category} • ${q.type} • ${q.points} Punkte ${q.boss?'• Bossfight':''}</div>${q.desc? `<div class='text-xs mt-1 text-slate-600'>${q.desc}</div>`:''}</div><button class="text-xs text-red-600" data-rm="${i}">Entfernen</button></div>`).join(''); el('#catalogList').innerHTML = list || '<div class="py-6 text-center text-slate-400">Keine Quests.</div>'; els('#catalogList [data-rm]').forEach(btn=> btn.addEventListener('click', ()=>{ const idx=Number(btn.getAttribute('data-rm')); state.catalog.splice(idx,1); save(); renderAll(); })); }
+  function renderSettings(){ const s=state.settings; const euro=el('#sEuro'); if(euro) euro.value=s.euroPerPoint; const eq=el('#sEventQuest'); if(eq) eq.value=s.eventQuest; const eb=el('#sEventBonus'); if(eb) eb.value=s.eventBonus; const bi=el('#sBaseInc'); if(bi) bi.value=s.baseInc; const gr=el('#sGrowth'); if(gr) gr.value=s.growth; const thr=progressiveThresholds(15, Number(s.baseInc||100), Number(s.growth||0)); el('#levelsPreview').innerHTML = thr.map((min,i)=> `<div class='text-xs'>Level ${i+1}: ≥ ${fmt(min)} Punkte</div>`).join(''); const ed = state.rewards.map((r,i)=>`<div class="grid grid-cols-6 gap-2 items-center"><input data-r="${i}" data-k="level" type="number" class="input col-span-1" value="${r.level}"><input data-r="${i}" data-k="text" class="input col-span-3" value="${r.text}"><input data-r="${i}" data-k="cost" type="number" step="0.01" class="input col-span-1" value="${r.cost}"><button data-del-r="${i}" class="btn col-span-1">Löschen</button></div>`).join(''); el('#rewardsEditor').innerHTML = ed || '<div class="text-sm text-slate-500">Noch keine Rewards.</div>'; els('#rewardsEditor [data-r]').forEach(inp=> inp.addEventListener('change', ()=>{ const i=Number(inp.getAttribute('data-r')); const k=inp.getAttribute('data-k'); let v=inp.value; if(k==='level'||k==='cost') v=Number(v); state.rewards[i][k]=v; save(); renderAll(); })); els('#rewardsEditor [data-del-r]').forEach(btn=> btn.addEventListener('click', ()=>{ const i=Number(btn.getAttribute('data-del-r')); state.rewards.splice(i,1); save(); renderAll(); })); }
+  function renderAll(){ renderDashboard(); renderLog(); renderCatalog(); renderSettings(); }
+
+  // --------- Bind UI (safe) ---------
+  function bindUI(){
+    els('nav [data-tab]').forEach(b=> b.addEventListener('click', ()=>{ const tab=b.getAttribute('data-tab'); els('.tab').forEach(t=>t.classList.remove('active')); const tgt=el(`#tab-${tab}`); if(tgt) tgt.classList.add('active'); els('nav [data-tab]').forEach(x=>x.classList.remove('text-blue-600')); b.classList.add('text-blue-600'); window.scrollTo({top:0,behavior:'smooth'}); }));
+    on('#btnQuickAdd','click', ()=>{ const q=el('#quickQuest')?.value; if(!q) return alert('Keine Quest ausgewählt'); addLogEntry(todayISO(), q, 'Quick-Add'); });
+    on('#btnAddEntry','click', ()=>{ const d=el('#logDate')?.value || todayISO(); const q=el('#logQuest')?.value; const n=el('#logNote')?.value || ''; if(!q) return alert('Bitte Quest wählen'); addLogEntry(d, q, n); const ln=el('#logNote'); if(ln) ln.value=''; });
+    on('#btnClearLog','click', clearLog);
+    on('#btnClearCatalog','click', resetCatalog);
+    on('#btnAddQuest','click', ()=>{ const q={ name:(el('#qName')?.value||'').trim(), category:(el('#qCategory')?.value||'Allgemein').trim(), type: el('#qType')?.value || '1%', points: Number(el('#qPoints')?.value||0), boss: (el('#qBoss')?.value||'Nein')==='Ja', desc:(el('#qDesc')?.value||'').trim() }; if(!q.name) return alert('Name fehlt'); state.catalog.push(q); save(); ['#qName','#qCategory','#qPoints','#qDesc'].forEach(s=>{ const i=el(s); if(i) i.value=''; }); renderAll(); toast('Quest hinzugefügt'); });
+    ['#sEuro','#sEventQuest','#sEventBonus','#sBaseInc','#sGrowth'].forEach(sel=> on(sel,'change', ()=>{ state.settings.euroPerPoint=Number(el('#sEuro')?.value||0); state.settings.eventQuest=el('#sEventQuest')?.value||''; state.settings.eventBonus=Number(el('#sEventBonus')?.value||0); state.settings.baseInc=Number(el('#sBaseInc')?.value||100); state.settings.growth=Number(el('#sGrowth')?.value||0); save(); renderAll(); }));
+    on('#btnAddReward','click', ()=>{ state.rewards.push({level:1,text:'Neue Belohnung',cost:0}); save(); renderAll(); });
+    on('#btnExport','click', exportJSON);
+    on('#btnImport','click', ()=> el('#fileImport')?.click());
+    const fi = el('#fileImport'); if (fi) fi.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) importJSON(f); e.target.value=''; });
+    on('#btnWipe','click', ()=>{ if(confirm('Wirklich ALLES löschen?')){ localStorage.removeItem(SKEY); state=structuredClone(defaultState); save(); renderAll(); } });
+  }
+
+  // --------- Lightweight Tests ---------
+  function runTests(show){
+    const results=[]; const ok=(name,pass,extra='')=>results.push({name,pass,extra});
+    ok('btnAddQuest exists', !!el('#btnAddQuest'));
+    ok('btnAddEntry exists', !!el('#btnAddEntry'));
+    ok('quickQuest select exists', !!el('#quickQuest'));
+    // progression monotonic
+    const thr=progressiveThresholds(10,100,0.1); let mono=true; for(let i=1;i<thr.length;i++){ if(!(thr[i]>=thr[i-1])) mono=false; } ok('Level thresholds monotonic', mono, JSON.stringify(thr));
+    // add quest + log
+    const beforeCatalog=state.catalog.length; state.catalog.push({name:'TEST_QUEST',category:'Test',type:'1%',points:3,boss:false,desc:''}); const afterCatalog=state.catalog.length; ok('Quest add programmatic', afterCatalog===beforeCatalog+1);
+    const beforePts=currentTotals().totalPts; addLogEntry(todayISO(), 'TEST_QUEST', 'test'); const afterPts=currentTotals().totalPts; ok('Log adds points', afterPts>=beforePts+3);
+    // cleanup test quest entries
+    state.log = state.log.filter(e=> e.quest!=='TEST_QUEST'); state.catalog = state.catalog.filter(q=> q.name!=='TEST_QUEST'); save();
+    if(show){ const pass=results.filter(r=>r.pass).length; const fail=results.length-pass; console.log('Tests:',results); toast(`Tests: ${pass} ✓ / ${fail} ✗`); const box=document.createElement('div'); box.style.position='fixed'; box.style.top='10px'; box.style.left='50%'; box.style.transform='translateX(-50%)'; box.style.background='#fff'; box.style.border='1px solid #e5e7eb'; box.style.borderRadius='12px'; box.style.padding='8px 12px'; box.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'; box.style.zIndex='60'; box.innerHTML = `<div class='text-sm font-medium'>Self-Tests: ${pass} ✓ / ${fail} ✗</div>`; document.body.appendChild(box); setTimeout(()=> box.remove(), 2500); }
+  }
+
+  // --------- Boot ---------
+  ready(()=>{ bindUI(); renderAll(); const url=new URL(location.href); if(url.searchParams.get('test')==='1'){ runTests(true); } });
+  </script>
+</body>
+</html>
