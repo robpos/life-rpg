@@ -1449,6 +1449,885 @@
 
 })();
 </script>
+<script>
+/* =========================================================
+   Part 8 – Level‑Perks
+   - Ab Level 5: +5% Punkte auf JEDE Quest
+   - Ab Level 10: +5 Bonuspunkte auf Quests, die „sport“ im Namen haben
+   - Ab Level 15: Tagesziel‑Bonus +10 (einmal pro Tag, wenn Ziel erreicht)
+   - Anzeige „🛡️ Aktive Perks“ im Dashboard
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  // ---- Storage ----
+  function load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+
+  // ---- Utils ----
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  function totalPoints(st){ return (st.log||[]).reduce((s,e)=> s + (Number(e.points)||0), 0); }
+  function levelForPoints(st, p){
+    const base   = Number(st.settings?.base ?? 100);
+    const growth = Number(st.settings?.growth ?? 0.10);
+    let lvl=1, need=base, sum=0;
+    while(p >= sum + need){
+      sum += need; lvl++; need = Math.round(need*(1+growth));
+      if(lvl>100) break;
+    }
+    return { lvl, current:p-sum, need };
+  }
+
+  // ---- Perk‑Definitionen ----
+  function perkStatus(st){
+    const { lvl } = levelForPoints(st, totalPoints(st));
+    return {
+      p5:  lvl >= 5,   // +5% Punkte
+      p10: lvl >= 10,  // +5 Bonus auf Sport
+      p15: lvl >= 15   // Tagesziel‑Bonus +10 (einmal pro Tag)
+    };
+  }
+
+  // ---- Anwendung der Perks beim Loggen ----
+  function bindPerksOnLog(){
+    const btn = document.getElementById("btnAddEntry");
+    if(!btn || btn.__lifeRPG_perks_bound) return;
+    btn.__lifeRPG_perks_bound = true;
+
+    btn.addEventListener("click", ()=>{
+      // Warten, bis Part‑3/6/7 den Eintrag geschrieben haben
+      setTimeout(()=>{
+        let st = load();
+        if(!Array.isArray(st.log) || st.log.length===0) return;
+
+        const perks = perkStatus(st);
+        let changed = false;
+
+        // Letzter Eintrag
+        const last = st.log[st.log.length-1];
+        if(!last) return;
+
+        // Punkte vor Perk‑Anwendung merken (für evtl. Level‑Up‑Feedback)
+        const beforeTotal = totalPoints(st);
+        const beforeLast  = Number(last.points)||0;
+
+        // p5: +5% auf alles
+        if(perks.p5){
+          last.points = Math.round(beforeLast * 1.05);
+          changed = true;
+        }
+
+        // p10: +5 auf Sport
+        if(perks.p10 && (last.quest||"").toLowerCase().includes("sport")){
+          last.points = Math.round((Number(last.points)||0) + 5);
+          // optionaler Marker
+          if(!/(\+5|p10)/i.test(last.quest)) last.quest = `${last.quest} (+5 Perk)`;
+          changed = true;
+        }
+
+        // Speichern, Level‑Up‑Feedback nachziehen
+        if(changed){
+          save(st);
+          const afterTotal = totalPoints(st);
+          const lvBefore   = levelForPoints(st, beforeTotal).lvl;
+          const lvAfter    = levelForPoints(st, afterTotal).lvl;
+          if(lvAfter > lvBefore){
+            try { if(window.Sound) Sound.level(); if(window.FX) FX.burst(true); } catch{}
+          }
+        }
+
+        // p15: Tagesziel‑Bonus (+10, 1×/Tag wenn Ziel erreicht und noch nicht gutgeschrieben)
+        if(perks.p15){
+          const goal = Number(st.settings?.dailyGoal || 3);
+          const today = todayISO();
+          const todayCount = (st.log||[]).filter(e=>e.date===today).length;
+          const already = (st.log||[]).some(e=> e.date===today && (e.quest||"") === "Perk: Tagesziel‑Bonus");
+          if(todayCount >= goal && !already){
+            st.log.push({ date: today, quest: "Perk: Tagesziel‑Bonus", points: 10 });
+            save(st);
+            try { if(window.Sound) Sound.task(); if(window.FX) FX.burst(); } catch{}
+          }
+        }
+
+        // Dashboard neu zeichnen (falls Part‑5 vorhanden)
+        try{
+          const dashBtn = document.querySelector('nav [data-tab="dashboard"]');
+          const isDashVisible = document.getElementById("tab-dashboard")?.classList.contains("active");
+          if(isDashVisible){
+            // Wenn Dashboard sichtbar ist, triggert Part‑5 sein Re‑Render auf Knopfdruck nicht automatisch,
+            // wir übernehmen eine sanfte Aktualisierung via Tab‑Reclick:
+            dashBtn && dashBtn.click() && setTimeout(()=>dashBtn.click(),10); // hin & zurück → Refresh
+          }
+        }catch{}
+      }, 40);
+    }, {passive:true});
+  }
+
+  // ---- Anzeige „🛡️ Aktive Perks“ im Dashboard ----
+  function renderPerksBox(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+    let card = document.getElementById("perksCard");
+    if(!card){
+      card = document.createElement("div");
+      card.id = "perksCard";
+      card.className = "card";
+      dash.appendChild(card);
+    }
+
+    const st = load();
+    const { p5, p10, p15 } = perkStatus(st);
+
+    function row(ok, text){
+      return `
+        <div class="flex items-center justify-between p-2 border rounded ${ok?'bg-green-50 border-green-300':'bg-slate-50'}">
+          <div>${text}</div>
+          <span class="text-xs px-2 py-0.5 rounded ${ok?'bg-green-200 text-green-800':'bg-slate-200 text-slate-700'}">
+            ${ok?'Aktiv':'Gesperrt'}
+          </span>
+        </div>`;
+    }
+
+    card.innerHTML = `
+      <div class="font-semibold mb-2">🛡️ Aktive Perks</div>
+      <div class="space-y-2">
+        ${row(p5, "Level 5: +5% Punkte auf alle Quests")}
+        ${row(p10,"Level 10: +5 Bonus auf „Sport“-Quests")}
+        ${row(p15,"Level 15: +10 Punkte, wenn Tagesziel erreicht (1×/Tag)")}
+      </div>
+    `;
+  }
+
+  // Bei Dashboard‑Rebuilds erneut injizieren
+  function observeDashboardForPerks(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash || dash.__lifeRPG_perksObs) return;
+    const obs = new MutationObserver(()=> renderPerksBox());
+    obs.observe(dash, {childList:true});
+    dash.__lifeRPG_perksObs = obs;
+  }
+
+  // ---- Boot ----
+  function boot(){
+    bindPerksOnLog();
+    renderPerksBox();
+    observeDashboardForPerks();
+
+    // Beim Wechsel auf Dashboard aktualisieren
+    const dashBtn = document.querySelector('nav [data-tab="dashboard"]');
+    dashBtn && dashBtn.addEventListener("click", ()=> renderPerksBox());
+  }
+
+  if(document.readyState!=="loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
+<script>
+/* =========================================================
+   Part 9 – Milestones (Meilensteine)
+   - prüft automatisch nach jedem Log
+   - schreibt einmalige Belohnungs-Punkte ins Log
+   - zeigt Fortschritt/Status im Dashboard (mit Progressbar)
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  /* ---------- Storage ---------- */
+  function load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+
+  /* ---------- Utils ---------- */
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  const nf = n => new Intl.NumberFormat("de-DE").format(n);
+
+  function totalPoints(st){
+    return (st.log||[]).reduce((s,e)=> s+(Number(e.points)||0), 0);
+  }
+  function streakCount(st){
+    const set = new Set((st.log||[]).map(e=>e.date));
+    let c=0, cur=todayISO();
+    while(set.has(cur)){
+      c++;
+      const d=new Date(cur); d.setDate(d.getDate()-1);
+      cur = d.toISOString().slice(0,10);
+    }
+    return c;
+  }
+  function countInLastDays(st, testFn, days){
+    const from = new Date(); from.setDate(from.getDate()-(days-1)); from.setHours(0,0,0,0);
+    return (st.log||[]).filter(e=>{
+      const d=new Date(e.date); d.setHours(0,0,0,0);
+      return d>=from && testFn(e);
+    }).length;
+  }
+
+  /* ---------- Milestone-Setup ---------- */
+  function ensureMilestones(st){
+    st.milestones = Array.isArray(st.milestones) ? st.milestones : [];
+    const have = new Set(st.milestones.map(m=>m.id));
+    // Du kannst diese Liste später beliebig erweitern/anpassen:
+    const defaults = [
+      {id:"pts500",       title:"500 Punkte insgesamt",                   type:"points",       target:500,  reward:50},
+      {id:"quests100",    title:"100 Quests erledigt",                    type:"count",        target:100,  reward:30},
+      {id:"streak7",      title:"7‑Tage‑Streak",                          type:"streak",       target:7,    reward:25},
+      {id:"pts1000",      title:"1000 Punkte insgesamt",                  type:"points",       target:1000, reward:120},
+      {id:"nofast20_30",  title:"20× „Kein Essen bestellt“ (30 Tage)",    type:"rollingNoFast",target:20,   reward:40}
+    ];
+    defaults.forEach(def=>{
+      if(!have.has(def.id)) st.milestones.push({...def, ok:false});
+    });
+    return st;
+  }
+
+  function progressOf(st, m){
+    switch(m.type){
+      case "points":        return {cur: totalPoints(st), max: m.target};
+      case "count":         return {cur: (st.log||[]).length, max: m.target};
+      case "streak":        return {cur: streakCount(st), max: m.target};
+      case "rollingNoFast": return {cur: countInLastDays(st, e => (e.quest||"").toLowerCase().includes("kein essen"), 30), max: m.target};
+      default:              return {cur: 0, max: m.target||1};
+    }
+  }
+
+  /* ---------- Prüfung + Belohnung ---------- */
+  function checkMilestones(){
+    let st = load();
+    st = ensureMilestones(st);
+    let changed = false;
+
+    st.milestones.forEach(m=>{
+      if(m.ok) return;
+      const {cur, max} = progressOf(st, m);
+      if(cur >= max){
+        m.ok = true;
+        // Punkte gutschreiben (einmalig)
+        if(m.reward){
+          st.log = Array.isArray(st.log) ? st.log : [];
+          st.log.push({date: todayISO(), quest: "Milestone: " + m.title, points: Number(m.reward)});
+        }
+        changed = true;
+      }
+    });
+
+    if(changed){
+      save(st);
+      // Sanftes Feedback (falls vorhanden)
+      try{
+        if(window.Sound && window.Sound.level) window.Sound.level();
+        if(window.FX && window.FX.burst) window.FX.burst(true);
+      }catch{}
+    }
+
+    renderMilestonesCard();
+  }
+
+  /* ---------- UI ---------- */
+  function progressBar(cur,max){
+    const pct = Math.max(0, Math.min(100, Math.round(100 * (max ? cur/max : 0))));
+    return `
+      <div class="w-full bg-slate-200 rounded h-2">
+        <div class="h-2 rounded" style="width:${pct}%; background:linear-gradient(90deg,#22c55e,#f59e0b)"></div>
+      </div>
+      <div class="text-[11px] text-slate-500 mt-1">${nf(cur)} / ${nf(max)} (${pct}%)</div>
+    `;
+  }
+
+  function renderMilestonesCard(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+
+    let card = document.getElementById("milestonesCard");
+    if(!card){
+      card = document.createElement("div");
+      card.id = "milestonesCard";
+      card.className = "card";
+      dash.appendChild(card);
+    }
+
+    const st = ensureMilestones(load());
+    const inner = (st.milestones||[]).map(m=>{
+      const {cur,max} = progressOf(st,m);
+      const done = !!m.ok;
+      return `
+        <div class="p-2 border rounded ${done?'bg-green-50 border-green-300':'bg-white'}">
+          <div class="flex items-center justify-between">
+            <div><b>${m.title}</b>${m.reward ? ` <span class="text-xs text-slate-500">(Belohnung: +${nf(m.reward)} Punkte)</span>` : ""}</div>
+            <span class="text-xs px-2 py-0.5 rounded ${done?'bg-green-200 text-green-800':'bg-slate-200 text-slate-700'}">${done?'Erreicht':'Offen'}</span>
+          </div>
+          <div class="mt-2">${progressBar(done ? max : cur, max)}</div>
+        </div>
+      `;
+    }).join("");
+
+    card.innerHTML = `
+      <div class="font-semibold mb-2">🎯 Meilensteine</div>
+      <div class="space-y-3">${inner}</div>
+    `;
+  }
+
+  /* ---------- Hooks ---------- */
+  function bindOnLog(){
+    const btn = document.getElementById("btnAddEntry");
+    if(!btn || btn.__lifeRPG_milestone_bound) return;
+    btn.__lifeRPG_milestone_bound = true;
+    btn.addEventListener("click", ()=> setTimeout(checkMilestones, 40), {passive:true});
+  }
+
+  function observeDashboard(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash || dash.__lifeRPG_milestoneObs) return;
+    const obs = new MutationObserver(()=> renderMilestonesCard());
+    obs.observe(dash, {childList:true});
+    dash.__lifeRPG_milestoneObs = obs;
+  }
+
+  /* ---------- Boot ---------- */
+  function boot(){
+    checkMilestones();          // initial evaluieren + Karte zeichnen
+    bindOnLog();                // nach jedem Eintrag prüfen
+    observeDashboard();         // bei Dashboard-Refresh erneut einfügen
+    const dashBtn = document.querySelector('nav [data-tab="dashboard"]');
+    dashBtn && dashBtn.addEventListener("click", renderMilestonesCard);
+  }
+
+  if(document.readyState!=="loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
+<script>
+/* =========================================================
+   Part 10 – Backup + Timed Quests + Rewards‑Shop
+   - Settings: Export / Import / Reset
+   - Timed Quests: Editor (Katalog) + Dashboard‑Karte + Malus bei Verpassen
+   - Rewards‑Shop: Einlösen je nach Level + verfügbaren Euros, Belege, Rückgängig
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+  const MALUS_TQ = -10; // Punkteabzug bei verpasster Timed Quest (einmalig)
+
+  /* ---------- Storage & Utils ---------- */
+  function load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  const nf  = n => new Intl.NumberFormat("de-DE").format(n);
+  const nf2 = n => new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+
+  function totalPoints(st){ return (st.log||[]).reduce((s,e)=> s + (Number(e.points)||0), 0); }
+  function levelForPoints(st, p){
+    const base   = Number(st.settings?.base ?? 100);
+    const growth = Number(st.settings?.growth ?? 0.10);
+    let lvl=1, need=base, sum=0;
+    while(p >= sum + need){ sum += need; lvl++; need = Math.round(need*(1+growth)); if(lvl>100) break; }
+    return { lvl, current: p - sum, need };
+  }
+
+  // „Ersparte €“ sind abgeleitet: Punkte * € pro Punkt
+  function derivedSavings(st){
+    const euro = Number(st.settings?.euro || 0);
+    return totalPoints(st) * euro;
+  }
+  // Ausgaben/Belege (Shop) separat führen → verfügbares Guthaben = erspart – ausgegeben
+  function spentTotal(st){
+    const list = Array.isArray(st.shopSpent) ? st.shopSpent : [];
+    return list.reduce((s,x)=> s + Number(x.cost||0), 0);
+  }
+  function availableSavings(st){
+    return Math.max(0, derivedSavings(st) - spentTotal(st));
+  }
+
+  // Mini‑Toast (leichtgewichtig)
+  function toast(msg, cls="bg-slate-900"){
+    let t = document.getElementById("liferpg_toast");
+    if(!t){
+      t = document.createElement("div");
+      t.id = "liferpg_toast";
+      t.style.position = "fixed";
+      t.style.left = "50%";
+      t.style.bottom = "88px";
+      t.style.transform = "translateX(-50%)";
+      t.style.zIndex = "60";
+      t.style.color = "white";
+      t.style.padding = ".5rem .75rem";
+      t.style.borderRadius = ".75rem";
+      t.style.fontSize = ".875rem";
+      document.body.appendChild(t);
+    }
+    t.className = cls;
+    t.textContent = msg;
+    t.style.opacity = "0.95";
+    setTimeout(()=>{ t.style.opacity = "0"; }, 1600);
+  }
+
+  /* =========================================================
+     A) Settings – Backup/Restore/Reset
+     ========================================================= */
+  function injectSettingsBackup(){
+    const tab = document.getElementById("tab-settings");
+    if(!tab) return;
+    if(document.getElementById("settingsBackupCard")) return;
+
+    const card = document.createElement("div");
+    card.id = "settingsBackupCard";
+    card.className = "card";
+    card.innerHTML = `
+      <div class="font-semibold mb-2">Backup</div>
+      <div class="flex flex-wrap gap-2">
+        <button id="btnBackupExport" class="btn">Export (.json)</button>
+        <button id="btnBackupImport" class="btn">Import</button>
+        <input type="file" id="fileBackupImport" accept="application/json" class="hidden" />
+        <button id="btnBackupReset" class="btn bg-red-600 text-white">Alles löschen</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Export sichert alle Daten (Einstellungen, Katalog, Log, Timed Quests, Shop‑Belege, Milestones, Events …).</p>
+    `;
+    tab.appendChild(card);
+
+    const btnEx = document.getElementById("btnBackupExport");
+    const btnIm = document.getElementById("btnBackupImport");
+    const inp   = document.getElementById("fileBackupImport");
+    const btnRs = document.getElementById("btnBackupReset");
+
+    btnEx.addEventListener("click", ()=>{
+      const blob=new Blob([JSON.stringify(load(),null,2)],{type:"application/json"});
+      const a=document.createElement("a");
+      const d=todayISO().replace(/-/g,"");
+      a.href=URL.createObjectURL(blob);
+      a.download=`life_rpg_backup_${d}.json`;
+      a.click();
+    });
+
+    btnIm.addEventListener("click", ()=> inp.click());
+    inp.addEventListener("change", e=>{
+      const f=e.target.files?.[0];
+      if(!f) return;
+      const r=new FileReader();
+      r.onload=()=>{
+        try{
+          const incoming = JSON.parse(r.result);
+          // Minimal‑Check
+          if(typeof incoming !== "object") throw new Error("Ungültiges Format");
+          localStorage.setItem(STORE_KEY, JSON.stringify(incoming));
+          toast("Backup importiert ✅");
+          try{ if(window.Sound) Sound.task(); if(window.FX) FX.burst(); }catch{}
+          // Sanft neu zeichnen: Dashboard‑Tab kurz wechseln
+          const dashBtn = document.querySelector('nav [data-tab="dashboard"]');
+          dashBtn && dashBtn.click() && setTimeout(()=>dashBtn.click(), 10);
+        }catch(e){
+          alert("Import fehlgeschlagen: "+e.message);
+        }
+        e.target.value="";
+      };
+      r.readAsText(f);
+    });
+
+    btnRs.addEventListener("click", ()=>{
+      if(!confirm("Wirklich ALLE Daten löschen?")) return;
+      localStorage.removeItem(STORE_KEY);
+      toast("Zurückgesetzt");
+      location.reload();
+    });
+  }
+
+  // Beobachter, damit nach Rendern vom Settings‑Tab die Karte vorhanden ist
+  function observeSettings(){
+    const tab = document.getElementById("tab-settings");
+    if(!tab || tab.__liferpg_settingsObs) return;
+    const obs = new MutationObserver(()=> injectSettingsBackup());
+    obs.observe(tab, {childList:true});
+    tab.__liferpg_settingsObs = obs;
+  }
+
+  /* =========================================================
+     B) Timed Quests – Editor (Katalog) + Dashboard‑Karte
+     ========================================================= */
+  function ensureTimedState(st){
+    st.timedQuests = Array.isArray(st.timedQuests) ? st.timedQuests : [];
+    return st;
+  }
+
+  // Editor im Katalog‑Tab
+  function injectTimedCatalog(){
+    const tab = document.getElementById("tab-catalog");
+    if(!tab) return;
+    if(document.getElementById("timedCatalogCard")) return;
+
+    const card = document.createElement("div");
+    card.id = "timedCatalogCard";
+    card.className = "card";
+    card.innerHTML = `
+      <div class="font-semibold mb-2">Timed Quests</div>
+      <div class="grid grid-cols-1 gap-2">
+        <input id="tqName" class="input" placeholder="Questname (z. B. 'Wohnzimmer streichen')" />
+        <input id="tqPoints" type="number" class="input" placeholder="Punkte (z. B. 40)" />
+        <input id="tqDeadline" type="date" class="input" />
+        <button id="btnTQAdd" class="btn bg-purple-600 text-white">+ Timed Quest</button>
+      </div>
+      <div class="mt-3 text-sm text-slate-600">Verpasst du die Deadline, wird einmalig ein Malus von ${MALUS_TQ} Punkten ins Log geschrieben.</div>
+      <div id="tqList" class="mt-3 space-y-2"></div>
+    `;
+    tab.appendChild(card);
+
+    document.getElementById("btnTQAdd").addEventListener("click", ()=>{
+      const st = ensureTimedState(load());
+      const name = document.getElementById("tqName").value.trim();
+      const pts  = Number(document.getElementById("tqPoints").value||0);
+      const dl   = document.getElementById("tqDeadline").value;
+      if(!name){ alert("Bitte einen Namen eingeben."); return; }
+      if(!(pts>0)){ alert("Bitte Punkte > 0 angeben."); return; }
+      if(!dl){ alert("Bitte Deadline wählen."); return; }
+      const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      st.timedQuests.push({id, name, points:pts, deadline:dl, done:false, failed:false});
+      save(st);
+      renderTimedCatalogList();
+      toast("Timed Quest hinzugefügt");
+    });
+
+    renderTimedCatalogList();
+  }
+
+  function renderTimedCatalogList(){
+    const list = document.getElementById("tqList");
+    if(!list) return;
+    const st = ensureTimedState(load());
+    if(st.timedQuests.length===0){
+      list.innerHTML = `<div class="text-sm text-slate-500">Noch keine Timed Quests angelegt.</div>`;
+      return;
+    }
+    list.innerHTML = st.timedQuests.map(q=>`
+      <div class="p-2 border rounded flex items-center justify-between ${q.done?'bg-green-50': (q.failed?'bg-red-50':'bg-white')}">
+        <div class="text-sm">
+          <b>${q.name}</b> <span class="text-slate-500">(+${q.points})</span><br>
+          <span class="text-xs ${q.failed?'text-red-700': 'text-slate-600'}">
+            Deadline: ${q.deadline} • Status: ${q.done?'✅ erledigt': (q.failed?'❌ verpasst':'⏳ offen')}
+          </span>
+        </div>
+        <div class="flex gap-2">
+          ${(!q.done && !q.failed) ? `<button class="btn text-sm" data-tq-done="${q.id}">Abschließen</button>` : ``}
+          <button class="btn text-sm" data-tq-del="${q.id}">Löschen</button>
+        </div>
+      </div>
+    `).join("");
+
+    // Aktionen
+    list.querySelectorAll("[data-tq-del]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-tq-del");
+        const st = ensureTimedState(load());
+        st.timedQuests = st.timedQuests.filter(x=>x.id!==id);
+        save(st);
+        renderTimedCatalogList();
+        renderTimedDashboardCard(); // synchron halten
+      });
+    });
+    list.querySelectorAll("[data-tq-done]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        completeTimedQuest(btn.getAttribute("data-tq-done"));
+      });
+    });
+  }
+
+  // Malus bei verpasster Deadline (nur einmal pro Quest)
+  function settleTimedOverdues(){
+    const st = ensureTimedState(load());
+    const today = todayISO();
+    let changed = false;
+    st.timedQuests.forEach(q=>{
+      if(!q.done && !q.failed && today > q.deadline){
+        // einmaliger Malus auf den Deadline‑Tag
+        st.log = Array.isArray(st.log) ? st.log : [];
+        st.log.push({date: q.deadline, quest: `Timed Quest verpasst: ${q.name}`, points: MALUS_TQ});
+        q.failed = true;
+        changed = true;
+      }
+    });
+    if(changed){
+      save(st);
+      try{ if(window.Sound) Sound.task(); }catch{}
+    }
+  }
+
+  // Punkteanpassung ähnlich Perks/Events (vereinfachte Übernahme)
+  function applyPerkAndEventToLastEntry(st){
+    if(!st || !Array.isArray(st.log) || st.log.length===0) return;
+    const ev = st.dailyEvent;
+    const last = st.log[st.log.length-1];
+    const beforeTotal = totalPoints(st);
+
+    // Perks
+    const { lvl } = levelForPoints(st, beforeTotal);
+    if(lvl >= 5){ last.points = Math.round(Number(last.points)||0 * 1.05); }
+    if(lvl >=10 && (last.quest||"").toLowerCase().includes("sport")){
+      last.points = Math.round(Number(last.points)||0 + 5);
+      if(!/(\+5 Perk)/.test(last.quest)) last.quest += " (+5 Perk)";
+    }
+
+    // Event
+    const today = todayISO();
+    if(ev && ev.date === today){
+      if(ev.type === "doubleSport" && (last.quest||"").toLowerCase().includes("sport")){
+        last.points = Math.round(Number(last.points)||0 * 2);
+        if(!/(Event x2)$/.test(last.quest)) last.quest += " (Event x2)";
+      }
+      if(ev.type === "bonus3" && !ev.done){
+        ev.progress = Number(ev.progress||0) + 1;
+        if(ev.progress >= 3){
+          st.log.push({date: today, quest: "Event‑Bonus", points: 20});
+          ev.done = true;
+        }
+      }
+    }
+
+    save(st);
+
+    // Level‑Up Feedback (falls die Anpassung ein Level hebt)
+    const afterTotal = totalPoints(st);
+    const lvBefore   = levelForPoints(st, beforeTotal).lvl;
+    const lvAfter    = levelForPoints(st, afterTotal).lvl;
+    if(lvAfter > lvBefore){
+      try{ if(window.Sound) Sound.level(); if(window.FX) FX.burst(true); }catch{}
+    }
+  }
+
+  // Timed Quest abschließen
+  function completeTimedQuest(id){
+    const st = ensureTimedState(load());
+    const q = st.timedQuests.find(x=>x.id===id);
+    if(!q || q.done || q.failed) return;
+    q.done = true;
+
+    st.log = Array.isArray(st.log) ? st.log : [];
+    st.log.push({date: todayISO(), quest:`Timed Quest: ${q.name}`, points: Number(q.points)||0, base:Number(q.points)||0});
+    save(st);
+
+    // Perks/Events anwenden (lokal)
+    applyPerkAndEventToLastEntry(load());
+
+    // Feedback + Re‑Render
+    try{ if(window.Sound) Sound.task(); if(window.FX) FX.burst(); }catch{}
+    toast("Timed Quest erledigt ✅","bg-green-700");
+    renderTimedCatalogList();
+    renderTimedDashboardCard();
+    refreshDashboardNumbers();
+  }
+
+  // Dashboard‑Karte
+  function renderTimedDashboardCard(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+    let card = document.getElementById("timedDashCard");
+    if(!card){
+      card = document.createElement("div");
+      card.id = "timedDashCard";
+      card.className = "card";
+      dash.appendChild(card);
+    }
+    const st = ensureTimedState(load());
+    if(st.timedQuests.length===0){
+      card.innerHTML = `<div class="font-semibold mb-2">⏱️ Timed Quests</div>
+                        <div class="text-sm text-slate-500">Keine Timed Quests angelegt.</div>`;
+      return;
+    }
+    const rows = st.timedQuests.map(q=>`
+      <div class="p-2 border rounded flex items-center justify-between ${q.done?'bg-green-50': (q.failed?'bg-red-50':'bg-white')}">
+        <div class="text-sm">
+          <b>${q.name}</b> <span class="text-slate-500">(+${q.points})</span><br>
+          <span class="text-xs ${q.failed?'text-red-700':'text-slate-600'}">bis ${q.deadline} • ${q.done?'✅ erledigt': (q.failed?'❌ verpasst':'⏳ offen')}</span>
+        </div>
+        <div class="flex gap-2">
+          ${(!q.done && !q.failed) ? `<button class="btn text-sm" data-tq-done="${q.id}">Abschließen</button>` : ``}
+        </div>
+      </div>
+    `).join("");
+
+    card.innerHTML = `<div class="font-semibold mb-2">⏱️ Timed Quests</div><div class="space-y-2">${rows}</div>`;
+    card.querySelectorAll("[data-tq-done]").forEach(btn=>{
+      btn.addEventListener("click", ()=> completeTimedQuest(btn.getAttribute("data-tq-done")));
+    });
+  }
+
+  // Bei Dashboard‑Rebuilds neu injizieren
+  function observeDashboardForTimed(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash || dash.__liferpg_timedObs) return;
+    const obs = new MutationObserver(()=> renderTimedDashboardCard());
+    obs.observe(dash, {childList:true});
+    dash.__liferpg_timedObs = obs;
+  }
+
+  /* =========================================================
+     C) Rewards‑Shop – Einlösen + Belege
+     ========================================================= */
+  function renderShopCard(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+    let card = document.getElementById("shopCard");
+    if(!card){
+      card = document.createElement("div");
+      card.id = "shopCard";
+      card.className = "card";
+      dash.appendChild(card);
+    }
+
+    const st = load();
+    const rewards = Array.isArray(st.rewards) ? st.rewards : [];
+    const { lvl } = levelForPoints(st, totalPoints(st));
+    const avail   = availableSavings(st);
+    const saved   = derivedSavings(st);
+    const spent   = spentTotal(st);
+
+    const rows = rewards.length ? rewards.map((r,i)=>{
+      const unlocked = lvl >= Number(r.level||0);
+      const cost = Number(r.cost||0);
+      const canBuy = unlocked && avail >= cost && cost>0;
+      return `
+        <div class="p-2 border rounded flex items-center justify-between ${unlocked?'bg-amber-50 border-amber-300':'bg-white'}">
+          <div class="text-sm">
+            <b>Level ${r.level}:</b> ${r.text||""} <span class="text-slate-500">(~€${nf2(cost)})</span>
+          </div>
+          <button class="btn text-sm ${canBuy?'':'opacity-50'}" data-redeem="${i}" ${canBuy?'':'disabled'}>Einlösen</button>
+        </div>
+      `;
+    }).join("") : `<div class="text-sm text-slate-500">Keine Rewards definiert.</div>`;
+
+    // Letzte Belege
+    const tickets = (Array.isArray(st.shopSpent)? st.shopSpent : []).slice(-5).reverse().map(t=>`
+      <div class="p-2 border rounded flex items-center justify-between">
+        <div class="text-sm">
+          ${t.date} • ${t.text} – €${nf2(t.cost)} ${t.note?`<span class="text-xs text-slate-500">(${t.note})</span>`:""}
+        </div>
+        <button class="btn text-sm" data-refund="${t.id}">Rückgängig</button>
+      </div>
+    `).join("");
+
+    card.innerHTML = `
+      <div class="font-semibold mb-2">🛒 Rewards‑Shop</div>
+      <div class="text-sm mb-2">Verfügbar: <b>€${nf2(avail)}</b> &nbsp; • &nbsp; Erspart gesamt: €${nf2(saved)} &nbsp; • &nbsp; Ausgegeben: €${nf2(spent)}</div>
+      <div class="space-y-2">${rows}</div>
+      <div class="mt-3">
+        <div class="font-semibold mb-1">Belege (letzte 5)</div>
+        ${tickets || `<div class="text-sm text-slate-500">Noch keine Belege.</div>`}
+      </div>
+    `;
+
+    // Redeem
+    card.querySelectorAll("[data-redeem]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const idx = Number(btn.getAttribute("data-redeem"));
+        const st = load();
+        const r = (st.rewards||[])[idx];
+        if(!r) return;
+        const cost = Number(r.cost||0);
+        if(availableSavings(st) < cost){ alert("Nicht genug verfügbares Guthaben."); return; }
+        const note = prompt(`Beleg/Notiz für „${r.text}“ (optional):`,"");
+        const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+        st.shopSpent = Array.isArray(st.shopSpent) ? st.shopSpent : [];
+        st.shopSpent.push({ id, date: todayISO(), level:r.level, text:r.text, cost, note: (note||"") });
+        save(st);
+        try{ if(window.Sound) Sound.task(); if(window.FX) FX.burst(); }catch{}
+        toast("Reward eingelöst ✅","bg-amber-700");
+        renderShopCard();
+      });
+    });
+
+    // Refund
+    card.querySelectorAll("[data-refund]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-refund");
+        const st = load();
+        st.shopSpent = (st.shopSpent||[]).filter(x=> x.id !== id);
+        save(st);
+        toast("Beleg rückgängig gemacht");
+        renderShopCard();
+      });
+    });
+  }
+
+  function observeDashboardForShop(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash || dash.__liferpg_shopObs) return;
+    const obs = new MutationObserver(()=> renderShopCard());
+    obs.observe(dash, {childList:true});
+    dash.__liferpg_shopObs = obs;
+  }
+
+  /* =========================================================
+     D) Kleine Hilfen
+     ========================================================= */
+  // Dashboard‑Zahlen (Kacheln) sanft aktualisieren, falls vorhanden
+  function refreshDashboardNumbers(){
+    const st = load();
+    const tp = totalPoints(st);
+    const sav= derivedSavings(st);
+    const lvl= levelForPoints(st, tp).lvl;
+    const tpEl = document.getElementById("totalPoints");
+    const savEl= document.getElementById("savingsTotal");
+    const lvEl = document.getElementById("currentLevel");
+    if(tpEl) tpEl.textContent = nf(tp);
+    if(savEl) savEl.textContent = nf2(sav);
+    if(lvEl) lvEl.textContent = nf(lvl);
+  }
+
+  // Wenn der Nutzer etwas loggt: Timed Overdues prüfen + Shop/Dashboard aktualisieren
+  function bindCommonAfterLog(){
+    const btn = document.getElementById("btnAddEntry");
+    if(!btn || btn.__liferpg_commonlog) return;
+    btn.__liferpg_commonlog = true;
+    btn.addEventListener("click", ()=>{
+      setTimeout(()=>{
+        settleTimedOverdues();
+        renderTimedDashboardCard();
+        renderShopCard();
+        refreshDashboardNumbers();
+      }, 50);
+    }, {passive:true});
+  }
+
+  /* =========================================================
+     E) Boot & Observers
+     ========================================================= */
+  function boot(){
+    // Settings
+    injectSettingsBackup();
+    observeSettings();
+
+    // Timed Quests
+    settleTimedOverdues();
+    injectTimedCatalog();
+    renderTimedDashboardCard();
+    observeDashboardForTimed();
+
+    // Shop
+    renderShopCard();
+    observeDashboardForShop();
+
+    // Common hooks
+    bindCommonAfterLog();
+
+    // Beim Tab‑Wechsel nötige Karten nachziehen
+    const navBtns = document.querySelectorAll("nav [data-tab]");
+    navBtns.forEach(b=>{
+      b.addEventListener("click", ()=>{
+        const tab = b.getAttribute("data-tab");
+        if(tab==="catalog"){ injectTimedCatalog(); }
+        if(tab==="dashboard"){ renderTimedDashboardCard(); renderShopCard(); }
+        if(tab==="settings"){ injectSettingsBackup(); }
+      });
+    });
+  }
+
+  if(document.readyState!=="loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
 
 </body>
 </html>
