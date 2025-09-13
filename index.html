@@ -2335,6 +2335,357 @@
 
 })();
 </script>
+<script>
+/* =========================================================
+   Life RPG – Part "Alles": PWA + Dark-Mode + CSV + Notifications
+   ========================================================= */
+(function(){
+  "use strict";
+
+  /* ---------- Storage Key Kompatibilität ---------- */
+  if(!window.lifeRPG) window.lifeRPG = {};
+  (function chooseKey(){
+    // Nimm alten Key, wenn vorhanden, sonst neuen
+    const k1='lifeRPG_p1', k2='lifeRPG_state_v1';
+    const s1=localStorage.getItem(k1), s2=localStorage.getItem(k2);
+    window.lifeRPG.stateKey = window.lifeRPG.stateKey || (s1? k1 : (s2? k2 : k1));
+  })();
+  const STORE_KEY = window.lifeRPG.stateKey;
+
+  function load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  const nf2 = n => new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+
+  /* =========================================================
+     A) PWA: Service Worker registrieren + Install-Button
+     ========================================================= */
+  let deferredPrompt = null;
+
+  function setupPWA(){
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    }
+    window.addEventListener('beforeinstallprompt', (e)=>{
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallCard(); // UI anzeigen
+    });
+  }
+
+  function showInstallCard(){
+    const settings = document.getElementById('tab-settings'); if(!settings) return;
+    if(document.getElementById('installCard')) return;
+    const card = document.createElement('div');
+    card.id = 'installCard';
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="font-semibold mb-2">App installieren</div>
+      <div class="text-sm text-slate-600 mb-2">Füge Life RPG zum Homescreen hinzu.</div>
+      <div class="flex gap-2">
+        <button id="btnInstallPWA" class="btn bg-blue-600 text-white">Installieren</button>
+        <button id="btnInstallHelp" class="btn">iOS‑Hinweis</button>
+      </div>
+    `;
+    settings.appendChild(card);
+
+    const btnInstall = card.querySelector('#btnInstallPWA');
+    btnInstall.addEventListener('click', async ()=>{
+      if(!deferredPrompt){ alert('Falls kein Prompt erscheint: Seite neu laden oder mit Chrome/Edge probieren.'); return; }
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch {}
+      deferredPrompt = null;
+    });
+
+    card.querySelector('#btnInstallHelp').addEventListener('click', ()=>{
+      alert("iOS: Teilen‑Button → „Zum Home‑Bildschirm“.");
+    });
+  }
+
+  /* =========================================================
+     B) Dark‑Mode (Auto/Hell/Dunkel) + stilistische Variablen
+     ========================================================= */
+  const THEME_KEY = 'lifeRPG_theme'; // 'auto' | 'light' | 'dark'
+
+  function applyTheme(theme){
+    const root = document.documentElement;
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = (theme==='dark') || (theme==='auto' && prefersDark);
+
+    root.classList.toggle('dark', !!dark);
+    // Theme Color für Android-Statusleiste
+    const meta = document.getElementById('themeColor');
+    if(meta) meta.setAttribute('content', dark ? '#0b1220' : '#0a7cff');
+  }
+
+  function ensureThemeStyles(){
+    if(document.getElementById('liferpg_theme_styles')) return;
+    const css = `
+      :root { --bg:#f8fafc; --fg:#0f172a; --card:#ffffff; --border:#cbd5e1; }
+      .dark { --bg:#0b1220; --fg:#e5e7eb; --card:#0f172a; --border:#334155; }
+      body { background: var(--bg) !important; color: var(--fg) !important; }
+      .card { background: var(--card) !important; border:1px solid var(--border) !important; border-radius:.75rem; padding:1rem; }
+      .btn { background: var(--card) !important; border:1px solid var(--border) !important; color: var(--fg) !important; }
+      .input { background: var(--card) !important; border:1px solid var(--border) !important; color: var(--fg) !important; }
+      nav { background: var(--card) !important; border-color: var(--border) !important; }
+    `;
+    const style = document.createElement('style');
+    style.id = 'liferpg_theme_styles';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  function injectThemeSettings(){
+    const tab = document.getElementById('tab-settings'); if(!tab) return;
+    if(document.getElementById('themeCard')) return;
+
+    const theme = localStorage.getItem(THEME_KEY) || 'auto';
+    ensureThemeStyles();
+    applyTheme(theme);
+
+    const card = document.createElement('div');
+    card.id = 'themeCard';
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="font-semibold mb-2">Darstellung</div>
+      <label class="text-sm">Theme
+        <select id="themeSelect" class="input mt-1">
+          <option value="auto">Auto (System)</option>
+          <option value="light">Hell</option>
+          <option value="dark">Dunkel</option>
+        </select>
+      </label>
+    `;
+    tab.appendChild(card);
+
+    const sel = card.querySelector('#themeSelect');
+    sel.value = theme;
+    sel.addEventListener('change', ()=>{
+      const t = sel.value;
+      localStorage.setItem(THEME_KEY, t);
+      applyTheme(t);
+    });
+
+    // Reagieren auf Systemwechsel im Auto‑Modus
+    if(window.matchMedia){
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      mq.addEventListener('change', ()=> {
+        if((localStorage.getItem(THEME_KEY)||'auto')==='auto') applyTheme('auto');
+      });
+    }
+  }
+
+  /* =========================================================
+     C) CSV‑Export (Log)
+     ========================================================= */
+  function exportCSV(){
+    const st = load();
+    const rows = Array.isArray(st.log) ? st.log : [];
+    if(rows.length===0){ alert('Noch keine Log‑Einträge.'); return; }
+
+    // Header dynamisch sammeln (robust gegenüber neuen Feldern)
+    const headers = Array.from(rows.reduce((set, r)=>{ Object.keys(r).forEach(k=>set.add(k)); return set; }, new Set(['date','quest','points'])));
+    const esc = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+    const csv = [headers.join(';')].concat(
+      rows.map(r => headers.map(h => esc(r[h])).join(';'))
+    ).join('\r\n');
+
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `life_rpg_log_${todayISO()}.csv`;
+    a.click();
+  }
+
+  function attachCSVButton(){
+    // Entweder in vorhandene Backup‑Karte integrieren …
+    let host = document.getElementById('settingsBackupCard');
+    if(host){
+      if(!document.getElementById('btnBackupCSV')){
+        const btn = document.createElement('button');
+        btn.id = 'btnBackupCSV';
+        btn.className = 'btn';
+        btn.textContent = 'CSV‑Export (Log)';
+        host.querySelector('.flex')?.appendChild(btn) || host.appendChild(btn);
+        btn.addEventListener('click', exportCSV);
+      }
+      return;
+    }
+    // … oder eigene Mini‑Karte, falls (noch) keine vorhanden ist
+    const tab = document.getElementById('tab-settings'); if(!tab) return;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="font-semibold mb-2">CSV‑Export</div>
+      <button id="btnBackupCSV" class="btn">CSV‑Export (Log)</button>
+    `;
+    tab.appendChild(card);
+    document.getElementById('btnBackupCSV').addEventListener('click', exportCSV);
+  }
+
+  /* =========================================================
+     D) Benachrichtigungen (tägliche Erinnerung)
+     ========================================================= */
+  const NOTI_KEY = 'lifeRPG_notify';
+  // Struktur: { enabled: true/false, time: "19:00" }
+
+  let notifyTimer = null;
+
+  function notify(title, body){
+    if(!('Notification' in window)) return;
+    if(Notification.permission !== 'granted') return;
+
+    // Versuche über SW (funktioniert auch im Standalone, wenn App offen), sonst Fallback
+    if(navigator.serviceWorker && navigator.serviceWorker.getRegistration){
+      navigator.serviceWorker.getRegistration().then(reg=>{
+        if(reg && reg.showNotification){
+          reg.showNotification(title, { body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png' });
+        }else{
+          new Notification(title, { body });
+        }
+      }).catch(()=> new Notification(title, { body }));
+    }else{
+      new Notification(title, { body });
+    }
+  }
+
+  function scheduleNextNotification(){
+    clearTimeout(notifyTimer);
+    const cfg = JSON.parse(localStorage.getItem(NOTI_KEY) || '{"enabled":false,"time":"19:00"}');
+    if(!cfg.enabled) return;
+
+    const [hh,mm] = (cfg.time||'19:00').split(':').map(Number);
+    const now = new Date();
+    const next = new Date();
+    next.setHours(hh, mm || 0, 0, 0);
+    if(next <= now) next.setDate(next.getDate() + 1);
+    const ms = next - now;
+
+    notifyTimer = setTimeout(()=>{
+      // kleine motivierende Nachricht
+      const st = load();
+      const total = (st.log||[]).length;
+      const msg = total === 0
+        ? 'Starte mit deiner ersten Quest! 💪'
+        : 'Mini‑Challenge wartet auf dich. 🔥';
+      notify('Life RPG', msg);
+      scheduleNextNotification(); // nächsten Tag planen
+    }, ms);
+  }
+
+  function injectNotificationsSettings(){
+    const tab = document.getElementById('tab-settings'); if(!tab) return;
+    if(document.getElementById('notifyCard')) return;
+
+    const cfg = JSON.parse(localStorage.getItem(NOTI_KEY) || '{"enabled":false,"time":"19:00"}');
+
+    const card = document.createElement('div');
+    card.id = 'notifyCard';
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="font-semibold mb-2">Erinnerungen</div>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="text-sm">Uhrzeit
+          <input id="notifyTime" type="time" class="input mt-1" value="${cfg.time||'19:00'}">
+        </label>
+        <label class="text-sm">Status
+          <select id="notifyEnabled" class="input mt-1">
+            <option value="true" ${cfg.enabled?'selected':''}>Aktiv</option>
+            <option value="false" ${!cfg.enabled?'selected':''}>Aus</option>
+          </select>
+        </label>
+      </div>
+      <div class="mt-2 flex gap-2">
+        <button id="btnNotifyPerm" class="btn">Berechtigung prüfen</button>
+        <button id="btnNotifyTest" class="btn">Test‑Reminder</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Hinweis: Web‑Apps können Erinnerungen nur sicher anzeigen, wenn die App im Vordergrund oder kürzlich geöffnet wurde. Für „echte“ Hintergrund‑Alarme bräuchte es native Apps/Push.</p>
+    `;
+    tab.appendChild(card);
+
+    const sel = card.querySelector('#notifyEnabled');
+    const tme = card.querySelector('#notifyTime');
+
+    sel.addEventListener('change', ()=>{
+      const cfg = JSON.parse(localStorage.getItem(NOTI_KEY) || '{}');
+      cfg.enabled = (sel.value === 'true');
+      localStorage.setItem(NOTI_KEY, JSON.stringify(cfg));
+      scheduleNextNotification();
+    });
+
+    tme.addEventListener('change', ()=>{
+      const cfg = JSON.parse(localStorage.getItem(NOTI_KEY) || '{}');
+      cfg.time = tme.value || '19:00';
+      localStorage.setItem(NOTI_KEY, JSON.stringify(cfg));
+      scheduleNextNotification();
+    });
+
+    card.querySelector('#btnNotifyPerm').addEventListener('click', async ()=>{
+      if(!('Notification' in window)) { alert('Benachrichtigungen nicht unterstützt.'); return; }
+      if(Notification.permission === 'granted'){ alert('Berechtigung ist bereits erteilt.'); return; }
+      try { await Notification.requestPermission(); } catch {}
+      alert('Status: ' + Notification.permission);
+    });
+
+    card.querySelector('#btnNotifyTest').addEventListener('click', ()=>{
+      notify('Life RPG', 'Test – klappt!');
+    });
+  }
+
+  /* =========================================================
+     E) Beobachter, damit Karten nach jedem Render wieder da sind
+     ========================================================= */
+  function observeSettings(){
+    const tab = document.getElementById('tab-settings');
+    if(!tab || tab.__liferpg_obs) return;
+    const obs = new MutationObserver(()=>{
+      injectThemeSettings();
+      attachCSVButton();
+      showInstallCard();
+      injectNotificationsSettings();
+    });
+    obs.observe(tab, {childList:true, subtree:false});
+    tab.__liferpg_obs = obs;
+  }
+
+  /* =========================================================
+     F) Boot
+     ========================================================= */
+  function boot(){
+    // PWA
+    setupPWA();
+
+    // Initiale Karten einhängen (falls Settings gerade sichtbar)
+    injectThemeSettings();
+    attachCSVButton();
+    showInstallCard();
+    injectNotificationsSettings();
+    observeSettings();
+
+    // Notifications starten (falls aktiv)
+    scheduleNextNotification();
+
+    // Beim Tab‑Wechsel ggf. Settings‑UIs nachziehen
+    document.querySelectorAll('nav [data-tab]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        if(b.getAttribute('data-tab')==='settings'){
+          // ein winziges Delay, damit der Tab DOM gemountet ist
+          setTimeout(()=>{
+            injectThemeSettings();
+            attachCSVButton();
+            showInstallCard();
+            injectNotificationsSettings();
+          }, 30);
+        }
+      });
+    });
+  }
+
+  if(document.readyState!=='loading') boot();
+  else document.addEventListener('DOMContentLoaded', boot);
+
+})();
+</script>
 
 </body>
 </html>
