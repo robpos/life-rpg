@@ -137,5 +137,1318 @@
       activateTab(name);
     });
   </script>
+  <script>
+(function(){
+  /* =======================
+     State & Persistence
+  ======================= */
+  const STORE_KEY = "lifeRPG_state_v1";
+
+  const defaultState = {
+    settings: { 
+      euro: 0.10,        // € pro Punkt
+      base: 100,         // Basis-Inkrement fürs Level
+      growth: 0.10,      // pro Level wird das Inkrement um 10% größer
+      dailyGoal: 3,      // Tagesziel: X Einträge/Quests
+      streakPerDay: 0.02,// +2% pro aktivem Tag in Folge
+      streakMax: 0.20    // max +20% durch Streak
+    },
+    catalog: [
+      { name: "Kein Essen bestellt", points: 10, boss: false },
+      { name: "30 Min. Sport", points: 20, boss: false },
+      { name: "15 Min. Aufräumen", points: 10, boss: false },
+      { name: "Keller aufräumen (Dungeon)", points: 50, boss: true }
+    ],
+    rewards: [
+      { level: 5,  text: "Essen bestellen", cost: 25 },
+      { level: 10, text: "Neues Shirt",     cost: 50 }
+    ],
+    log: [],                 // {date, quest, points, base?, note?, malus?}
+    timedQuests: [],         // {name, points, deadline, done, failed?}
+    dailyChallengeDate: "",
+    dailyChallenge: null,    // {text, points}
+    dailyEvent: { date:null, type:null, text:null, progress:0, done:false },
+    milestones: [
+      { id:"m500",     text:"500 Punkte insgesamt", ok:false, reward:50 },
+      { id:"m100q",    text:"100 Quests erledigt",  ok:false, reward:30 },
+      { id:"m30streak",text:"30 Tage Streak",       ok:false, reward:100 }
+    ]
+  };
+
+  function migrate(st){
+    st = st || {};
+    st.settings   = Object.assign({}, defaultState.settings, st.settings||{});
+    st.catalog    = Array.isArray(st.catalog) ? st.catalog : defaultState.catalog.slice();
+    st.rewards    = Array.isArray(st.rewards) ? st.rewards : defaultState.rewards.slice();
+    st.log        = Array.isArray(st.log) ? st.log : [];
+    st.timedQuests= Array.isArray(st.timedQuests) ? st.timedQuests : [];
+    st.milestones = Array.isArray(st.milestones) ? st.milestones : defaultState.milestones.slice();
+    st.dailyEvent = st.dailyEvent || { date:null, type:null, text:null, progress:0, done:false };
+    st.dailyChallengeDate = st.dailyChallengeDate || "";
+    st.dailyChallenge     = st.dailyChallenge || null;
+    return st;
+  }
+
+  function load(){
+    try { return migrate(JSON.parse(localStorage.getItem(STORE_KEY)) || defaultState); }
+    catch(e){ return JSON.parse(JSON.stringify(defaultState)); }
+  }
+  function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+  // Exposing small helpers for debugging (optional)
+  window.lifeRPG = window.lifeRPG || {};
+  window.lifeRPG.stateKey = STORE_KEY;
+
+  let state = load();
+  window.lifeRPG.getState  = () => state;
+  window.lifeRPG.resetState= () => { state = JSON.parse(JSON.stringify(defaultState)); save(); render(); };
+
+  /* =======================
+     Helpers & Derived values
+  ======================= */
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const nf  = n => new Intl.NumberFormat("de-DE").format(n);
+  const nf2 = n => new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+
+  function totalPoints(){ 
+    return state.log.reduce((s,e)=> s + (Number(e.points)||0), 0); 
+  }
+  function totalSavings(){ 
+    return totalPoints() * Number(state.settings.euro||0); 
+  }
+
+  // Liefert Level + Fortschritt im aktuellen Level
+  function levelForPoints(p){
+    let lvl=1, need=Number(state.settings.base||100), growth=Number(state.settings.growth||0.10), sum=0;
+    // solange Punkte reichen, weiteres Level holen
+    while(p >= sum + need){
+      sum += need;
+      lvl++;
+      need = Math.round(need * (1 + growth));
+      if(lvl > 100) break; // harte Kappe
+    }
+    return { lvl, current: p - sum, need }; // current = Punkte innerhalb des Levels, need = benötigte Punkte bis nächstes Level
+  }
+
+  function streakCount(){
+    const set = new Set(state.log.map(e=>e.date));
+    let c=0, cur=todayISO();
+    while(set.has(cur)){
+      c++;
+      const d = new Date(cur); d.setDate(d.getDate()-1);
+      cur = d.toISOString().slice(0,10);
+    }
+    return c;
+  }
+
+  /* =======================
+     Render (nur Anzeige)
+  ======================= */
+  function render(){
+    const el = id => document.getElementById(id);
+    const { lvl, current, need } = levelForPoints(totalPoints());
+
+    if(el("totalPoints"))  el("totalPoints").textContent = nf(totalPoints());
+    if(el("savingsTotal")) el("savingsTotal").textContent = nf2(totalSavings());
+    if(el("currentLevel")) el("currentLevel").textContent = nf(lvl);
+    if(el("streakVal"))    el("streakVal").textContent = nf(streakCount());
+
+    // Log-Liste (read-only)
+    const list = el("logList");
+    if(list){
+      list.innerHTML = state.log.length
+        ? state.log.slice().reverse().map(e => `<div>${e.date} • ${e.quest} +${e.points}</div>`).join("")
+        : "Noch keine Einträge.";
+    }
+
+    // Datum setzen (falls leer)
+    const d = el("logDate");
+    if(d && !d.value) d.value = todayISO();
+  }
+
+  // Beim Laden einmal rendern
+  window.addEventListener("DOMContentLoaded", render);
+
+  // (Speicherfunktioniert schon – echte Logik zum Eintragen kommt in Part 3)
+})();
+</script>
+<script>
+/* =========================================================
+   Part 3 – Basisfunktionen: Eintragen + Punkte + Render
+   → Ergänzt Part 2, ohne ihn zu ersetzen.
+   ========================================================= */
+(function(){
+  "use strict";
+
+  // --- Zugriff auf denselben Speicher-Key wie Part 2 ---
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  // Fallback-Defaults (falls Part 2 fehlt – normalerweise greifen wir die existierenden Daten)
+  const fallback = {
+    settings: { euro:0.10, base:100, growth:0.10, dailyGoal:3, streakPerDay:0.02, streakMax:0.20 },
+    catalog: [
+      { name: "Kein Essen bestellt", points: 10, boss: false },
+      { name: "30 Min. Sport", points: 20, boss: false },
+      { name: "15 Min. Aufräumen", points: 10, boss: false },
+      { name: "Keller aufräumen (Dungeon)", points: 50, boss: true }
+    ],
+    rewards: [
+      { level: 5,  text: "Essen bestellen", cost: 25 },
+      { level: 10, text: "Neues Shirt",     cost: 50 }
+    ],
+    log: [],
+    timedQuests: [],
+    dailyChallengeDate: "",
+    dailyChallenge: null,
+    dailyEvent: { date:null, type:null, text:null, progress:0, done:false },
+    milestones: [
+      { id:"m500",     text:"500 Punkte insgesamt", ok:false, reward:50 },
+      { id:"m100q",    text:"100 Quests erledigt",  ok:false, reward:30 },
+      { id:"m30streak",text:"30 Tage Streak",       ok:false, reward:100 }
+    ]
+  };
+
+  // --- Load/Save + Migration (robust gegen fehlende Felder) ---
+  function migrate(st){
+    st = st || {};
+    st.settings = Object.assign({}, fallback.settings, st.settings||{});
+    st.catalog  = Array.isArray(st.catalog)  ? st.catalog  : fallback.catalog.slice();
+    st.rewards  = Array.isArray(st.rewards)  ? st.rewards  : fallback.rewards.slice();
+    st.log      = Array.isArray(st.log)      ? st.log      : [];
+    st.timedQuests = Array.isArray(st.timedQuests) ? st.timedQuests : [];
+    st.dailyChallengeDate = st.dailyChallengeDate || "";
+    st.dailyChallenge     = st.dailyChallenge || null;
+    st.dailyEvent         = st.dailyEvent || { date:null, type:null, text:null, progress:0, done:false };
+    st.milestones         = Array.isArray(st.milestones) ? st.milestones : fallback.milestones.slice();
+    return st;
+  }
+  function load(){ 
+    try { return migrate(JSON.parse(localStorage.getItem(STORE_KEY)) || fallback); }
+    catch { return JSON.parse(JSON.stringify(fallback)); }
+  }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+
+  // --- Kleine Utils ---
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const nf  = (n)=> new Intl.NumberFormat("de-DE").format(n);
+  const nf2 = (n)=> new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+
+  // --- Abgeleitete Werte / Logik ---
+  function totalPoints(state){ return state.log.reduce((s,e)=> s + (Number(e.points)||0), 0); }
+  function totalSavings(state){ return totalPoints(state) * Number(state.settings.euro||0); }
+
+  function levelForPoints(state, p){
+    let lvl=1, need=Number(state.settings.base||100), growth=Number(state.settings.growth||0.10), sum=0;
+    while(p >= sum + need){
+      sum += need; lvl++; need = Math.round(need*(1+growth));
+      if(lvl>100) break;
+    }
+    return { lvl, current: p - sum, need };
+  }
+
+  function streakCount(state){
+    const set = new Set(state.log.map(e=>e.date));
+    let c=0, cur=todayISO();
+    while(set.has(cur)){
+      c++;
+      const d = new Date(cur); d.setDate(d.getDate()-1);
+      cur = d.toISOString().slice(0,10);
+    }
+    return c;
+  }
+
+  function computePoints(state, base, dateISO){
+    // Streak-Multiplikator: +X% pro Tag, gedeckelt
+    const per   = Number(state.settings.streakPerDay||0);
+    const cap   = Number(state.settings.streakMax||0);
+    // Streak zählt: wie viele aufeinanderfolgende Tage bis inkl. dateISO?
+    const set   = new Set(state.log.map(e=>e.date));
+    let s=0, cur=dateISO||todayISO();
+    while(set.has(cur)){ s++; const d=new Date(cur); d.setDate(d.getDate()-1); cur=d.toISOString().slice(0,10); }
+    const mult = Math.min(cap, Math.max(0, per * Math.max(0, s-1)));
+    return Math.round(Number(base||0) * (1 + mult));
+  }
+
+  // --- Render (nur die Felder, die wir jetzt brauchen) ---
+  function renderBasic(state){
+    const $ = (id)=> document.getElementById(id);
+    const pts  = totalPoints(state);
+    const { lvl } = levelForPoints(state, pts);
+
+    const elPts = $("totalPoints");  if(elPts)  elPts.textContent  = nf(pts);
+    const elSav = $("savingsTotal"); if(elSav)  elSav.textContent  = nf2(totalSavings(state));
+    const elLvl = $("currentLevel"); if(elLvl)  elLvl.textContent  = nf(lvl);
+    const elStr = $("streakVal");    if(elStr)  elStr.textContent  = nf(streakCount(state));
+
+    const list = $("logList");
+    if(list){
+      list.innerHTML = state.log.length
+        ? state.log.slice().reverse().map(e => 
+            `<div>${e.date} • ${e.quest} ${e.base?`(Base ${e.base})`:""} +${e.points}</div>`
+          ).join("")
+        : "Noch keine Einträge.";
+    }
+    const d = $("logDate");
+    if(d && !d.value) d.value = todayISO();
+  }
+
+  // --- Eintragen (Button) ---
+  function bindLogForm(){
+    const btn = document.getElementById("btnAddEntry");
+    if(!btn) return;
+
+    // Button aktivieren (in Part 1 war er disabled)
+    btn.disabled = false;
+
+    btn.addEventListener("click", ()=>{
+      let state = load();
+
+      const date   = (document.getElementById("logDate")?.value || todayISO());
+      const qName  = (document.getElementById("logQuest")?.value || "").trim();
+      const pInput = document.getElementById("logPoints")?.value;
+      const pNum   = pInput === "" ? NaN : Number(pInput);
+
+      if(!qName){
+        alert("Bitte einen Questnamen eingeben.");
+        return;
+      }
+
+      // Wenn Punkte leer: Katalog nach passendem Eintrag durchsuchen (case-insensitiv)
+      let base = NaN;
+      if(Number.isNaN(pNum)){
+        const found = state.catalog.find(q => q.name.toLowerCase() === qName.toLowerCase());
+        if(found) base = Number(found.points)||0;
+      } else {
+        base = pNum;
+      }
+
+      if(Number.isNaN(base) || base <= 0){
+        alert("Bitte Punkte angeben oder einen vorhandenen Katalog‑Questnamen verwenden.");
+        return;
+      }
+
+      const pts = computePoints(state, base, date);
+      state.log.push({ date, quest:qName, points:pts, base:base });
+      save(state);
+      renderBasic(state);
+
+      // Felder zurücksetzen (Quest/Points bleiben leer, Datum bleibt)
+      const qEl = document.getElementById("logQuest"); if(qEl) qEl.value = "";
+      const pEl = document.getElementById("logPoints"); if(pEl) pEl.value = "";
+    });
+
+    // Komfort: Enter in Punkten triggert Eintragen
+    const pEl = document.getElementById("logPoints");
+    if(pEl){
+      pEl.addEventListener("keyup", (e)=>{ if(e.key==="Enter") btn.click(); });
+    }
+    const qEl = document.getElementById("logQuest");
+    if(qEl){
+      qEl.addEventListener("keyup", (e)=>{ if(e.key==="Enter") btn.click(); });
+    }
+  }
+
+  // --- Start ---
+  window.addEventListener("DOMContentLoaded", ()=>{
+    renderBasic(load());
+    bindLogForm();
+  });
+
+})();
+</script>
+<script>
+/* =========================================================
+   Part 4 – Katalog-Editor + Auswahl im Log
+   - Katalog-Tab: Quests hinzufügen/löschen, Boss-Flag
+   - Log-Tab: Dropdown-Auswahl aus Katalog (füllt Felder)
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  // Fallback-Defaults für Katalog (falls Part 2/3 nicht geladen)
+  const defaultCatalog = [
+    { name: "Kein Essen bestellt", points: 10, boss: false },
+    { name: "30 Min. Sport", points: 20, boss: false },
+    { name: "15 Min. Aufräumen", points: 10, boss: false },
+    { name: "Keller aufräumen (Dungeon)", points: 50, boss: true }
+  ];
+
+  function load(){
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+
+  // Kleine DOM-Helper
+  const $ = (sel,root=document)=> root.querySelector(sel);
+  const $$ = (sel,root=document)=> Array.from(root.querySelectorAll(sel));
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+
+  /* -----------------------------
+     LOG: Dropdown aus Katalog
+  ----------------------------- */
+  function ensureLogSelect(){
+    const logTab = document.getElementById("tab-log");
+    if(!logTab) return;
+
+    // Wenn Select schon existiert → nur Optionen neu füllen
+    let sel = $("#logQuestSelect", logTab);
+    if(!sel){
+      // Select einfügen direkt NACH dem Textinput #logQuest
+      const input = $("#logQuest", logTab);
+      if(!input) return;
+      sel = document.createElement("select");
+      sel.id = "logQuestSelect";
+      sel.className = "input";
+      sel.title = "Aus Katalog wählen (optional)";
+      input.insertAdjacentElement("afterend", sel);
+
+      // Verhalten: Auswahl setzt Text + Punkte
+      sel.addEventListener("change", ()=>{
+        const val = sel.value;
+        const state = load();
+        const quest = (state.catalog||defaultCatalog).find(q=>q.name===val);
+        if(val && quest){
+          // Questname in Textfeld übernehmen & Punkte vorbelegen
+          const nameEl = $("#logQuest");
+          const ptsEl  = $("#logPoints");
+          if(nameEl) nameEl.value = quest.name;
+          if(ptsEl)  ptsEl.value  = quest.points;
+        }
+      });
+    }
+
+    // Optionen befüllen
+    const state = load();
+    const catalog = Array.isArray(state.catalog) ? state.catalog : defaultCatalog;
+    sel.innerHTML = [
+      `<option value="">Aus Katalog wählen …</option>`,
+      ...catalog.map(q=>`<option value="${q.name.replace(/"/g,'&quot;')}">${q.boss?'👑 ':''}${q.name} (+${q.points})</option>`)
+    ].join("");
+  }
+
+  /* -----------------------------
+     KATALOG: Render + Aktionen
+  ----------------------------- */
+  function renderCatalogTab(){
+    const tab = document.getElementById("tab-catalog");
+    if(!tab) return;
+
+    const state = load();
+    if(!Array.isArray(state.catalog)) state.catalog = defaultCatalog.slice();
+
+    // Editor-UI
+    tab.innerHTML = `
+      <div class="card">
+        <h2 class="font-semibold mb-1">Quest hinzufügen</h2>
+        <p class="text-sm text-slate-600">Name + Punkte angeben. Optional als <b>Bossquest</b> markieren (👑).</p>
+        <div class="grid grid-cols-1 gap-2 mt-3">
+          <input id="qName" class="input" placeholder="Questname (z. B. 'Küche gründlich putzen')" />
+          <input id="qPoints" type="number" class="input" placeholder="Punkte (z. B. 25)" />
+          <select id="qBoss" class="input">
+            <option value="false">Normale Quest</option>
+            <option value="true">Bossquest (👑)</option>
+          </select>
+          <div class="flex gap-2">
+            <button id="btnAddQuest" class="btn btn-primary">Zur Liste hinzufügen</button>
+            <button id="btnResetCatalog" class="btn">Standard wiederherstellen</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="font-semibold mb-1">Quest‑Katalog</h2>
+        <div id="catalogList" class="mt-2 space-y-2"></div>
+      </div>
+    `;
+
+    // Liste rendern
+    const list = $("#catalogList", tab);
+    list.innerHTML = state.catalog.length
+      ? state.catalog.map((q,i)=>`
+          <div class="p-2 border rounded flex items-center justify-between ${q.boss?'bg-yellow-50':''}">
+            <div class="text-sm">
+              ${q.boss?'👑 ':''}<b>${q.name}</b> <span class="text-slate-500">(+${q.points})</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="btn text-sm" data-edit="${i}">Bearbeiten</button>
+              <button class="btn text-sm" data-del="${i}">Löschen</button>
+            </div>
+          </div>
+        `).join("")
+      : `<div class="text-sm text-slate-500">Noch keine Quests im Katalog.</div>`;
+
+    // Hinzufügen
+    $("#btnAddQuest", tab)?.addEventListener("click", ()=>{
+      const name  = $("#qName", tab)?.value?.trim() || "";
+      const pts   = Number($("#qPoints", tab)?.value || 0);
+      const boss  = ($("#qBoss", tab)?.value === "true");
+      if(!name){ alert("Bitte einen Questnamen angeben."); return; }
+      if(!(pts>0)){ alert("Bitte Punkte > 0 angeben."); return; }
+
+      // Duplikate vermeiden (case-insensitiv)
+      if(state.catalog.some(q=>q.name.toLowerCase() === name.toLowerCase())){
+        alert("Diese Quest existiert bereits im Katalog.");
+        return;
+      }
+      state.catalog.push({ name, points: pts, boss });
+      save(state);
+      renderCatalogTab();
+      ensureLogSelect();
+      // Felder leeren
+      $("#qName", tab).value = "";
+      $("#qPoints", tab).value = "";
+      $("#qBoss", tab).value = "false";
+    });
+
+    // Reset auf Defaults
+    $("#btnResetCatalog", tab)?.addEventListener("click", ()=>{
+      if(!confirm("Katalog wirklich auf Standard zurücksetzen?")) return;
+      state.catalog = defaultCatalog.slice();
+      save(state);
+      renderCatalogTab();
+      ensureLogSelect();
+    });
+
+    // Löschen
+    $$("[data-del]", tab).forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const idx = Number(btn.getAttribute("data-del"));
+        if(Number.isNaN(idx)) return;
+        const q = state.catalog[idx];
+        if(!confirm(`„${q.name}“ wirklich löschen?`)) return;
+        state.catalog.splice(idx,1);
+        save(state);
+        renderCatalogTab();
+        ensureLogSelect();
+      });
+    });
+
+    // Bearbeiten (Inline-Prompt für Einfachheit)
+    $$("[data-edit]", tab).forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const idx = Number(btn.getAttribute("data-edit"));
+        if(Number.isNaN(idx)) return;
+        const q = state.catalog[idx];
+        const newName = prompt("Neuer Name:", q.name);
+        if(!newName) return;
+        const newPts  = Number(prompt("Neue Punkte:", q.points) || q.points);
+        const newBoss = confirm("Als Bossquest markieren? (OK = Ja / Abbrechen = Nein)");
+        state.catalog[idx] = { name:newName.trim(), points:newPts, boss:newBoss };
+        save(state);
+        renderCatalogTab();
+        ensureLogSelect();
+      });
+    });
+  }
+
+  /* -----------------------------
+     Start: initial aufbauen
+  ----------------------------- */
+  function boot(){
+    renderCatalogTab();
+    ensureLogSelect();
+
+    // Wenn der Nutzer später den Katalog-Tab anzeigt, zur Sicherheit neu rendern
+    const navBtns = document.querySelectorAll("nav [data-tab]");
+    navBtns.forEach(b=>{
+      b.addEventListener("click", ()=>{
+        if(b.getAttribute("data-tab")==="catalog"){
+          renderCatalogTab();
+        }
+        if(b.getAttribute("data-tab")==="log"){
+          ensureLogSelect();
+          // Heutiges Datum setzen, falls leer
+          const d = $("#logDate");
+          if(d && !d.value) d.value = todayISO();
+        }
+      });
+    });
+  }
+
+  // DOM ready
+  if(document.readyState !== "loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
+<script>
+/* =========================================================
+   Part 5 – Dashboard: Progressbar, Achievements, Rewards,
+   14‑Tage‑Chart, Tagesziel
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  // --- Load/Save ---
+  function load(){
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+    catch { return {}; }
+  }
+
+  // --- Utils & Derivates ---
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  const nf  = n => new Intl.NumberFormat("de-DE").format(n);
+  const nf2 = n => new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+
+  function totalPoints(state){ return (state.log||[]).reduce((s,e)=> s + (Number(e.points)||0), 0); }
+  function totalSavings(state){ return totalPoints(state) * Number(state.settings?.euro||0); }
+
+  function levelForPoints(state, p){
+    const base   = Number(state.settings?.base??100);
+    const growth = Number(state.settings?.growth??0.10);
+    let lvl=1, need=base, sum=0;
+    while(p >= sum + need){
+      sum += need;
+      lvl++;
+      need = Math.round(need*(1+growth));
+      if(lvl>100) break;
+    }
+    // current = Punkte innerhalb des aktuellen Levels
+    return { lvl, current: p - sum, need };
+  }
+
+  function streakCount(state){
+    const set = new Set((state.log||[]).map(e=>e.date));
+    let c=0, cur=todayISO();
+    while(set.has(cur)){
+      c++;
+      const d=new Date(cur); d.setDate(d.getDate()-1);
+      cur = d.toISOString().slice(0,10);
+    }
+    return c;
+  }
+
+  function countInRange(state, questNameIncludes, daysBack){
+    const from = new Date(); from.setDate(from.getDate()-daysBack);
+    return (state.log||[]).filter(e=>{
+      const d=new Date(e.date);
+      return d>=from && (e.quest||"").toLowerCase().includes(questNameIncludes);
+    }).length;
+  }
+
+  // --- Rendering Blocks ---
+  function renderDashboardV2(){
+    const tab = document.getElementById("tab-dashboard");
+    if(!tab) return;
+
+    const state = load();
+    const pts   = totalPoints(state);
+    const { lvl, current, need } = levelForPoints(state, pts);
+    const needLeft = Math.max(0, need - current);
+    const pct = Math.max(0, Math.min(100, Math.round((current/Math.max(1,need))*100)));
+
+    // Build Dashboard content (inkl. IDs, die Part 3 aktualisiert)
+    tab.innerHTML = `
+      <div class="card">
+        <h2 class="font-semibold mb-1">Dashboard</h2>
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <div class="card"><div class="text-xs text-slate-500">Gesamtpunkte</div><div class="text-2xl font-semibold" id="totalPoints">${nf(pts)}</div></div>
+          <div class="card"><div class="text-xs text-slate-500">Level</div><div class="text-2xl font-semibold" id="currentLevel">${nf(lvl)}</div></div>
+          <div class="card"><div class="text-xs text-slate-500">Sparstand (€)</div><div class="text-2xl font-semibold" id="savingsTotal">${nf2(totalSavings(state))}</div></div>
+          <div class="card"><div class="text-xs text-slate-500">Streak</div><div class="text-2xl font-semibold" id="streakVal">${nf(streakCount(state))}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold">Level‑Fortschritt</div>
+          <div class="text-xs text-slate-500">Level ${lvl} → ${lvl+1}</div>
+        </div>
+        <div class="w-full bg-slate-200 rounded h-3 mt-2">
+          <div id="lvBar" class="h-3 rounded" style="width:${pct}%; background:linear-gradient(90deg,#38bdf8,#22c55e,#f59e0b)"></div>
+        </div>
+        <div id="levelNextText" class="text-xs text-slate-600 mt-1">${needLeft>0 ? `Noch ${nf(needLeft)} Punkte bis zum nächsten Level` : "Max‑Level erreicht"}</div>
+      </div>
+
+      <div class="card">
+        <div class="font-semibold mb-2">Achievements</div>
+        <div id="achievementsGrid" class="grid grid-cols-1 gap-2"></div>
+      </div>
+
+      <div class="card">
+        <div class="font-semibold mb-2">Statistik (letzte 14 Tage)</div>
+        <canvas id="stats14" class="w-full" style="height:160px"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="font-semibold mb-2">Tagesziel</div>
+        <div id="dailyGoalBox" class="p-2 border rounded bg-gray-50 text-sm"></div>
+      </div>
+
+      <div class="card">
+        <div class="font-semibold mb-2">Rewards</div>
+        <div id="rewardsList" class="space-y-2"></div>
+      </div>
+    `;
+
+    renderAchievements(state);
+    drawStats14(state);
+    renderDailyGoal(state);
+    renderRewards(state);
+  }
+
+  function renderAchievements(state){
+    const wrap = document.getElementById("achievementsGrid");
+    if(!wrap) return;
+
+    // Beispiele/Start-Achievements:
+    const total = totalPoints(state);
+    const s     = streakCount(state);
+    const sport10 = (state.log||[]).filter(e=>(e.quest||"").toLowerCase().includes("sport")).length >= 10;
+    const noFood30 = countInRange(state, "kein essen", 30) >= 20;
+
+    const ach = [
+      {ok: total >= 100,  icon:"⭐️", title:"100 Punkte",     desc:"Sammle insgesamt 100 Punkte"},
+      {ok: s >= 5,        icon:"🔥", title:"5‑Tage‑Streak",  desc:"Sei 5 Tage in Folge aktiv"},
+      {ok: sport10,       icon:"💪", title:"Sport x10",      desc:"10× Sport eingetragen"},
+      {ok: noFood30,      icon:"🍔", title:"Fast‑Food‑frei", desc:"≥20× „Kein Essen bestellt“ in 30 Tagen"}
+    ];
+
+    wrap.innerHTML = ach.map(a => `
+      <div class="p-3 rounded-xl border ${a.ok?'border-green-300 bg-green-50':'border-slate-200 bg-slate-50'} flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">${a.icon}</span>
+          <div>
+            <div class="font-medium">${a.title}</div>
+            <div class="text-xs text-slate-500">${a.desc}</div>
+          </div>
+        </div>
+        <span class="text-xs px-2 py-1 rounded ${a.ok?'bg-green-200 text-green-800':'bg-slate-200 text-slate-700'}">${a.ok?'Erreicht':'Offen'}</span>
+      </div>
+    `).join("");
+  }
+
+  function drawStats14(state){
+    const cvs = document.getElementById("stats14");
+    if(!cvs) return;
+    const dpr = Math.max(1, window.devicePixelRatio||1);
+    const cssW = cvs.clientWidth || 320;
+    const cssH = 160;
+    cvs.width  = Math.floor(cssW * dpr);
+    cvs.height = Math.floor(cssH * dpr);
+    const ctx = cvs.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    // Daten für 14 Tage
+    const days=[];
+    const baseDate = new Date(todayISO());
+    for(let i=13;i>=0;i--){
+      const d = new Date(baseDate); d.setDate(baseDate.getDate()-i);
+      const iso = d.toISOString().slice(0,10);
+      const sum = (state.log||[]).filter(e=>e.date===iso).reduce((s,e)=>s+(Number(e.points)||0),0);
+      days.push({label: iso.slice(5), value: sum});
+    }
+    const max = Math.max(10, ...days.map(x=>x.value));
+    const pad = 24, H = cssH - pad*1.2, W = cssW - pad*2;
+    const barW = W / days.length * 0.6;
+
+    // Achse
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.beginPath();
+    ctx.moveTo(pad, cssH - pad);
+    ctx.lineTo(cssW - pad, cssH - pad);
+    ctx.stroke();
+
+    // Bars
+    days.forEach((d,i)=>{
+      const h = Math.round((H * d.value) / max);
+      const x = pad + i*(W/days.length) + (W/days.length - barW)/2;
+      const y = cssH - pad - h;
+      ctx.fillStyle = "#3b82f6";
+      ctx.fillRect(x,y,barW,h);
+      // Labels (jeden 2. Tag)
+      if(i%2===0){
+        ctx.fillStyle="#64748b";
+        ctx.font="10px system-ui, -apple-system, Segoe UI, Roboto";
+        ctx.fillText(d.label, x, cssH-6);
+      }
+    });
+  }
+
+  function renderDailyGoal(state){
+    const box = document.getElementById("dailyGoalBox");
+    if(!box) return;
+    const goal = Number(state.settings?.dailyGoal || 3);
+    const count = (state.log||[]).filter(e=>e.date===todayISO()).length;
+    if(count >= goal){
+      box.textContent = `✅ Tagesziel erreicht (${count}/${goal})`;
+      box.className   = "p-2 border rounded bg-green-100 text-sm";
+    }else{
+      box.textContent = `🔄 ${count}/${goal} erledigt – noch ${goal-count} offen`;
+      box.className   = "p-2 border rounded bg-yellow-100 text-sm";
+    }
+  }
+
+  function renderRewards(state){
+    const host = document.getElementById("rewardsList");
+    if(!host) return;
+    const list = Array.isArray(state.rewards) ? state.rewards : [];
+    const { lvl } = levelForPoints(state, totalPoints(state));
+
+    host.innerHTML = list.length ? list.map(r=>{
+      const unlocked = lvl >= Number(r.level||0);
+      const cost = Number(r.cost||0);
+      return `
+        <div class="p-3 border rounded flex items-center justify-between ${unlocked?'bg-amber-50 border-amber-300':'bg-white'}">
+          <div>
+            <div class="font-medium">Level ${r.level}: ${r.text||""}</div>
+            <div class="text-xs text-slate-500">~€${nf2(cost)}</div>
+          </div>
+          <span class="text-xs px-2 py-1 rounded ${unlocked?'bg-amber-200 text-amber-800':'bg-slate-200 text-slate-700'}">${unlocked?'Freigeschaltet':'Gesperrt'}</span>
+        </div>
+      `;
+    }).join("") : `<div class="text-sm text-slate-500">Noch keine Rewards definiert.</div>`;
+  }
+
+  // --- Re-Render Hooks ---
+  let resizeBound = false;
+
+  function scheduleRerenderAfterLog(){
+    // Wenn der Add-Button existiert, nach dem Klick kurz warten, dann re‑rendern
+    const addBtn = document.getElementById("btnAddEntry");
+    if(addBtn){
+      addBtn.addEventListener("click", ()=> setTimeout(()=> {
+        // Nach Part‑3‑Speichern neu aufbauen
+        renderDashboardV2();
+      }, 30));
+    }
+  }
+
+  function boot(){
+    renderDashboardV2();
+    scheduleRerenderAfterLog();
+
+    // Beim Tab-Wechsel auf Dashboard neu rendern
+    const dashBtn = document.querySelector('nav [data-tab="dashboard"]');
+    if(dashBtn){
+      dashBtn.addEventListener("click", ()=> renderDashboardV2());
+    }
+
+    // Redraw Chart bei Resize (nur 1x binden)
+    if(!resizeBound){
+      window.addEventListener("resize", ()=> {
+        const state = load();
+        drawStats14(state);
+      }, {passive:true});
+      resizeBound = true;
+    }
+  }
+
+  if(document.readyState!=="loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
+<script>
+/* =========================================================
+   Part 6 – Sounds, Konfetti, Boss‑Effekte, Daily Mini‑Challenge
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  /* ---------------------------
+     State laden/speichern
+  --------------------------- */
+  function load(){
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function save(st){
+    localStorage.setItem(STORE_KEY, JSON.stringify(st));
+  }
+
+  /* ---------------------------
+     Kleine Utils
+  --------------------------- */
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+
+  function levelForPointsState(state, points){
+    const base   = Number(state.settings?.base ?? 100);
+    const growth = Number(state.settings?.growth ?? 0.10);
+    let lvl=1, need=base, sum=0;
+    while(points >= sum + need){
+      sum += need; lvl++; need = Math.round(need*(1+growth));
+      if(lvl>100) break;
+    }
+    return { lvl, current: points - sum, need };
+  }
+  function totalPoints(state){
+    return (state.log||[]).reduce((s,e)=> s + (Number(e.points)||0), 0);
+  }
+
+  /* ---------------------------
+     WebAudio Sound-Engine
+  --------------------------- */
+  const Sound = (()=>{
+    let ctx=null;
+    let muted = JSON.parse(localStorage.getItem("lifeRPG_muted")||"false");
+    function ensure(){
+      if(!ctx){
+        const AC = window.AudioContext || window.webkitAudioContext;
+        try{ ctx = new AC(); }catch{ /* Safari ohne User-Interaction */ }
+      }
+    }
+    function tone(f=440, t=0.09, g=0.03, type="sine", when=0){
+      if(muted) return;
+      ensure(); if(!ctx) return;
+      const o=ctx.createOscillator(); const gain=ctx.createGain();
+      o.type=type; o.frequency.value=f; gain.gain.value=g;
+      o.connect(gain).connect(ctx.destination);
+      o.start(ctx.currentTime+when);
+      o.stop(ctx.currentTime+when+t);
+    }
+    function seq(notes){
+      if(muted) return;
+      ensure(); if(!ctx) return;
+      let w=0;
+      notes.forEach(([f,t=0.08,g=0.03,type="triangle",gap=0.03])=>{
+        tone(f,t,g,type,w); w += t + gap;
+      });
+    }
+    function click(){ tone(440,0.05,0.02,"sine"); }
+    function task(){ seq([[523,0.07,0.03], [659,0.07,0.03], [784,0.10,0.03]]); }
+    function level(){ seq([[392,0.10,0.03], [523,0.10,0.03], [659,0.12,0.03], [784,0.16,0.03]]); }
+    function boss(){ seq([[220,0.12,0.04,"sawtooth",0.02],[330,0.12,0.04,"sawtooth",0.02],[440,0.14,0.04,"sawtooth",0.03],[660,0.16,0.04,"sawtooth",0.04]]); }
+    function toggle(){
+      muted = !muted;
+      localStorage.setItem("lifeRPG_muted", JSON.stringify(muted));
+      return !muted;
+    }
+    return { click, task, level, boss, toggle, muted:()=>muted };
+  })();
+
+  // Mute-Button in Header einfügen (ohne HTML zu ändern)
+  function ensureMuteButton(){
+    const header = document.querySelector("header .flex.items-center.justify-between");
+    if(!header) return;
+    if(document.getElementById("btnMute")) return;
+    const btn = document.createElement("button");
+    btn.id = "btnMute";
+    btn.className = "btn";
+    btn.title = "Sound umschalten";
+    btn.textContent = Sound.muted()? "🔈" : "🔊";
+    header.appendChild(btn);
+    btn.addEventListener("click", ()=>{
+      const on = Sound.toggle();
+      btn.textContent = on ? "🔊" : "🔈";
+      Sound.click();
+    });
+  }
+
+  /* ---------------------------
+     Konfetti (Canvas Overlay)
+  --------------------------- */
+  const FX = (()=>{
+    let cvs = document.getElementById("fx");
+    if(!cvs){
+      cvs = document.createElement("canvas");
+      cvs.id = "fx";
+      cvs.style.position = "fixed";
+      cvs.style.inset = "0";
+      cvs.style.pointerEvents = "none";
+      cvs.style.zIndex = "50";
+      document.body.appendChild(cvs);
+    }
+    const ctx = cvs.getContext("2d");
+    let W=0,H=0, parts=[], raf=null;
+    function resize(){ W = cvs.width = window.innerWidth * (window.devicePixelRatio||1); H = cvs.height = window.innerHeight * (window.devicePixelRatio||1); }
+    window.addEventListener("resize", resize, {passive:true}); resize();
+
+    function spawn(n=100, strong=false){
+      for(let i=0;i<n;i++){
+        parts.push({
+          x: Math.random()*W, y: -20, r: 2+Math.random()*6,
+          vx: -1+Math.random()*2, vy: 2+Math.random()*3 + (strong?2:0),
+          a: Math.random()*Math.PI, col: `hsl(${Math.random()*360},85%,55%)`
+        });
+      }
+      if(!raf) loop();
+    }
+    function loop(){
+      raf = requestAnimationFrame(loop);
+      ctx.clearRect(0,0,W,H);
+      parts.forEach(p=>{
+        p.x += p.vx; p.y += p.vy; p.vy += 0.02; p.a += 0.1;
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.a);
+        ctx.fillStyle = p.col; ctx.fillRect(-p.r, -p.r, p.r*2, p.r*2); ctx.restore();
+      });
+      parts = parts.filter(p=> p.y < H + 40);
+      if(parts.length===0){ cancelAnimationFrame(raf); raf=null; }
+    }
+    return { burst: (strong=false)=> spawn(strong?180:100, strong) };
+  })();
+
+  /* ---------------------------
+     Boss‑Effekt (Sound+FX+Toast)
+  --------------------------- */
+  function bossEffect(){
+    FX.burst(true);
+    Sound.boss();
+    const t=document.createElement("div");
+    t.textContent="👑 Bossquest erledigt!";
+    t.className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded shadow-lg";
+    t.style.transform = "translateX(-50%)";
+    document.body.appendChild(t);
+    setTimeout(()=> t.remove(), 1800);
+  }
+
+  /* ---------------------------
+     Log‑Hook: Sounds/FX & Level‑Up
+  --------------------------- */
+  function bindLogFeedback(){
+    const btn = document.getElementById("btnAddEntry");
+    if(!btn) return;
+    if(btn.__lifeRPG_fx_bound) return; // nur einmal binden
+    btn.__lifeRPG_fx_bound = true;
+
+    btn.addEventListener("click", ()=>{
+      // Nach Part‑3 Eintrag kurz warten, dann Effekte
+      setTimeout(()=>{
+        const st = load();
+        if(!Array.isArray(st.log) || st.log.length===0) return;
+
+        // Letzter Eintrag
+        const last = st.log[st.log.length-1];
+        const afterTotal = totalPoints(st);
+        const beforeTotal = afterTotal - (Number(last.points)||0);
+        const lvBefore = levelForPointsState(st, beforeTotal).lvl;
+        const lvAfter  = levelForPointsState(st, afterTotal).lvl;
+
+        // Boss?
+        const isBoss = Array.isArray(st.catalog) && st.catalog.find(q=>q.name===last.quest && q.boss);
+
+        if(lvAfter > lvBefore){
+          Sound.level(); FX.burst(true);
+        }else if(isBoss){
+          bossEffect();
+        }else{
+          Sound.task(); FX.burst(false);
+        }
+      }, 25);
+    }, {passive:true});
+  }
+
+  /* ---------------------------
+     Daily Mini‑Challenge
+  --------------------------- */
+  const miniChallenges = [
+    {text:"Trink 2 Gläser Wasser", points:5},
+    {text:"10 Liegestütze", points:8},
+    {text:"15 Minuten spazieren", points:10},
+    {text:"2 Minuten meditieren", points:6},
+    {text:"1 Schublade aufräumen", points:10},
+    {text:"Kein Zucker bis Abend", points:12},
+    {text:"Fenster öffnen & 10 tiefe Atemzüge", points:6}
+  ];
+
+  function getTodayChallenge(state){
+    const today = todayISO();
+    if(state.dailyChallengeDate !== today || !state.dailyChallenge){
+      // Neue Challenge ziehen
+      state.dailyChallengeDate = today;
+      state.dailyChallenge = miniChallenges[Math.floor(Math.random()*miniChallenges.length)];
+      save(state);
+    }
+    return state.dailyChallenge;
+  }
+
+  function injectMiniChallengeCard(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+    if(document.getElementById("miniChallengeCard")) return; // schon da
+
+    const card = document.createElement("div");
+    card.id = "miniChallengeCard";
+    card.className = "card";
+    card.innerHTML = `
+      <div class="font-semibold mb-2">Mini‑Challenge</div>
+      <div id="dailyChallengeBox" class="p-2 border rounded bg-gray-50 text-sm"></div>
+    `;
+    dash.appendChild(card);
+
+    renderDailyChallenge(); // initial füllen
+  }
+
+  function renderDailyChallenge(){
+    const box = document.getElementById("dailyChallengeBox");
+    if(!box) return;
+    const state = load();
+    const ch = getTodayChallenge(state);
+
+    // Prüfen, ob schon erledigt (heute)
+    const done = (state.log||[]).some(e => e.date===todayISO() && (e.quest||"").startsWith("Daily Challenge: "));
+
+    if(done){
+      box.textContent = `✅ Tages‑Challenge erledigt: ${ch.text} (+${ch.points} Punkte)`;
+      box.className = "p-2 border rounded bg-green-100 text-sm";
+      return;
+    }
+
+    box.innerHTML = `
+      🎯 ${ch.text} (+${ch.points} Punkte)
+      <div class="mt-2">
+        <button id="btnDoChallenge" class="btn btn-primary">Erledigt!</button>
+      </div>
+    `;
+    const btn = document.getElementById("btnDoChallenge");
+    if(btn){
+      btn.addEventListener("click", ()=>{
+        const s = load();
+        // Eintrag hinzufügen (neutraler Name → wiedererkennbar)
+        s.log = Array.isArray(s.log) ? s.log : [];
+        s.log.push({date:todayISO(), quest:`Daily Challenge: ${ch.text}`, points:ch.points, base:ch.points});
+        save(s);
+
+        // Effekte + Re‑Render
+        Sound.task(); FX.burst(false);
+
+        // Dashboard von Part 5 baut sich beim Tab‑Klick neu auf;
+        // wir aktualisieren die Box direkt:
+        renderDailyChallenge();
+
+        // Zahlen oben (Dashboard-Kacheln) werden in Part 5 beim nächsten Render neu gesetzt.
+        // Optional: kleine Toast
+        const t=document.createElement("div");
+        t.textContent="✅ Mini‑Challenge eingetragen!";
+        t.className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded shadow-lg";
+        t.style.transform = "translateX(-50%)";
+        document.body.appendChild(t);
+        setTimeout(()=>t.remove(), 1400);
+      });
+    }
+  }
+
+  // Beobachten, wenn das Dashboard von Part 5 neu gerendert wurde → Mini‑Challenge wieder einfügen
+  function observeDashboard(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+    if(dash.__lifeRPG_obs) return;
+    const obs = new MutationObserver(()=>{
+      // Nach jedem Rebuild erneut die Karte einfügen und rendern
+      injectMiniChallengeCard();
+      renderDailyChallenge();
+    });
+    obs.observe(dash, {childList:true});
+    dash.__lifeRPG_obs = obs;
+  }
+
+  /* ---------------------------
+     Boot
+  --------------------------- */
+  function boot(){
+    ensureMuteButton();
+    bindLogFeedback();
+    injectMiniChallengeCard();
+    observeDashboard();
+  }
+
+  if(document.readyState!=="loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
+<script>
+/* =========================================================
+   Part 7 – Tages‑Events (Buffs/Debuffs)
+   - pro Tag genau 1 Event (z. B. doppelter Sport, 3x erledigen → Bonus,
+     Faulheits-Malus bei 0 Einträgen)
+   - Anzeige im Dashboard
+   - automatische Anwendung beim Loggen
+   - „Faulheits“-Malus wird beim nächsten Tag nachgetragen
+   ========================================================= */
+(function(){
+  "use strict";
+
+  const STORE_KEY = (window.lifeRPG && window.lifeRPG.stateKey) || "lifeRPG_state_v1";
+
+  // ---------- Storage ----------
+  function load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+  function save(st){ localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+
+  // ---------- Utils ----------
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  function totalPoints(st){ return (st.log||[]).reduce((s,e)=>s+(Number(e.points)||0),0); }
+  function levelForPoints(st, p){
+    const base   = Number(st.settings?.base ?? 100);
+    const growth = Number(st.settings?.growth ?? 0.10);
+    let lvl=1, need=base, sum=0;
+    while(p >= sum + need){
+      sum += need; lvl++; need = Math.round(need*(1+growth));
+      if(lvl>100) break;
+    }
+    return { lvl, current:p-sum, need };
+  }
+
+  // ---------- Event‑Definitionen ----------
+  const EVENT_POOL = [
+    { type:"doubleSport", text:"💪 Heute: doppelte Punkte für Sport!" },
+    { type:"bonus3",      text:"🎁 Heute: Erledige 3 Aufgaben → +20 Bonus!" },
+    { type:"malusLazy",   text:"😴 Heute: Wenn du NICHTS einträgst → −5 Punkte." }
+  ];
+
+  // ---------- Tageswechsel: altes Event „abrechnen“, neues ziehen ----------
+  function settlePreviousAndEnsureToday(){
+    const st = load();
+    const today = todayISO();
+
+    // Falls es ein Event von gestern (oder früher) gibt, das „Faulheits“-Malus hat und nicht erledigt wurde
+    if(st.dailyEvent?.date && st.dailyEvent.date !== today){
+      const ev = st.dailyEvent;
+      if(ev.type === "malusLazy" && !ev.done){
+        const hadEntries = (st.log||[]).some(e => e.date === ev.date);
+        if(!hadEntries){
+          // Malus einmalig nachtragen auf den EVENT‑Tag
+          st.log = Array.isArray(st.log) ? st.log : [];
+          st.log.push({ date: ev.date, quest: "Event-Malus (fauler Tag)", points: -5 });
+        }
+        ev.done = true;
+      }
+    }
+
+    // Neues Event für heute setzen, falls noch nicht geschehen
+    if(st.dailyEvent?.date !== today){
+      const rnd = EVENT_POOL[Math.floor(Math.random()*EVENT_POOL.length)];
+      st.dailyEvent = { date: today, type: rnd.type, text: rnd.text, progress: 0, done: false };
+    }
+
+    save(st);
+    return st;
+  }
+
+  // ---------- Event‑Box im Dashboard ----------
+  function renderEventBox(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash) return;
+
+    // Karte (wird bei Dashboard‑Rebuilds neu injiziert)
+    let card = document.getElementById("dailyEventCard");
+    if(!card){
+      card = document.createElement("div");
+      card.id = "dailyEventCard";
+      card.className = "card";
+      dash.appendChild(card);
+    }
+
+    const st = load();
+    const ev = st.dailyEvent;
+    if(!ev || ev.date !== todayISO()){
+      card.innerHTML = `<div class="font-semibold mb-2">🎲 Tages‑Event</div>
+                        <div class="text-sm text-slate-500">Kein Event aktiv.</div>`;
+      return;
+    }
+
+    // Progress‑Zeile nur bei bonus3
+    let progressHTML = "";
+    if(ev.type === "bonus3"){
+      const prog = Number(ev.progress||0);
+      progressHTML = `<div class="mt-1 text-xs text-slate-600">Fortschritt: ${prog}/3</div>`;
+    }
+
+    card.innerHTML = `
+      <div class="font-semibold mb-2">🎲 Tages‑Event</div>
+      <div>${ev.text}</div>
+      ${progressHTML}
+    `;
+  }
+
+  // ---------- Anwendung beim Loggen ----------
+  function bindEventOnLog(){
+    const btn = document.getElementById("btnAddEntry");
+    if(!btn || btn.__lifeRPG_event_bound) return;
+    btn.__lifeRPG_event_bound = true;
+
+    btn.addEventListener("click", ()=>{
+      // kurz warten bis Part‑3 den Eintrag geschrieben hat
+      setTimeout(()=>{
+        let st = load();
+        const ev = st.dailyEvent;
+        const today = todayISO();
+        if(!Array.isArray(st.log) || st.log.length===0 || !ev || ev.date !== today) {
+          renderEventBox();
+          return;
+        }
+
+        const last = st.log[st.log.length-1];
+        let changed = false;
+
+        // Punkte vor Änderung merken, um Level‑Up korrekt zu erkennen
+        const beforeTotal = totalPoints(st);
+
+        // Effekt anwenden
+        if(ev.type === "doubleSport"){
+          if((last.quest||"").toLowerCase().includes("sport")){
+            last.points = Math.round(Number(last.points)||0) * 2;
+            if(!/Event x2$/.test(last.quest)) last.quest += " (Event x2)";
+            changed = true;
+          }
+        }
+
+        if(ev.type === "bonus3" && !ev.done){
+          ev.progress = Number(ev.progress||0) + 1;
+          if(ev.progress >= 3){
+            // Bonus gut schreiben
+            st.log.push({ date: today, quest: "Event‑Bonus", points: 20 });
+            ev.done = true;
+            // kleines Feedback (falls Part 6 vorhanden)
+            try { if(window.FX) FX.burst(); if(window.Sound) Sound.task(); } catch{}
+          }
+          changed = true;
+        }
+
+        if(changed){
+          save(st);
+
+          // Level‑Up ggf. nachziehen (da Part 6 vorher laufen könnte)
+          const afterTotal  = totalPoints(st);
+          const lvBefore    = levelForPoints(st, beforeTotal).lvl;
+          const lvAfter     = levelForPoints(st, afterTotal).lvl;
+          if(lvAfter > lvBefore){
+            try { if(window.Sound) Sound.level(); if(window.FX) FX.burst(true); } catch{}
+          }
+        }
+
+        renderEventBox();
+      }, 35);
+    }, {passive:true});
+  }
+
+  // ---------- Bei Dashboard‑Rebuilds erneut injizieren ----------
+  function observeDashboardForEvent(){
+    const dash = document.getElementById("tab-dashboard");
+    if(!dash || dash.__lifeRPG_eventObs) return;
+    const obs = new MutationObserver(()=> renderEventBox());
+    obs.observe(dash, {childList:true});
+    dash.__lifeRPG_eventObs = obs;
+  }
+
+  // ---------- Boot ----------
+  function boot(){
+    settlePreviousAndEnsureToday();
+    renderEventBox();
+    bindEventOnLog();
+    observeDashboardForEvent();
+
+    // Beim Wechsel auf den Dashboard‑Tab neu zeichnen
+    const dashBtn = document.querySelector('nav [data-tab="dashboard"]');
+    dashBtn && dashBtn.addEventListener("click", ()=> {
+      settlePreviousAndEnsureToday();
+      renderEventBox();
+    });
+  }
+
+  if(document.readyState!=="loading") boot();
+  else document.addEventListener("DOMContentLoaded", boot);
+
+})();
+</script>
+
 </body>
 </html>
