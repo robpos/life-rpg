@@ -13391,7 +13391,326 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH D === -->
+<!-- === PATCH E : Dynamische Meilensteine (Quests/Missionen/Bossquests/Kategorien) — vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
 
+  if(!window.state){ console.warn("Patch E: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const S = window.state;
+  const TODAY = ()=> new Date().toISOString().slice(0,10);
+  const SAVE  = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+
+  // -------- Helpers --------
+  const getCatalogByName = (name)=> (S.catalog||[]).find(q=>q.name===name);
+  const isPositive = (n)=> Number(n||0) > 0;
+
+  // Robust: Missende Container initialisieren
+  S.milestones = Array.isArray(S.milestones) ? S.milestones : [];
+  S.categories = S.categories || { list:[], byQuest:{} }; // falls noch nicht vorhanden
+
+  // Zähler bestimmen
+  function computeStats(){
+    const log = Array.isArray(S.log) ? S.log : [];
+    let quests=0, boss=0;
+    const seenToday = new Set();
+
+    log.forEach(e=>{
+      const q = getCatalogByName(e.quest);
+      if(!q) return;             // nur Quests aus dem Katalog zählen
+      if(!isPositive(e.points)) return; // nur positive Abschlüsse
+
+      if(q.boss) boss++;
+      else quests++;
+    });
+
+    // Missionen (falls Missionssystem vorhanden)
+    let missionsDone = 0;
+    if(Array.isArray(S.missions)){
+      missionsDone = S.missions.filter(m=>m.done===true).length;
+    }else{
+      missionsDone = S.missionsDone || 0; // Fallback
+    }
+
+    // Kategorien-Zähler (pro Kategorie: Anzahl positiver Abschlüsse zugewiesenem Quest)
+    const catCounts = {};
+    const catNames  = {};
+    (S.categories.list||[]).forEach(c=>{
+      catCounts[c.id] = 0;
+      catNames[c.id]  = c.name || ("Kategorie "+c.id);
+    });
+    log.forEach(e=>{
+      if(!isPositive(e.points)) return;
+      const cid = (S.categories.byQuest||{})[e.quest];
+      if(cid && cid in catCounts) catCounts[cid]++;
+    });
+
+    return { quests, boss, missionsDone, catCounts, catNames };
+  }
+
+  // -------- Regeln / Schwellen --------
+  // Feste Beispiele aus deiner Beschreibung + skalierende Fortsetzung
+  const RULES = {
+    quests: {
+      thresholds: [100,200,500,1000,2000,5000,10000,20000,50000],
+      fixed: {100:100, 200:400, 500:2500}, growth: 2.0,
+      title: (thr)=>`🏁 ${thr} Quests erledigt`,
+      desc:  (thr)=>`Erreiche insgesamt ${thr} normale Quests`
+    },
+    boss: {
+      thresholds: [10,20,50,100,200,500,1000],
+      fixed: {10:100, 20:200, 50:2500}, growth: 2.0,
+      title: (thr)=>`👑 ${thr} Bossquests besiegt`,
+      desc:  (thr)=>`Erledige insgesamt ${thr} Bossquests`
+    },
+    missions: {
+      thresholds: [5,10,20,50,100,200,500,1000],
+      fixed: {5:50, 10:100, 20:400, 50:2500}, growth: 2.0,
+      title: (thr)=>`🎯 ${thr} Missionen abgeschlossen`,
+      desc:  (thr)=>`Schließe insgesamt ${thr} Missionen ab`
+    },
+    // Kategorien: standardisierte Staffel
+    category: {
+      thresholds: [10,25,50,100,200,500,1000],
+      rewardOf: (thr)=> thr*5, // linear, günstig & motivierend
+      title: (name,thr)=>`🏷️ ${name}: ${thr} Abschlüsse`,
+      desc:  (name,thr)=>`Erledige ${thr} Quests in Kategorie „${name}“`
+    }
+  };
+
+  function rewardFor(ruleKey, thr){
+    const r = RULES[ruleKey];
+    if(!r) return 0;
+    if(r.fixed && r.fixed[thr]!=null) return r.fixed[thr];
+    // fallback: skaliere vom größten bekannten Fixwert an
+    let known = Object.keys(r.fixed||{}).map(n=>Number(n)).sort((a,b)=>a-b);
+    let baseThr = known.length ? known[known.length-1] : (r.thresholds && r.thresholds[0]) || 10;
+    let baseRew = known.length ? r.fixed[baseThr] : 50;
+    if(thr<=baseThr) return baseRew;
+
+    let curThr = baseThr, curRew = baseRew;
+    while(curThr < thr){
+      // nächstes Threshold aus Liste oder verdoppeln bis wir >= thr sind
+      let next = (r.thresholds||[]).find(x=>x>curThr) || (curThr*2);
+      curRew = Math.round(curRew * (r.growth||2));
+      curThr  = next;
+    }
+    return curRew;
+  }
+
+  // -------- Meilensteine erzeugen / synchronisieren --------
+  function milestoneId(kind, key, thr){ // key: global oder kategorieId
+    return `ms:${kind}:${key}:${thr}`;
+  }
+
+  function ensureMilestone(obj){
+    // Fix gegen "undefined": Felder immer setzen
+    obj.id      = obj.id || `ms:${Math.random().toString(36).slice(2)}`;
+    obj.title   = obj.title || "Meilenstein";
+    obj.desc    = obj.desc  || "";
+    obj.kind    = obj.kind  || "misc";
+    obj.key     = (obj.key==null ? "all" : obj.key);
+    obj.ok      = !!obj.ok;
+    obj.claimed = !!obj.claimed;
+    obj.thr     = Number(obj.thr||0);
+    obj.reward  = Number(obj.reward||0);
+    return obj;
+  }
+
+  function ensureBaseMilestones(){
+    const { catCounts, catNames } = computeStats();
+
+    // Globale Serien
+    [
+      {kind:"quests",   key:"all", rule:"quests"},
+      {kind:"boss",     key:"all", rule:"boss"},
+      {kind:"missions", key:"all", rule:"missions"}
+    ].forEach(({kind,key,rule})=>{
+      (RULES[rule].thresholds||[]).forEach(thr=>{
+        const id = milestoneId(kind,key,thr);
+        if(!S.milestones.find(m=>m.id===id)){
+          const reward = rewardFor(rule,thr);
+          const title  = RULES[rule].title(thr);
+          const desc   = RULES[rule].desc(thr);
+          S.milestones.push(ensureMilestone({id, kind, key, thr, reward, title, desc, ok:false, claimed:false}));
+        }
+      });
+    });
+
+    // Kategorien-Serien (nur, wenn Kategorien existieren)
+    Object.keys(catCounts).forEach(cid=>{
+      const name = catNames[cid] || "Kategorie";
+      (RULES.category.thresholds||[]).forEach(thr=>{
+        const id = milestoneId("category",cid,thr);
+        if(!S.milestones.find(m=>m.id===id)){
+          const reward = RULES.category.rewardOf(thr);
+          const title  = RULES.category.title(name,thr);
+          const desc   = RULES.category.desc(name,thr);
+          S.milestones.push(ensureMilestone({id, kind:"category", key:cid, thr, reward, title, desc, ok:false, claimed:false}));
+        }
+      });
+    });
+
+    SAVE();
+  }
+
+  // -------- Prüfen & Belohnen --------
+  function currentProgress(kind,key){
+    const { quests, boss, missionsDone, catCounts } = computeStats();
+    if(kind==="quests")   return quests;
+    if(kind==="boss")     return boss;
+    if(kind==="missions") return missionsDone;
+    if(kind==="category") return (catCounts[key]||0);
+    return 0;
+  }
+
+  function checkAndAwardMilestones(){
+    let changed=false;
+    S.milestones.forEach(m=>{
+      // immer Felder fixen (gegen undefined)
+      ensureMilestone(m);
+
+      const prog = currentProgress(m.kind, m.key);
+      if(!m.ok && prog >= Number(m.thr||0)){
+        m.ok = true;
+        changed = true;
+      }
+      if(m.ok && !m.claimed){
+        // Belohnung vergeben
+        const pts = Number(m.reward||0);
+        if(pts>0){
+          S.log.push({date:TODAY(), quest:`Milestone: ${m.title}`, points:pts});
+        }
+        m.claimed = true;
+        changed = true;
+      }
+    });
+    if(changed) SAVE();
+  }
+
+  // -------- UI --------
+  function renderMilestonesBox(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+
+    let box = document.getElementById("dashMilestonesBoxV2");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "dashMilestonesBoxV2";
+      box.className = "mt-4 p-3 border rounded bg-orange-50";
+      host.appendChild(box);
+    }
+
+    // Aufteilen: Nächste anstehende (pro Serie 1) + kürzlich geschaffte
+    const groups = {
+      quests:   S.milestones.filter(m=>m.kind==="quests").sort((a,b)=>a.thr-b.thr),
+      boss:     S.milestones.filter(m=>m.kind==="boss").sort((a,b)=>a.thr-b.thr),
+      missions: S.milestones.filter(m=>m.kind==="missions").sort((a,b)=>a.thr-b.thr),
+      category: S.milestones.filter(m=>m.kind==="category").sort((a,b)=>a.thr-b.thr)
+    };
+
+    function nextPending(list){
+      return list.find(m=>!m.ok) || null;
+    }
+    const nxt = {
+      quests:   nextPending(groups.quests),
+      boss:     nextPending(groups.boss),
+      missions: nextPending(groups.missions)
+    };
+
+    // 3 „nächste“ zeigen + 5 zuletzt geschaffte
+    const recentDone = S.milestones
+      .filter(m=>m.ok)
+      .slice(-5)
+      .reverse();
+
+    let html = `<h3 class="font-bold">🎯 Meilensteine</h3>`;
+
+    html += `<div class="grid grid-cols-1 gap-2 mt-2">
+      ${nxt.quests   ? milestoneRow(nxt.quests)   : `<div class="text-sm text-slate-600">Alle Quest-Meilensteine erreicht ✔️</div>`}
+      ${nxt.boss     ? milestoneRow(nxt.boss)     : `<div class="text-sm text-slate-600">Alle Boss-Meilensteine erreicht ✔️</div>`}
+      ${nxt.missions ? milestoneRow(nxt.missions) : `<div class="text-sm text-slate-600">Alle Missions-Meilensteine erreicht ✔️</div>`}
+    </div>`;
+
+    // Kategorien – nur die nächsten 3 fälligsten
+    const catNext = [];
+    Object.values(groups.category).forEach(m=>{
+      if(!m.ok) catNext.push(m);
+    });
+    catNext.sort((a,b)=>a.thr-b.thr);
+    const catSlice = catNext.slice(0,3);
+
+    if(catSlice.length){
+      html += `<div class="mt-3"><div class="font-semibold mb-1">Kategorien – als nächstes:</div>
+        ${catSlice.map(m=>milestoneRow(m)).join("")}
+      </div>`;
+    }
+
+    if(recentDone.length){
+      html += `<div class="mt-3"><div class="font-semibold mb-1">Kürzlich geschafft:</div>
+        ${recentDone.map(m=>milestoneRow(m,true)).join("")}
+      </div>`;
+    }
+
+    box.innerHTML = html;
+  }
+
+  function milestoneRow(m, done=false){
+    const safeTitle = m.title || "Meilenstein";
+    const safeDesc  = m.desc  || "";
+    const badge = done ? "✅" : "⏳";
+    const style = done ? "bg-green-100 border-green-300" : "bg-white";
+    return `<div class="p-2 border rounded ${style}">
+      <div class="flex justify-between items-center">
+        <div>
+          <div class="font-medium">${badge} ${safeTitle}</div>
+          <div class="text-xs text-slate-600">${safeDesc}</div>
+        </div>
+        <div class="text-xs text-slate-700">Belohnung: +${Number(m.reward||0)} P.</div>
+      </div>
+    </div>`;
+  }
+
+  // Hook in renderDashboard
+  const _oldRenderDashboard_E = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof _oldRenderDashboard_E==="function") _oldRenderDashboard_E();
+    ensureBaseMilestones();
+    checkAndAwardMilestones();
+    renderMilestonesBox();
+  };
+
+  // -------- Log-Push hook (Belohnungen sofort prüfen) --------
+  function patchLogPushMilestones(){
+    const st=window.state;
+    if(!st || !st.log || st._logPushMilestonesPatched) return;
+    const orig = st.log.push.bind(st.log);
+    st.log.push = function(...items){
+      const res = orig(...items);
+      try{
+        ensureBaseMilestones();
+        checkAndAwardMilestones();
+        // Dashboard ggf. aktualisieren
+        if(typeof window.renderDashboard==="function") window.renderDashboard();
+      }catch(e){ console.warn("Patch E check award failed", e); }
+      return res;
+    };
+    st._logPushMilestonesPatched = true;
+  }
+  patchLogPushMilestones();
+  setInterval(()=>{ if(window.state && !window.state._logPushMilestonesPatched) patchLogPushMilestones(); }, 1500);
+
+  // -------- Init --------
+  try{
+    ensureBaseMilestones();
+    checkAndAwardMilestones();
+    if(typeof window.renderAll==="function") window.renderAll();
+    else if(typeof window.renderDashboard==="function") window.renderDashboard();
+  }catch(e){ console.warn("Patch E init:", e); }
+
+})();
+</script>
+<!-- === /PATCH E === -->
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
   // Ich sage dir dann immer: "Füge Part X direkt ÜBER dem EXTENSION-POINT ein."
