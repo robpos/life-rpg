@@ -11779,6 +11779,174 @@ window.completeMission = function(missionName, basePointsTotal){
 
 })();
 <!-- ==== /DYNAMISCHE MEILENSTEINE ==== -->
+<!-- ==== MISSION-BONUS (4×) + CHAT FIX (vor </script> einfügen) ==== -->
+(function(){
+
+  // ---------- Hilfen ----------
+  const todayISO = window.todayISO || (()=>new Date().toISOString().slice(0,10));
+  function toast(msg, cls="bg-emerald-600"){
+    const t=document.createElement("div");
+    t.textContent=msg;
+    t.className=`fixed bottom-24 left-1/2 -translate-x-1/2 ${cls} text-white px-4 py-2 rounded shadow-lg`;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),2000);
+  }
+  function sum(arr){return arr.reduce((a,b)=>a+b,0);}
+
+  // ---------- Mission-Utils ----------
+  state.missions = state.missions || [];
+  // Flag pro Mission, ob der 4×-Abschlussbonus bereits ausgeschüttet wurde
+  // (falls ältere Missionen existieren, initialisiere sicher)
+  state.missions.forEach(m=>{ if(m && typeof m.rewarded==="undefined") m.rewarded=false; });
+
+  function missionTotalPoints(m){
+    if(!m || !Array.isArray(m.tasks)) return 0;
+    return sum(m.tasks.map(t=>Number(t && t.points || 0)));
+  }
+  function isMissionDone(m){
+    if(!m) return false;
+    if(m.done===true) return true;
+    if(Array.isArray(m.tasks) && m.tasks.length>0){
+      return m.tasks.every(t=>t && t.done===true);
+    }
+    return false;
+  }
+  function recomputeUnlocks(m){
+    // falls dein Missionsblock bereits eine eigene Funktion hat, diese bevorzugen
+    if(typeof window.recomputeUnlocks==="function" && m) return window.recomputeUnlocks(m);
+    // Minimal: nichts tun (Tasks bleiben sichtbar)
+  }
+
+  // Versuche, den letzten Log-Eintrag einer offenen Task zuzuordnen (Name = exakt)
+  function tryMarkTaskFromLog(entry){
+    if(!entry || !entry.quest) return null;
+    let touched = null;
+
+    for(const m of state.missions){
+      if(!m || !Array.isArray(m.tasks)) continue;
+      const task = m.tasks.find(t => t && !t.done && (t.name||"").toLowerCase() === entry.quest.toLowerCase());
+      if(task){
+        task.done = true;
+        task.doneAt = entry.date || todayISO();
+        touched = m;
+        recomputeUnlocks(m);
+        break;
+      }
+    }
+    return touched; // Mission, die verändert wurde, oder null
+  }
+
+  function awardMissionIfCompleted(m){
+    if(!m) return false;
+    if(m.rewarded) return false;
+    const done = isMissionDone(m);
+    if(!done) return false;
+
+    // 4× Summe aller Task-Punkte als **Bonus** (ohne Streak/Multiplikator)
+    const baseSum = missionTotalPoints(m);
+    const bonus   = baseSum * 4;
+
+    state.log.push({
+      date: todayISO(),
+      quest: `Mission abgeschlossen: ${m.name || "Ohne Titel"}`,
+      points: bonus
+    });
+    m.rewarded = true;
+    try{ save(); }catch(e){}
+    try{
+      if(window.FX) FX.burst();
+      if(window.Sound && Sound.level) Sound.level();
+    }catch(e){}
+
+    toast(`🎉 Mission abgeschlossen! +${bonus} Punkte`);
+    return true;
+  }
+
+  // ---------- addLog hooken ----------
+  const prevAddLog = window.addLog;
+  window.addLog = function(){
+    const lenBefore = (state.log||[]).length;
+    // ursprüngliches Logging ausführen
+    if(typeof prevAddLog==="function"){ prevAddLog(); }
+    const lenAfter = (state.log||[]).length;
+    if(lenAfter<=lenBefore) return;
+
+    const last = state.log[lenAfter-1];
+
+    // 1) Task auto-abhaken (wenn Name identisch)
+    const changedMission = tryMarkTaskFromLog(last);
+    if(changedMission){
+      try{ save(); }catch(e){}
+      awardMissionIfCompleted(changedMission);
+      if(typeof window.renderAll==="function") renderAll();
+    }
+  };
+
+  // ---------- Chat reaktivieren & vereinheitlichen ----------
+  // Robuste Chat-Ausgabe (nutzt #chatWindow, fallback #chatLog)
+  window.chatAddMessage = function(from, text){
+    const host = document.getElementById("chatWindow") || document.getElementById("chatLog");
+    if(!host) return;
+    const row = document.createElement("div");
+    const isUser = (from==="user");
+    row.className = isUser ? "text-right" : "text-left text-blue-700";
+    row.textContent = text;
+    host.appendChild(row);
+    host.scrollTop = host.scrollHeight;
+  };
+
+  let chatBound = false;
+  function ensureChatBindings(){
+    if(chatBound) return;
+    const btn = document.getElementById("btnChatSend") || document.getElementById("btnChat");
+    const inp = document.getElementById("chatInput");
+    if(!btn || !inp) return;
+
+    function send(){
+      const txt = (inp.value||"").trim();
+      if(!txt) return;
+      window.chatAddMessage("user", txt);
+      let out=[];
+      try{
+        if(typeof window.processMessage==="function"){
+          const r = window.processMessage(txt);
+          if(Array.isArray(r)) out=r;
+        }
+      }catch(e){
+        out = ["⚠️ Chat-Fehler: "+(e.message||e)];
+      }
+      out.forEach(msg=>window.chatAddMessage("bot", msg));
+      inp.value="";
+    }
+
+    btn.addEventListener("click", send);
+    inp.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter") send(); });
+    chatBound = true;
+  }
+
+  // Nach jedem Render sicher erneut binden
+  const prevRenderAll = window.renderAll;
+  window.renderAll = function(){
+    if(typeof prevRenderAll==="function") prevRenderAll();
+    ensureChatBindings();
+  };
+
+  // Erstinitialisierung
+  ensureChatBindings();
+
+  // ---------- Start: evtl. bestehende Missionen auf Abschluss prüfen ----------
+  state.missions.forEach(m=>{
+    if(isMissionDone(m) && !m.rewarded){
+      // kein Bonus nachträglich ohne Nutzeraktion – nur sauber markieren (Vermeidung von doppelten Boni)
+      // Wenn du historische Boni auch nachträglich auszahlen willst, setze die nächste Zeile auf "false"
+      // und rufe awardMissionIfCompleted(m) stattdessen auf.
+      m.rewarded = false; // offen lassen, wird beim nächsten passenden Log ausgezahlt
+    }
+  });
+  try{ save(); }catch(e){}
+
+})();
+<!-- ==== /MISSION-BONUS + CHAT FIX ==== -->
 
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
