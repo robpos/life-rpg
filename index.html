@@ -12799,7 +12799,376 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH B === -->
+<!-- === PATCH C : Missionen (Dependencies, Alternativen, 4× Bonus) — vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
 
+  // ----- Guard -----
+  if(!window.state){ console.warn("Patch C: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const S   = window.state;
+  const save = window.save || function(){ localStorage.setItem("lifeRPG_p1", JSON.stringify(S)); };
+  const todayISO = window.todayISO || (()=>new Date().toISOString().slice(0,10));
+  const computePoints = window.computePoints || (base=>base);
+
+  // ===== 1) Datenmodell Missionen =====
+  // Mission:
+  // { id, name, tasks:[ Task ], done, bonusGrantedAt? }
+  // Task:
+  // { id, label, questName?, points?, requires:[], groupKey?:string, unlocked?:bool, done?:bool, skipped?:bool, doneAt?:ISO }
+  S.missions = S.missions || [];
+
+  // ===== 2) Hilfsfunktionen =====
+  const byId = id => document.getElementById(id);
+
+  function uid(prefix="m"){
+    return prefix + Math.random().toString(36).slice(2,8);
+  }
+
+  function findCatalogQuest(name){
+    return (S.catalog||[]).find(q=>q.name===name);
+  }
+
+  function taskBasePoints(t){
+    if(t.points && t.points>0) return t.points;
+    if(t.questName){
+      const q = findCatalogQuest(t.questName);
+      if(q) return q.points||0;
+    }
+    return 0;
+  }
+
+  function missionBaseSum(m){
+    return m.tasks.reduce((s,t)=> s + taskBasePoints(t), 0);
+  }
+
+  function isTaskDoneOrSkipped(t){ return !!(t.done || t.skipped); }
+
+  // Abhängigkeiten prüfen (alle requires müssen done/skipped sein)
+  function depsSatisfied(m, t){
+    if(!t.requires || t.requires.length===0) return true;
+    const doneSet = new Set(m.tasks.filter(isTaskDoneOrSkipped).map(x=>x.id));
+    return t.requires.every(rid=> doneSet.has(rid));
+  }
+
+  // „Alternativen“: Alle mit gleicher groupKey gehören zusammen; wenn eine erledigt, sind andere „skipped“
+  function applyAlternativesAfterComplete(m, task){
+    if(!task.groupKey) return;
+    m.tasks.forEach(t=>{
+      if(t.id!==task.id && t.groupKey===task.groupKey && !t.done){
+        t.skipped = true; // ohne Punkte
+      }
+    });
+  }
+
+  function recomputeUnlocks(m){
+    m.tasks.forEach(t=>{
+      t.unlocked = !isTaskDoneOrSkipped(t) && depsSatisfied(m,t);
+    });
+  }
+
+  function missionComplete(m){
+    return m.tasks.every(isTaskDoneOrSkipped);
+  }
+
+  function awardMissionBonus(m){
+    if(m.bonusGrantedAt) return; // schon vergeben
+    const baseSum = missionBaseSum(m);
+    const bonus = Math.round(baseSum * 4); // 4× Belohnung
+    S.log.push({date:todayISO(), quest:"Mission abgeschlossen: "+m.name, points:bonus});
+    m.bonusGrantedAt = todayISO();
+    save();
+    try{
+      if(window.FX) window.FX.burst();
+      if(window.Sound && window.Sound.level) window.Sound.level();
+      // kleiner Toast
+      const t=document.createElement("div");
+      t.textContent="🎯 Mission '"+m.name+"' abgeschlossen! +"+bonus+" Punkte";
+      t.className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded shadow-lg";
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),2500);
+    }catch{}
+  }
+
+  // ===== 3) UI: Tab „Missionen“ einfügen (falls noch nicht vorhanden) =====
+  // Section
+  if(!byId("tab-missions")){
+    const main = document.querySelector("main");
+    const sec = document.createElement("section");
+    sec.id = "tab-missions";
+    sec.className = "tab space-y-4";
+    sec.innerHTML = `
+      <div class="flex items-center justify-between">
+        <h2 class="text-xl font-bold">🗺️ Missionen</h2>
+        <div class="flex gap-2">
+          <button id="btnAddMissionWizard" class="btn">+ Mission</button>
+          <button id="btnImportMission" class="btn">Import</button>
+          <input id="fileImportMission" type="file" accept="application/json" class="hidden" />
+          <button id="btnExportMissions" class="btn">Export</button>
+        </div>
+      </div>
+      <div id="missionList" class="space-y-3"></div>
+    `;
+    main.appendChild(sec);
+  }
+
+  // Nav-Button
+  (function ensureNavButton(){
+    const nav = document.querySelector("nav .grid");
+    if(!nav) return;
+    if(!nav.querySelector("[data-tab='missions']")){
+      const btn = document.createElement("button");
+      btn.setAttribute("data-tab","missions");
+      btn.className="py-3";
+      btn.textContent="Missionen";
+      nav.appendChild(btn);
+      // aktiviert sich durch bestehenden globalen Tab-Handler
+    }
+  })();
+
+  // ===== 4) Aktionen: Missionen erstellen / exportieren / importieren =====
+  function addMissionWizard(){
+    const name = prompt("Name der Mission?");
+    if(!name) return;
+
+    const m = { id:uid("mis_"), name, tasks:[], done:false };
+    alert("Lege jetzt Aufgaben an. Du kannst jede Aufgabe mit einer vorhandenen Katalog-Quest verknüpfen.\n" +
+          "Tipps:\n- 'quest:<EXAKTER Katalogname>' verknüpft eine Quest\n- oder 'label:<Anzeigename>' + 'points:<Zahl>'\n" +
+          "- 'requires:<id1,id2>' setzt Abhängigkeiten (IDs siehst du nach dem Speichern)\n- 'group:<key>' bildet Alternativen (z. B. '2')\n\n" +
+          "Beende durch Abbrechen bei der Eingabe des Typs.");
+
+    while(true){
+      const type = prompt("Aufgabentyp (quest/label) — Abbrechen zum Beenden");
+      if(!type) break;
+
+      const t = { id:uid("t_"), label:"", questName:null, points:null, requires:[], groupKey:null, done:false, skipped:false };
+
+      if(type==="quest"){
+        const qn = prompt("EXAKTER Katalog-Quest-Name?");
+        if(!qn) continue;
+        const q = findCatalogQuest(qn);
+        if(!q){ alert("Quest nicht gefunden. Bitte im Katalog anlegen oder exakt schreiben."); continue; }
+        t.questName = qn;
+        t.label = qn;
+      }else{
+        // freier Label + Punkte
+        const label = prompt("Label / Titel der Aufgabe:");
+        if(!label) continue;
+        t.label = label;
+        const pts = Number(prompt("Punkte (Basis) für diese Aufgabe?")||0);
+        t.points = Math.max(0,pts);
+      }
+
+      const req = prompt("Optional: requires (kommagetrennte Task-IDs, später bearbeitbar). Leer lassen für keine Abhängigkeiten.")||"";
+      if(req.trim()){
+        t.requires = req.split(",").map(s=>s.trim()).filter(Boolean);
+      }
+      const grp = prompt("Optional: group-Key (z. B. '2' für alternative 2.0/2.1 Aufgaben). Leer lassen wenn keine Alternativen.")||"";
+      if(grp.trim()) t.groupKey = grp.trim();
+
+      m.tasks.push(t);
+      if(!confirm("Noch eine Aufgabe hinzufügen?")) break;
+    }
+
+    // Initial freischalten
+    recomputeUnlocks(m);
+    S.missions.push(m);
+    save();
+    renderMissions();
+  }
+
+  function exportMissions(){
+    const blob = new Blob([JSON.stringify(S.missions,null,2)],{type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "missions_export.json";
+    a.click();
+  }
+
+  function importMissionsFile(file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const data = JSON.parse(reader.result);
+        if(!Array.isArray(data)) throw new Error("Ungültiges Format.");
+        // IDs sichern, grob prüfen
+        data.forEach(m=>{
+          if(!m.id) m.id = uid("mis_");
+          if(!m.tasks) m.tasks=[];
+          m.tasks.forEach(t=>{ if(!t.id) t.id=uid("t_"); });
+          recomputeUnlocks(m);
+        });
+        S.missions = data;
+        save(); renderMissions();
+      }catch(e){ alert("Import fehlgeschlagen: "+e.message); }
+    };
+    reader.readAsText(file);
+  }
+
+  // ===== 5) Aufgaben abschließen =====
+  function completeTask(missionId, taskId){
+    const m = S.missions.find(x=>x.id===missionId);
+    if(!m) return;
+    const t = m.tasks.find(x=>x.id===taskId);
+    if(!t || t.done || t.skipped) return;
+
+    // Punkte bestimmen
+    const base = taskBasePoints(t);
+    const pts  = computePoints(base, todayISO());
+
+    // Questname für Log ableiten
+    const questLabel = t.questName || (`${m.name}: ${t.label}`);
+    S.log.push({date:todayISO(), quest:questLabel, points:pts, base:base});
+    t.done = true;
+    t.doneAt = todayISO();
+
+    // Alternativen-Gruppe sperren
+    applyAlternativesAfterComplete(m, t);
+
+    // Unlocks neu berechnen
+    recomputeUnlocks(m);
+
+    // Mission abgeschlossen?
+    if(missionComplete(m)){
+      awardMissionBonus(m);
+      m.done = true;
+    }
+
+    save();
+    try{ if(window.FX) window.FX.burst(); if(window.Sound) window.Sound.task(); }catch{}
+    renderMissions();
+    (window.renderAll||(()=>{}))();
+  }
+
+  function resetTask(missionId, taskId){
+    const m = S.missions.find(x=>x.id===missionId); if(!m) return;
+    const t = m.tasks.find(x=>x.id===taskId); if(!t) return;
+    t.done=false; t.skipped=false; t.doneAt=null;
+    // Falls Alternativgruppe: alle in der Gruppe wieder freigeben
+    if(t.groupKey){
+      m.tasks.forEach(x=>{
+        if(x.groupKey===t.groupKey && x.id!==t.id){
+          x.skipped=false;
+        }
+      });
+    }
+    m.done=false; m.bonusGrantedAt=null;
+    recomputeUnlocks(m);
+    save(); renderMissions(); (window.renderAll||(()=>{}))();
+  }
+
+  // ===== 6) Render: Missionen-Tab =====
+  function renderMissions(){
+    const host = byId("missionList");
+    if(!host) return;
+    if(!S.missions || S.missions.length===0){
+      host.innerHTML = `<div class="text-sm text-slate-500">Noch keine Missionen. Lege eine mit „+ Mission“ an.</div>`;
+      return;
+    }
+
+    host.innerHTML = S.missions.map(m=>{
+      const total = m.tasks.length;
+      const done  = m.tasks.filter(x=>x.done).length;
+      const skipped = m.tasks.filter(x=>x.skipped).length;
+      const prog  = done+skipped;
+      const pct   = total? Math.round(prog/total*100) : 0;
+      const baseSum = missionBaseSum(m);
+      const bonusPreview = baseSum*4;
+
+      const tasksHtml = m.tasks.map(t=>{
+        const status = t.done? "✅"
+                     : t.skipped? "🟡"
+                     : t.unlocked? "⏳"
+                     : "🔒";
+        const deps = (t.requires && t.requires.length>0)
+          ? `<span class="text-xs text-slate-500 ml-2">erfordert: ${t.requires.join(", ")}</span>`
+          : "";
+        const alt  = t.groupKey ? `<span class="text-xs ml-2 px-1 rounded bg-violet-100">Alternative: ${t.groupKey}</span>` : "";
+        const basePts = taskBasePoints(t);
+        const btns = t.done
+          ? `<button class="btn text-xs ml-2" data-reset="${m.id}:${t.id}">Rückgängig</button>`
+          : t.unlocked && !t.skipped
+            ? `<button class="btn text-xs ml-2 bg-blue-600 text-white" data-do="${m.id}:${t.id}">Erledigt</button>`
+            : ``;
+
+        return `<div class="p-2 border rounded">
+          <div class="flex items-center justify-between">
+            <div>${status} ${t.label || t.questName} <span class="text-xs text-slate-500">(Basis: +${basePts})</span>${alt}${deps}</div>
+            <div>${btns}</div>
+          </div>
+        </div>`;
+      }).join("");
+
+      return `
+        <div class="p-3 border rounded bg-white">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-semibold">🗺️ ${m.name}</div>
+              <div class="text-xs text-slate-500">Fortschritt: ${prog}/${total} (${pct}%) • Abschlussbonus: +${bonusPreview}</div>
+            </div>
+            <div>
+              ${m.done ? `<span class="text-emerald-700 text-sm">🎉 Abgeschlossen</span>` : ``}
+            </div>
+          </div>
+          <div class="mt-2">
+            <div class="w-full bg-gray-200 rounded h-2">
+              <div class="bg-blue-500 h-2 rounded" style="width:${pct}%"></div>
+            </div>
+          </div>
+          <div class="mt-3 space-y-2">${tasksHtml}</div>
+        </div>
+      `;
+    }).join("");
+
+    // Buttons binden
+    host.querySelectorAll("[data-do]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const [mid,tid] = btn.getAttribute("data-do").split(":");
+        completeTask(mid,tid);
+      });
+    });
+    host.querySelectorAll("[data-reset]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const [mid,tid] = btn.getAttribute("data-reset").split(":");
+        resetTask(mid,tid);
+      });
+    });
+  }
+
+  // ===== 7) Buttons im Tab =====
+  const addBtn = byId("btnAddMissionWizard");
+  if(addBtn) addBtn.addEventListener("click", addMissionWizard);
+
+  const expBtn = byId("btnExportMissions");
+  if(expBtn) expBtn.addEventListener("click", exportMissions);
+
+  const impBtn = byId("btnImportMission");
+  const impFile= byId("fileImportMission");
+  if(impBtn && impFile){
+    impBtn.addEventListener("click", ()=>impFile.click());
+    impFile.addEventListener("change", e=>{
+      const f = e.target.files[0];
+      if(!f) return;
+      importMissionsFile(f);
+      e.target.value = "";
+    });
+  }
+
+  // ===== 8) Hooks ins Gesamtsystem =====
+  // Hook in renderAll, damit Missionen-Tab immer aktuell ist
+  const _oldRenderAll_C = window.renderAll;
+  window.renderAll = function(){
+    if(typeof _oldRenderAll_C === "function") _oldRenderAll_C();
+    renderMissions();
+  };
+
+  // Beim Start Unlocks berechnen und rendern
+  S.missions.forEach(recomputeUnlocks);
+  try{ renderMissions(); }catch{}
+
+})();
+</script>
+<!-- === /PATCH C === -->
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
   // Ich sage dir dann immer: "Füge Part X direkt ÜBER dem EXTENSION-POINT ein."
