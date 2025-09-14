@@ -13711,6 +13711,286 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH E === -->
+<!-- === PATCH F : Kategorien-Summen & Verschieben — direkt vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
+
+  if(!window.state){ console.warn("Patch F: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const S = window.state;
+  const TODAY = ()=> new Date().toISOString().slice(0,10);
+  const SAVE  = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+
+  // --------- Kategorie-Daten initial sicherstellen ---------
+  S.categories = S.categories || { list:[], byQuest:{} };
+
+  // Defaults anlegen (nur wenn leer)
+  if(!Array.isArray(S.categories.list) || S.categories.list.length===0){
+    S.categories.list = [
+      {id:"sport",   name:"Sport",            type:"positive"},
+      {id:"ordnung", name:"Ordnung / Putzen", type:"positive"},
+      {id:"essen",   name:"Ernährung",        type:"positive"},
+      {id:"handwerk",name:"Handwerk",         type:"positive"},
+      {id:"neg",     name:"Schlechter Lebensstil", type:"negative"} // nur als Platzhalter – Logik für negative Effekte kommt in späterem Patch
+    ];
+  }
+  S.categories.byQuest = S.categories.byQuest || {};
+
+  // Ein paar vorhandene Quests automatisch zuordnen (nur, wenn noch unzugeordnet)
+  (S.catalog||[]).forEach(q=>{
+    if(!S.categories.byQuest[q.name]){
+      const n=q.name.toLowerCase();
+      if(n.includes("sport"))        S.categories.byQuest[q.name] = "sport";
+      else if(n.includes("aufräum") || n.includes("putz")) S.categories.byQuest[q.name] = "ordnung";
+      else if(n.includes("essen"))   S.categories.byQuest[q.name] = "essen";
+      else if(n.includes("keller") || n.includes("leisten") || n.includes("wand")) S.categories.byQuest[q.name] = "handwerk";
+    }
+  });
+  SAVE();
+
+  // --------- Stats: Punkte & Anzahl pro Kategorie ---------
+  function categoryStats(){
+    const map = {};  // id -> {points,count}
+    (S.categories.list||[]).forEach(c=> map[c.id] = {points:0,count:0});
+    (S.log||[]).forEach(entry=>{
+      const cid = (S.categories.byQuest||{})[entry.quest];
+      if(!cid || !(cid in map)) return;
+      // Für die Übersicht zählen wir nur positive Punkte (negatives Handling kommt separat)
+      const pts = Number(entry.points||0);
+      if(pts>0){
+        map[cid].points += pts;
+        map[cid].count  += 1;
+      }
+    });
+    return map;
+  }
+
+  // Hilfen
+  const categoryById = (id)=> (S.categories.list||[]).find(c=>c.id===id);
+  function ensureUniqueId(base){
+    let id = base.replace(/\s+/g,"-").toLowerCase().replace(/[^a-z0-9\-]/g,"").slice(0,24) || "cat";
+    let idx=1;
+    while(S.categories.list.some(c=>c.id===id)) { id = `${base}-${idx++}`.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9\-]/g,""); }
+    return id;
+  }
+
+  // --------- UI: Kategorien-Übersicht im Dashboard ---------
+  function renderCategoryOverview(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+
+    let box = document.getElementById("categoryOverviewBox");
+    const stats = categoryStats();
+
+    const rows = (S.categories.list||[]).map(c=>{
+      const s = stats[c.id] || {points:0,count:0};
+      const chip = c.type==="negative" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700";
+      return `
+        <div class="p-2 border rounded bg-white flex justify-between items-center">
+          <div class="font-medium">${c.name}
+            <span class="ml-2 text-[10px] px-2 py-0.5 rounded ${chip}">${c.type}</span>
+          </div>
+          <div class="text-sm text-slate-700">
+            <span class="font-semibold">+${s.points}</span> Punkte · <span>${s.count}</span> Einträge
+          </div>
+        </div>`;
+    }).join("");
+
+    const html = `
+      <h3 class="font-bold">Kategorien</h3>
+      <div class="grid grid-cols-1 gap-2 mt-2">${rows || `<div class="text-sm text-slate-500">Noch keine Kategorien.</div>`}</div>
+    `;
+
+    if(!box){
+      box = document.createElement("div");
+      box.id = "categoryOverviewBox";
+      box.className = "mt-4 p-3 border rounded bg-indigo-50";
+      box.innerHTML = html;
+      host.appendChild(box);
+    }else{
+      box.innerHTML = html;
+    }
+  }
+
+  // Hook ins Dashboard
+  const _oldRenderDashboard_F = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof _oldRenderDashboard_F==="function") _oldRenderDashboard_F();
+    renderCategoryOverview();
+  };
+
+  // --------- UI: Katalog – Quests verschieben (Kategorie-Select) ---------
+  function renderCatalogEnhanced(){
+    const list = document.getElementById("catalogList");
+    const tab  = document.getElementById("tab-catalog");
+    if(!list || !tab) return;
+
+    // Kopfzeile: kleine Manager-Zeile
+    let manager = document.getElementById("categoryManager");
+    if(!manager){
+      manager = document.createElement("div");
+      manager.id = "categoryManager";
+      manager.className = "mt-4 p-3 border rounded bg-slate-50";
+      tab.appendChild(manager);
+    }
+
+    // Stats für Anzeige im Manager
+    const stats = categoryStats();
+    const catRows = (S.categories.list||[]).map(c=>{
+      const s = stats[c.id] || {points:0,count:0};
+      return `
+        <div class="flex items-center justify-between p-2 border rounded bg-white">
+          <div>
+            <div class="font-medium">${c.name}</div>
+            <div class="text-xs text-slate-600">${c.type==="negative"?"negative":"positive"} · +${s.points} Punkte · ${s.count} Einträge</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn text-xs" data-cat-edit="${c.id}">Umbenennen</button>
+            <button class="btn text-xs text-red-700" data-cat-del="${c.id}">Löschen</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    manager.innerHTML = `
+      <h3 class="font-bold mb-2">Kategorie-Manager</h3>
+      <div class="space-y-2">${catRows || `<div class="text-sm text-slate-500">Noch keine Kategorien.</div>`}</div>
+      <div class="grid grid-cols-3 gap-2 mt-3">
+        <input id="newCatName" class="input col-span-2" placeholder="Neue Kategorie (Name)" />
+        <select id="newCatType" class="input">
+          <option value="positive">positiv</option>
+          <option value="negative">negativ</option>
+        </select>
+      </div>
+      <button id="btnAddCat" class="btn mt-2 bg-purple-600 text-white">+ Kategorie hinzufügen</button>
+    `;
+
+    // Events: Add / Rename / Delete
+    manager.querySelector("#btnAddCat").addEventListener("click", ()=>{
+      const name = manager.querySelector("#newCatName").value.trim();
+      const type = manager.querySelector("#newCatType").value;
+      if(!name) return alert("Bitte Kategorienamen eingeben.");
+      const id = ensureUniqueId(name);
+      S.categories.list.push({id,name,type});
+      SAVE(); renderAll();
+    });
+
+    manager.querySelectorAll("[data-cat-edit]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-cat-edit");
+        const cat = categoryById(id);
+        if(!cat) return;
+        const n = prompt("Neuer Name für Kategorie:", cat.name);
+        if(!n) return;
+        cat.name = n.trim();
+        SAVE(); renderAll();
+      });
+    });
+
+    manager.querySelectorAll("[data-cat-del]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-cat-del");
+        const used = Object.values(S.categories.byQuest||{}).some(cid=>cid===id);
+        if(used) return alert("Kategorie ist noch Quests zugeordnet. Bitte zuerst umhängen.");
+        S.categories.list = S.categories.list.filter(c=>c.id!==id);
+        SAVE(); renderAll();
+      });
+    });
+
+    // ---- Questliste mit Kategorie-Select & Löschen/Timed-Button ----
+    const options = (S.categories.list||[]).map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+
+    list.innerHTML = (S.catalog||[]).map((q,i)=>{
+      const catSel = `
+        <label class="text-xs text-slate-600">Kategorie:
+          <select class="input text-xs" data-csel="${q.name}">
+            <option value="">(keine)</option>
+            ${options}
+          </select>
+        </label>`;
+      return `
+        <div class="p-2 border rounded ${q.boss?'bg-yellow-50':'bg-white'}">
+          <div class="flex items-center justify-between">
+            <div class="font-medium">${q.boss?'👑 ':''}${q.name} <span class="text-sm text-slate-600">(+${q.points} P.)</span></div>
+            <div class="flex items-center gap-2">
+              <button class="text-red-600 text-sm" data-del="${i}">Löschen</button>
+            </div>
+          </div>
+          <div class="mt-2">${catSel}</div>
+        </div>`;
+    }).join("");
+
+    // Timed-Quest Button unten (falls Funktion vorhanden)
+    if(typeof window.addTimedQuest==="function"){
+      const btn = document.createElement("button");
+      btn.textContent = "+ Timed Quest";
+      btn.className = "btn w-full bg-purple-600 text-white mt-2";
+      btn.addEventListener("click", window.addTimedQuest);
+      list.appendChild(btn);
+    }
+
+    // Events: Delete
+    list.querySelectorAll("[data-del]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const idx = Number(btn.getAttribute("data-del"));
+        // Zuordnung löschen
+        const q = S.catalog[idx];
+        if(q && S.categories.byQuest[q.name]) delete S.categories.byQuest[q.name];
+        S.catalog.splice(idx,1);
+        SAVE(); renderAll();
+      });
+    });
+
+    // Events: Kategorie-Select setzen & reagieren
+    list.querySelectorAll("[data-csel]").forEach(sel=>{
+      const qname = sel.getAttribute("data-csel");
+      sel.value = S.categories.byQuest[qname] || "";
+      sel.addEventListener("change", ()=>{
+        const val = sel.value || "";
+        if(val==="") delete S.categories.byQuest[qname];
+        else S.categories.byQuest[qname] = val;
+        SAVE(); renderAll();
+      });
+    });
+  }
+
+  // Wir übersteuern das Katalog-Rendering komplett (um Duplikate zu vermeiden)
+  const _oldRenderCatalog = window.renderCatalog;
+  window.renderCatalog = function(){
+    // Vorherige Varianten nicht aufrufen, wir rendern alles konsistent neu:
+    // if(typeof _oldRenderCatalog==="function") _oldRenderCatalog();
+    // Stattdessen: die oberen Eingabefelder bleiben (HTML), wir füllen nur #catalogList + Kategorie-Manager.
+    renderCatalogEnhanced();
+  };
+
+  // --------- Re-Render triggern nach Log-Änderungen ----------
+  // (damit Dashboard-Kategorien live updaten)
+  function patchLogPushCats(){
+    if(!S || !S.log || S._logPushCatsPatched) return;
+    const orig = S.log.push.bind(S.log);
+    S.log.push = function(...items){
+      const r = orig(...items);
+      try{
+        if(typeof window.renderDashboard==="function") window.renderDashboard();
+      }catch(e){}
+      return r;
+    };
+    S._logPushCatsPatched = true;
+  }
+  patchLogPushCats();
+  setInterval(()=>{ if(window.state && !window.state._logPushCatsPatched) patchLogPushCats(); }, 1500);
+
+  // --------- Init ---------
+  try{
+    if(typeof window.renderAll==="function") window.renderAll();
+    else{
+      if(typeof window.renderDashboard==="function") window.renderDashboard();
+      if(typeof window.renderCatalog==="function") window.renderCatalog();
+    }
+  }catch(e){ console.warn("Patch F init:", e); }
+
+})();
+</script>
+<!-- === /PATCH F === -->
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
   // Ich sage dir dann immer: "Füge Part X direkt ÜBER dem EXTENSION-POINT ein."
