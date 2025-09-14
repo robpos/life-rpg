@@ -12441,6 +12441,364 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH A === -->
+<!-- === PATCH B : Negative Kategorien + Editor + Übersicht (vor </body> einfügen) === -->
+<script>
+(function(){
+  "use strict";
+
+  // ----- Guard: vorhandener App-State muss existieren -----
+  if(!window.state){ console.warn("Patch B: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const S = window.state;
+
+  // ===== 1) Datenmodell: Kategorien =====
+  // type: "pos" | "neg"
+  // Für "neg": negFactor (z.B. 2 => 15 Cat-Punkte ergeben -30 Global)
+  S.categories = S.categories || {
+    uncat:     {id:"uncat",     name:"Ohne Kategorie",        type:"pos"},
+    sport:     {id:"sport",     name:"Sport",                 type:"pos"},
+    handwerk:  {id:"handwerk",  name:"Handwerk",              type:"pos"},
+    gesundheit:{id:"gesundheit",name:"Gesundheit",            type:"pos"},
+    haushalt:  {id:"haushalt",  name:"Haushalt",              type:"pos"},
+    bad:       {id:"bad",       name:"Schlechter Lebensstil", type:"neg", negFactor:2}
+  };
+
+  // Katalog-Einträge ggf. mit Kategorie versehen
+  S.catalog = S.catalog || [];
+  S.catalog.forEach(q=>{
+    if(!q.categoryId) q.categoryId = "uncat";
+    // negative Quests dürfen per-Quest Faktor haben (optional)
+    if(q.negFactor==null) q.negFactor = null; 
+  });
+
+  // ===== 2) Migration: Log-Einträge um catPoints / categoryId ergänzen (ohne Retro-Strafen) =====
+  S.log = S.log || [];
+  S.log.forEach(e=>{
+    if(e.categoryId) return;                // bereits getaggt
+    const q = S.catalog.find(x=>x.name===e.quest);
+    if(!q) return;                           // Sonderlogs (Reward, Event, etc.) unangetastet
+    e.categoryId = q.categoryId || "uncat";
+    // catPoints = "thematische" Punkte (immer positiv); globale Punkte NICHT ändern
+    const baseAbs = Math.abs(e.base!=null ? e.base : e.points);
+    e.catPoints = Math.max(0, baseAbs);
+  });
+
+  // ===== 3) Interceptor: state.log.push abfangen und kategorien-logik anwenden =====
+  if(!S.__logPushWrapped){
+    const origPush = S.log.push.bind(S.log);
+    S.log.push = function(entry){
+      try{
+        if(entry && typeof entry==="object"){
+          const q = S.catalog.find(x=>x.name===entry.quest);
+          if(q){
+            // Kategorie übernehmen
+            entry.categoryId = q.categoryId || "uncat";
+            // thematische Punkte (immer positiv zählen, z.B. in Übersichten)
+            const baseForCat = Math.abs(entry.base!=null ? entry.base : entry.points||0);
+            entry.catPoints = Math.max(0, baseForCat);
+
+            // Negative Kategorien: Global-Punkte überschreiben (Strafe), NICHT multiplikatorisch erhöhen
+            const cat = S.categories[entry.categoryId];
+            if(cat && cat.type==="neg"){
+              const factor = (q.negFactor || cat.negFactor || 2);
+              const penalty = Math.round(baseForCat * factor);
+              entry.points = -penalty; // globaler Impact
+            }
+          }
+        }
+      }catch(err){ console.warn("Kategorie-Normalisierung Fehler:", err); }
+      return origPush(entry);
+    };
+    S.__logPushWrapped = true;
+  }
+
+  // ===== 4) Helfer =====
+  const save = window.save || function(){ localStorage.setItem("lifeRPG_p1", JSON.stringify(S)); };
+  const todayISO = window.todayISO || ( ()=> new Date().toISOString().slice(0,10) );
+  const computePoints = window.computePoints || ( (base)=> base );
+  const byId = id => document.getElementById(id);
+
+  function catList(){
+    return Object.values(S.categories);
+  }
+
+  function categoryTotals(){
+    // Summen aus e.catPoints (thematische Sicht), separat: global impact aus e.points
+    const totals = {};
+    catList().forEach(c=> totals[c.id] = {cat:0, global:0, name:c.name, type:c.type});
+    S.log.forEach(e=>{
+      if(!e.categoryId || !totals[e.categoryId]) return;
+      const t = totals[e.categoryId];
+      t.cat    += Math.max(0, e.catPoints||0);
+      t.global += e.points||0;
+    });
+    return totals;
+  }
+
+  // ===== 5) Dashboard: Kategorie-Übersicht einhängen =====
+  function renderCategorySummary(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+    // Container erschaffen/erneuern
+    let box = byId("catSummaryBox");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "catSummaryBox";
+      box.className = "mt-4 p-3 border rounded bg-white";
+      host.appendChild(box);
+    }
+    const totals = categoryTotals();
+    const rows = Object.entries(totals).map(([id,t])=>{
+      const negInfo = t.type==="neg" ? `<span class="text-xs text-slate-500 ml-2">📉 Global: ${t.global}</span>` : "";
+      return `<div class="flex justify-between items-center py-1">
+        <div>🏷️ ${t.name}</div>
+        <div><b>${t.cat}</b>${negInfo}</div>
+      </div>`;
+    }).join("");
+    box.innerHTML = `<h3 class="font-bold">Kategorien (Summen)</h3>${rows || "<div class='text-sm text-slate-500'>Noch keine Einträge</div>"}`;
+  }
+
+  // Hook in renderDashboard (spätester Hook gewinnt)
+  const _oldRenderDashboard_B = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof _oldRenderDashboard_B === "function") _oldRenderDashboard_B();
+    renderCategorySummary();
+  };
+
+  // ===== 6) Settings: einfacher Kategorien-Editor =====
+  function renderSettingsCategories(){
+    const settingsTab = byId("tab-settings");
+    if(!settingsTab) return;
+
+    // Container einfügen/auffrischen
+    let wrap = byId("settingsCatsWrap");
+    if(!wrap){
+      wrap = document.createElement("div");
+      wrap.id = "settingsCatsWrap";
+      wrap.className = "space-y-2 mt-4 p-3 border rounded bg-white";
+      settingsTab.appendChild(wrap);
+    }
+
+    const cats = catList();
+    wrap.innerHTML = `
+      <h3 class="font-bold">Kategorien verwalten</h3>
+      <div id="catEditorList" class="space-y-1">
+        ${
+          cats.map(c=>`
+            <div class="grid grid-cols-12 gap-2 items-center">
+              <div class="col-span-4">
+                <input data-cid="${c.id}" data-k="name" class="input" value="${c.name}">
+              </div>
+              <div class="col-span-3">
+                <select data-cid="${c.id}" data-k="type" class="input">
+                  <option value="pos" ${c.type==="pos"?"selected":""}>Positiv</option>
+                  <option value="neg" ${c.type==="neg"?"selected":""}>Negativ</option>
+                </select>
+              </div>
+              <div class="col-span-3">
+                <input data-cid="${c.id}" data-k="negFactor" type="number" class="input" placeholder="Faktor (neg)" value="${c.negFactor!=null?c.negFactor:""}">
+              </div>
+              <div class="col-span-2 text-right">
+                ${c.id==="uncat" ? "" : `<button class="btn text-red-600" data-del="${c.id}">Löschen</button>`}
+              </div>
+            </div>
+          `).join("")
+        }
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input id="newCatName" class="input col-span-5" placeholder="Neue Kategorie (Name)">
+        <select id="newCatType" class="input col-span-3">
+          <option value="pos">Positiv</option>
+          <option value="neg">Negativ</option>
+        </select>
+        <input id="newCatFactor" type="number" class="input col-span-2" placeholder="Faktor">
+        <button id="btnAddCat" class="btn col-span-2">+ Hinzufügen</button>
+      </div>
+      <div class="text-xs text-slate-500">Hinweis: Für negative Kategorien gilt Globalstrafe = Faktor × Kategoriepunkte. Kategorien wirken nicht global als Bonus auf andere Kategorien.</div>
+    `;
+
+    // Change-Handler
+    wrap.querySelectorAll("[data-cid][data-k]").forEach(inp=>{
+      inp.addEventListener("change",()=>{
+        const id = inp.getAttribute("data-cid");
+        const k  = inp.getAttribute("data-k");
+        const cat = S.categories[id];
+        if(!cat) return;
+        let val = inp.value;
+        if(k==="negFactor"){
+          val = val==="" ? null : Number(val);
+        }
+        cat[k] = (k==="negFactor" ? val : (k==="type" ? (val==="neg"?"neg":"pos") : val));
+        save();
+        // Neu rendern, da sich Anzeige/Feldern ändern könnte
+        renderSettingsCategories();
+        // Dashboard aktualisieren
+        (window.renderAll||(()=>{}))();
+      });
+    });
+
+    // Delete
+    wrap.querySelectorAll("[data-del]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const id = btn.getAttribute("data-del");
+        if(!S.categories[id]) return;
+        // Quests dieser Kategorie auf "uncat" umhängen
+        S.catalog.forEach(q=>{ if(q.categoryId===id) q.categoryId="uncat"; });
+        delete S.categories[id];
+        save();
+        renderSettingsCategories();
+        (window.renderAll||(()=>{}))();
+      });
+    });
+
+    // Add
+    const addBtn = byId("btnAddCat");
+    if(addBtn){
+      addBtn.addEventListener("click",()=>{
+        const name = (byId("newCatName").value||"").trim();
+        if(!name) return;
+        const type = byId("newCatType").value==="neg"?"neg":"pos";
+        const facStr = byId("newCatFactor").value;
+        const negFactor = facStr==="" ? null : Number(facStr);
+        // ID generieren
+        let id = name.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9\-]/g,"");
+        if(!id) id = "cat"+Math.random().toString(36).slice(2,6);
+        if(S.categories[id]) id = id+"-"+Math.random().toString(36).slice(2,4);
+        S.categories[id] = {id, name, type, negFactor};
+        save();
+        renderSettingsCategories();
+        (window.renderAll||(()=>{}))();
+      });
+    }
+  }
+
+  // Hook in renderSettings
+  const _oldRenderSettings_B = window.renderSettings;
+  window.renderSettings = function(){
+    if(typeof _oldRenderSettings_B === "function") _oldRenderSettings_B();
+    renderSettingsCategories();
+  };
+
+  // ===== 7) Catalog: Kategorie-Zuweisung je Quest (auch nachträglich änderbar) =====
+  const _oldRenderCatalog_B = window.renderCatalog;
+  window.renderCatalog = function(){
+    const tab = byId("tab-catalog");
+    if(!tab){ if(typeof _oldRenderCatalog_B === "function") _oldRenderCatalog_B(); return; }
+
+    // Eigene Version des Tab-Inhalts (komplett)
+    tab.innerHTML = `
+      <div class="space-y-2">
+        <input id="qName"    class="input" placeholder="Questname (z. B. 'Keller aufräumen')" />
+        <input id="qPoints"  type="number" class="input" placeholder="Punkte" />
+        <select id="qBoss"   class="input">
+          <option value="false">Normale Quest</option>
+          <option value="true">Bossquest</option>
+        </select>
+        <select id="qCat"    class="input">
+          ${catList().map(c=>`<option value="${c.id}">${c.name}${c.type==="neg"?" (neg)":" (pos)"}</option>`).join("")}
+        </select>
+        <button id="btnAddQuest" class="btn bg-blue-600 text-white">Zur Liste hinzufügen</button>
+      </div>
+
+      <div class="mt-4 space-y-2" id="catalogList"></div>
+    `;
+
+    const list = byId("catalogList");
+    const cats = catList();
+
+    // Liste rendern
+    function renderList(){
+      if(!list) return;
+      list.innerHTML = S.catalog.map((q,i)=>{
+        const cat = S.categories[q.categoryId] || S.categories["uncat"];
+        return `
+          <div class="p-2 border rounded">
+            <div class="flex items-center justify-between gap-2">
+              <div class="${q.boss?'font-semibold':''}">
+                ${q.boss?'👑 ':''}${q.name} (+${q.points} Punkte)
+              </div>
+              <div class="flex items-center gap-2">
+                <select class="input text-sm" data-i="${i}" data-k="categoryId" title="Kategorie">
+                  ${cats.map(c=>`<option value="${c.id}" ${c.id===q.categoryId?"selected":""}>${c.name}${c.type==="neg"?" (neg)":""}</option>`).join("")}
+                </select>
+                <button class="btn text-red-600 text-sm" data-del="${i}">Löschen</button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-500 mt-1">Kategorie: ${cat.name} • Typ: ${cat.type==="neg"?"Negativ":"Positiv"}${cat.type==="neg"&& (q.negFactor||cat.negFactor)?` • Faktor: ${q.negFactor||cat.negFactor}`:""}</div>
+          </div>
+        `;
+      }).join("") || `<div class="text-sm text-slate-500">Noch keine Quests im Katalog.</div>`;
+
+      // Kategorie ändern
+      list.querySelectorAll("[data-k='categoryId']").forEach(sel=>{
+        sel.addEventListener("change",()=>{
+          const i = Number(sel.getAttribute("data-i"));
+          const val = sel.value;
+          if(!S.catalog[i]) return;
+          S.catalog[i].categoryId = val;
+          save();
+          // Bestehende Logs mit dieser Quest nur taggen/aktualisieren (keine Retro-Strafen!)
+          S.log.forEach(e=>{
+            if(e.quest===S.catalog[i].name){
+              e.categoryId = val;
+              e.catPoints = Math.max(0, Math.abs(e.base!=null ? e.base : e.points||0));
+            }
+          });
+          save();
+          // Liste & Dashboard auffrischen
+          renderList();
+          (window.renderAll||(()=>{}))();
+        });
+      });
+
+      // Löschen
+      list.querySelectorAll("[data-del]").forEach(btn=>{
+        btn.addEventListener("click",()=>{
+          const idx = Number(btn.getAttribute("data-del"));
+          if(!S.catalog[idx]) return;
+          S.catalog.splice(idx,1);
+          save();
+          renderList();
+          (window.renderAll||(()=>{}))();
+        });
+      });
+    }
+    renderList();
+
+    // Hinzufügen
+    const addBtn = byId("btnAddQuest");
+    if(addBtn){
+      addBtn.addEventListener("click",()=>{
+        const name = (byId("qName").value||"").trim();
+        const points = Number(byId("qPoints").value||0);
+        const boss = (byId("qBoss").value==="true");
+        const catId = byId("qCat").value || "uncat";
+        if(!name || !points){ alert("Bitte Name und Punkte ausfüllen."); return; }
+        S.catalog.push({name, points, boss, categoryId:catId, negFactor:null});
+        save();
+        byId("qName").value="";
+        byId("qPoints").value="";
+        renderList();
+        (window.renderAll||(()=>{}))();
+      });
+    }
+  };
+
+  // ===== 8) Log/Chat: wenn direkt Quests eingetragen werden, greift unser Push-Interceptor automatisch =====
+  // Nichts weiter nötig – alle state.log.push() laufen über den Interceptor.
+
+  // ===== 9) Render-All patchen, damit Settings/Catalog/Dashboard Ergänzungen angezeigt werden =====
+  const _oldRenderAll_B = window.renderAll;
+  window.renderAll = function(){
+    if(typeof _oldRenderAll_B === "function") _oldRenderAll_B();
+    // Unsere Teile hängen auf ihre Hooks (renderSettings, renderCatalog, renderDashboard) – diese wurden schon gepatcht.
+  };
+
+  // Einmal initial auffrischen (falls App schon geladen ist)
+  try{ (window.renderAll||(()=>{}))(); }catch(e){}
+
+})();
+</script>
+<!-- === /PATCH B === -->
 
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
