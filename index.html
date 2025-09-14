@@ -22,9 +22,12 @@
     .dark .btn { border-color:#334155; background:#111827; color:#e5e7eb; }
     .input { width:100%; border-radius:.75rem; border:1px solid #cbd5e1; padding:.5rem .75rem; background:#fff; }
     .dark .input { border-color:#334155; background:#0f172a; color:#e5e7eb; }
-    header.safe { padding-top: calc(var(--safe-top) + 12px); }
-    nav.safe { padding-bottom: calc(var(--safe-bottom) + 4px); }
-    canvas { display:block; }
+    header.safe { padding-top: calc(var(--safe-top) + 28px); } /* weiter runter */
+    .ach-card { background:#fff; color:#000; }                 /* Achievements immer schwarz */
+    .ach-card.ok { background:#fde68a; }                       /* gelb bei ok */
+    .ach-card.nok { background:#f1f5f9; }                      /* hellgrau sonst */
+    .tile { @apply p-4 border rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 flex items-center justify-between; }
+    .menu-grid { @apply grid grid-cols-2 gap-3; }
   </style>
 </head>
 <body>
@@ -32,15 +35,30 @@
     <!-- Header -->
     <header class="safe px-4 pt-4 pb-3 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-700">
       <div class="flex items-center justify-between">
+        <button id="btnHome" class="btn text-sm">☰ Menü</button>
         <h1 class="text-xl font-bold flex items-center gap-2">🎮 Life RPG</h1>
         <button id="themeToggle" class="btn text-sm">🌙/☀️</button>
       </div>
     </header>
 
     <!-- Main -->
-    <main class="flex-1 px-4 pb-28 space-y-4">
+    <main class="flex-1 px-4 pb-8 space-y-4">
+      <!-- Hauptmenü -->
+      <section id="tab-home" class="tab active space-y-4">
+        <h2 class="text-lg font-bold">Hauptmenü</h2>
+        <div class="menu-grid">
+          <button class="tile" data-goto="dashboard"><span>📊 Dashboard</span> ➜</button>
+          <button class="tile" data-goto="log"><span>📝 Log</span> ➜</button>
+          <button class="tile" data-goto="catalog"><span>📚 Katalog</span> ➜</button>
+          <button class="tile" data-goto="special"><span>⭐ Sonderaufgaben</span> ➜</button>
+          <button class="tile" data-goto="milestones"><span>🎯 Meilensteine</span> ➜</button>
+          <button class="tile" data-goto="settings"><span>⚙️ Einstellungen</span> ➜</button>
+          <button class="tile" data-goto="chat"><span>💬 Chat</span> ➜</button>
+        </div>
+      </section>
+
       <!-- Dashboard -->
-      <section id="tab-dashboard" class="tab active space-y-4">
+      <section id="tab-dashboard" class="tab space-y-4">
         <div class="grid grid-cols-3 gap-3 text-sm">
           <div class="p-3 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             Punkte<br><span id="totalPoints" class="text-lg font-bold">0</span>
@@ -77,13 +95,24 @@
           <h3 class="font-bold">Tagesziel</h3>
           <div id="dailyGoalBox" class="p-2 border rounded bg-gray-50 dark:bg-slate-800 text-sm"></div>
         </div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        </div>
       </section>
 
       <!-- Log -->
       <section id="tab-log" class="tab space-y-4">
         <div class="space-y-2">
           <input type="date" id="logDate" class="input" />
-          <input type="text" id="logQuest" class="input" placeholder="Questname (oder leer lassen & aus Katalog wählen)" />
+          <div class="grid gap-2">
+            <!-- Schnellauswahl -->
+            <select id="logQuick" class="input">
+              <option value="">– Schnellauswahl aus Katalog –</option>
+            </select>
+            <div id="logChips" class="flex flex-wrap gap-2"></div>
+          </div>
+          <input type="text" id="logQuest" class="input" placeholder="Questname (oder aus Schnellauswahl wählen)" />
           <div class="grid grid-cols-2 gap-2">
             <input type="number" id="logPoints" class="input" placeholder="Punkte (optional)" />
             <input type="number" id="logMalus" class="input" placeholder="Malus (z. B. -10)" />
@@ -91,6 +120,10 @@
           <button id="btnAddEntry" class="btn bg-blue-600 text-white">Eintragen</button>
         </div>
         <div id="logList" class="space-y-1 text-sm"></div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        </div>
       </section>
 
       <!-- Katalog -->
@@ -105,6 +138,10 @@
           <button id="btnAddQuest" class="btn bg-blue-600 text-white">Zur Liste hinzufügen</button>
         </div>
         <div id="catalogList" class="mt-2 space-y-2"></div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        </div>
       </section>
 
       <!-- Sonderaufgaben (Cooldown) -->
@@ -128,6 +165,20 @@
         <div>
           <h4 class="font-bold mt-4">Gesperrt</h4>
           <div id="specialLocked" class="space-y-2 text-slate-600"></div>
+        </div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        </div>
+      </section>
+
+      <!-- Meilensteine -->
+      <section id="tab-milestones" class="tab space-y-4">
+        <h3 class="font-bold text-lg">Meilensteine</h3>
+        <div id="milestoneBoxes" class="space-y-3"></div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
         </div>
       </section>
 
@@ -160,6 +211,10 @@
           <button id="btnImport" class="btn">Import</button>
           <button id="btnReset" class="btn bg-red-600 text-white">Alles löschen</button>
         </div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        </div>
       </section>
 
       <!-- Chat -->
@@ -169,20 +224,12 @@
           <input id="chatInput" class="input flex-1" placeholder="Frag nach Vorschlägen („Was soll ich machen?“) oder nenne eine Quest" />
           <button id="btnChatSend" class="btn bg-blue-600 text-white">Senden</button>
         </div>
+
+        <div class="pt-2">
+          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        </div>
       </section>
     </main>
-
-    <!-- Bottom Nav -->
-    <nav class="safe fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-      <div class="max-w-xl mx-auto grid grid-cols-6 text-center">
-        <button data-tab="dashboard" class="py-3 text-blue-600">Dashboard</button>
-        <button data-tab="log" class="py-3">Log</button>
-        <button data-tab="catalog" class="py-3">Katalog</button>
-        <button data-tab="special" class="py-3">Sonder</button>
-        <button data-tab="settings" class="py-3">Einstellungen</button>
-        <button data-tab="chat" class="py-3">Chat</button>
-      </div>
-    </nav>
   </div>
 
   <script>
@@ -192,12 +239,13 @@
     log: [],
     settings: { euro: 0.1, base: 100, growth: 0.1, dailyGoal: 3, theme: "light" },
     catalog: [
-      {name:"Sport",points:20},
-      {name:"Kein Essen bestellt",points:10},
-      {name:"Aufräumen",points:5}
+      {name:"Sport",points:20,boss:false},
+      {name:"Kein Essen bestellt",points:10,boss:false},
+      {name:"Aufräumen",points:5,boss:false}
     ],
     rewards: [],
-    specialTasks: [] // {name, points, everyDays, lastDone}
+    specialTasks: [], // {name, points, everyDays, lastDone}
+    milestonesClaimed: [] // ['quests-100', 'boss-10', ...]
   };
 
   function load(){
@@ -212,11 +260,11 @@
   function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
 
   function migrate(s){
-    // Robust mergen, damit alte Daten übernommen werden
     s.settings = Object.assign({ euro:0.1, base:100, growth:0.1, dailyGoal:3, theme:"light" }, s.settings||{});
-    s.catalog = s.catalog || structuredClone(defaultState.catalog);
+    s.catalog = (s.catalog||[]).map(q=>({boss:false, ...q}));
     s.rewards = s.rewards || [];
     s.specialTasks = s.specialTasks || [];
+    s.milestonesClaimed = s.milestonesClaimed || [];
     return s;
   }
 
@@ -261,7 +309,23 @@
     save(); applyTheme();
   });
 
-  // ====== RENDER: DASHBOARD ======
+  // ====== NAVIGATION ======
+  function goto(tabId){
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.getElementById("tab-"+tabId).classList.add("active");
+    // Bei Wechsel in Dashboard: Statistik neu zeichnen
+    if(tabId==='dashboard') renderStats();
+    // Beim Öffnen Log: Schnellauswahl aktualisieren
+    if(tabId==='log') fillLogQuick();
+  }
+  function bindMenu(){
+    document.getElementById("btnHome").addEventListener("click", ()=>goto('home'));
+    document.querySelectorAll("[data-goto]").forEach(btn=>{
+      btn.addEventListener("click", ()=>goto(btn.getAttribute("data-goto")));
+    });
+  }
+
+  // ====== DASHBOARD ======
   function renderLevelProgress(){
     const total = totalPoints();
     const lvl = levelForPoints(total);
@@ -286,7 +350,7 @@
       {ok: sportCount>=10, icon:"💪", text:"10x Sport gemacht"}
     ];
     return list.map(a=>`
-      <div class="p-2 border rounded ${a.ok?'bg-yellow-100 dark:bg-yellow-900/40':'bg-gray-100 dark:bg-slate-800'}">
+      <div class="ach-card ${a.ok?'ok':'nok'} p-2 border rounded">
         ${a.icon} ${a.text} ${a.ok?'✅':'❌'}
       </div>
     `).join('');
@@ -308,13 +372,14 @@
     ctx.clearRect(0,0,W,H);
     const max=Math.max(10,...days.map(d=>d.value));
     const barW=W/days.length*0.6;
+    const dark = document.documentElement.classList.contains('dark');
     days.forEach((d,i)=>{
       const x=i*(W/days.length)+barW*0.2;
       const h=(d.value/max)*(H-22);
       const y=H-h-18;
-      ctx.fillStyle=getComputedStyle(document.documentElement).classList?.contains('dark') ? "#60a5fa" : "#3b82f6";
+      ctx.fillStyle = dark ? "#60a5fa" : "#3b82f6";
       ctx.fillRect(x,y,barW,h);
-      ctx.fillStyle = "#94a3b8";
+      ctx.fillStyle = dark ? "#94a3b8" : "#64748b";
       ctx.font="10px sans-serif";
       if(i%2===0) ctx.fillText(d.label,x,H-5);
     });
@@ -329,8 +394,7 @@
       : `<div class="text-slate-500 text-sm">Alles erledigt 🎉</div>`;
     box.querySelectorAll("[data-sug]").forEach(btn=>{
       btn.addEventListener("click",()=>{
-        const name=btn.getAttribute("data-sug");
-        quickAdd(name);
+        quickAdd(btn.getAttribute("data-sug"));
       });
     });
   }
@@ -394,9 +458,10 @@
     document.getElementById("logQuest").value="";
     document.getElementById("logPoints").value="";
     document.getElementById("logMalus").value="";
+    document.getElementById("logQuick").value="";
   }
 
-  // Schnell hinzufügen (für Vorschläge/Buttons)
+  // Quick-add für Vorschläge/Buttons
   function quickAdd(questName){
     const q = state.catalog.find(x=>x.name===questName);
     const base = q ? q.points : 0;
@@ -405,8 +470,34 @@
     save(); renderAll();
   }
 
+  // Schnellauswahl im Log (Dropdown + Chips)
+  function fillLogQuick(){
+    const sel = document.getElementById("logQuick");
+    const chips = document.getElementById("logChips");
+    // Dropdown
+    sel.innerHTML = `<option value="">– Schnellauswahl aus Katalog –</option>` +
+      state.catalog.map(q=>`<option value="${q.name}">${q.boss?'👑 ':''}${q.name} (+${q.points})</option>`).join('');
+    sel.onchange = ()=>{
+      const name=sel.value;
+      if(!name) return;
+      const q = state.catalog.find(x=>x.name===name);
+      document.getElementById("logQuest").value = q.name;
+      document.getElementById("logPoints").value = q.points;
+    };
+    // Chips: Top 6 nach Häufigkeit
+    const stats = {};
+    state.log.forEach(e=>{ stats[e.quest]=(stats[e.quest]||0)+1; });
+    const top = Object.entries(stats).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name])=>name);
+    chips.innerHTML = top.map(n=>`<button class="btn text-xs" data-chip="${n}">➕ ${n}</button>`).join('') ||
+      `<div class="text-xs text-slate-500">Noch keine Schnellvorschläge – trage ein paar Quests ein.</div>`;
+    chips.querySelectorAll("[data-chip]").forEach(b=>{
+      b.onclick=()=> quickAdd(b.getAttribute("data-chip"));
+    });
+  }
+
   function renderLog(){
     document.getElementById("logDate").value = todayISO();
+    fillLogQuick();
     renderLogList();
   }
 
@@ -552,6 +643,78 @@
     }
   }
 
+  // ====== MEILENSTEINE ======
+  const MS = {
+    quests:  [ {count:100,reward:100}, {count:200,reward:400}, {count:500,reward:2500}, {count:1000,reward:10000} ],
+    boss:    [ {count:10,reward:100}, {count:20,reward:200}, {count:50,reward:2500}, {count:100,reward:10000} ],
+    missions:[ {count:5,reward:50}, {count:10,reward:100}, {count:20,reward:400}, {count:50,reward:2500} ] // Placeholder – Missionssystem später
+  };
+  function msKey(group, count){ return `${group}-${count}`; }
+
+  function countQuestsDone(){
+    // alle Log-Einträge mit Punkten != 0 (Rewards „Kauf“ mit negativ zählen auch)
+    return state.log.filter(e=>typeof e.points==='number').length;
+  }
+  function countBossDone(){
+    const bossNames = new Set(state.catalog.filter(q=>q.boss).map(q=>q.name));
+    return state.log.filter(e=> bossNames.has(e.quest)).length;
+  }
+  function countMissionsDone(){
+    // Missionssystem noch nicht aktiv → 0 (Struktur vorhanden, UI zeigt Status)
+    return 0;
+  }
+
+  function renderMilestones(){
+    const box = document.getElementById("milestoneBoxes");
+    const qDone = countQuestsDone();
+    const bDone = countBossDone();
+    const mDone = countMissionsDone();
+
+    const groups = [
+      {id:'quests',    title:'📚 Quests gesamt',      done:qDone, conf:MS.quests},
+      {id:'boss',      title:'👑 Bossquests',         done:bDone, conf:MS.boss},
+      {id:'missions',  title:'🧭 Missionen (bald)',   done:mDone, conf:MS.missions}
+    ];
+
+    box.innerHTML = groups.map(g=>{
+      const items = g.conf.map(ms=>{
+        const reached = g.done >= ms.count;
+        const key = msKey(g.id, ms.count);
+        const claimed = state.milestonesClaimed.includes(key);
+        return `
+          <div class="p-2 border rounded bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div>
+              <div class="font-medium">${g.title}: ${ms.count}</div>
+              <div class="text-xs text-slate-500">Belohnung: +${ms.reward} Punkte</div>
+            </div>
+            <div>
+              ${reached
+                ? (claimed
+                    ? `<span class="text-green-600">✅ Eingelöst</span>`
+                    : `<button class="btn text-sm bg-green-600 text-white" data-claim="${g.id}|${ms.count}|${ms.reward}">Einlösen</button>`
+                  )
+                : `<span class="text-slate-500">${g.done}/${ms.count}</span>`}
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `<div class="space-y-2">${items}</div>`;
+    }).join('');
+
+    // Claim-Buttons
+    box.querySelectorAll("[data-claim]").forEach(b=>{
+      b.onclick=()=>{
+        const [id,count,reward] = b.getAttribute("data-claim").split("|");
+        const key = msKey(id, Number(count));
+        if(state.milestonesClaimed.includes(key)) return;
+        state.milestonesClaimed.push(key);
+        state.log.push({date:todayISO(), quest:`Milestone: ${id} ${count}`, points: Number(reward)});
+        save(); renderAll();
+        alert(`🎯 Meilenstein eingelöst: ${id} ${count} (+${reward} Punkte)`);
+      };
+    });
+  }
+
   // ====== SETTINGS ======
   function renderSettings(){
     const s=state.settings;
@@ -595,7 +758,7 @@
     };
   }
 
-  // ====== CHAT ======
+  // ====== CHAT (leicht) ======
   function chatAdd(msg, from="bot"){
     const log=document.getElementById("chatLog");
     const row=document.createElement("div");
@@ -612,7 +775,6 @@
       const done=new Set(state.log.filter(e=>e.date===today).map(e=>e.quest));
       const open=state.catalog.filter(q=>!done.has(q.name)).slice(0,5);
       if(open.length===0) return ["🎉 Alles erledigt!"];
-      // Buttons als einfache Liste – Klicks über quickAdd
       open.forEach(q=> chatAdd(`➕ ${q.name} (+${q.points} Punkte)`,"bot"));
       return ["👉 Vorschläge oben als Liste."];
     }
@@ -622,14 +784,14 @@
       const last=state.log.pop(); save(); renderAll();
       return [`🗑️ Letzte Quest gelöscht: ${last.quest} (${last.points} Punkte)`];
     }
-    // Zeige <wort>
+    // „zeige “
     if(text.startsWith("zeige ")){
       const q=text.replace("zeige ","").trim();
       const res=state.log.filter(e=> e.quest.toLowerCase().includes(q));
       if(res.length===0) return ["❌ Nichts gefunden."];
       return ["🔍 Ergebnisse:", ...res.slice(-10).map(e=>`${e.date} • ${e.quest} (${e.points} Punkte)`)];
     }
-    // Falls ein Katalognamen genannt wird → eintragen
+    // Falls ein Katalogname genannt → eintragen
     const found = state.catalog.find(q=> text.includes(q.name.toLowerCase()));
     if(found){
       const pts=computePoints(found.points, todayISO());
@@ -640,7 +802,7 @@
     // Sonst neue Quest mit +5
     const nq = msg.trim();
     if(nq){
-      state.catalog.push({name:nq,points:5});
+      state.catalog.push({name:nq,points:5,boss:false});
       const pts=computePoints(5, todayISO());
       state.log.push({date:todayISO(), quest:nq, points:pts, base:5});
       save(); renderAll();
@@ -660,19 +822,6 @@
     });
   }
 
-  // ====== NAVIGATION ======
-  function bindNav(){
-    document.querySelectorAll("nav [data-tab]").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        const tab=btn.getAttribute("data-tab");
-        document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-        document.getElementById("tab-"+tab).classList.add("active");
-        document.querySelectorAll("nav [data-tab]").forEach(b=>b.classList.remove("text-blue-600"));
-        btn.classList.add("text-blue-600");
-      });
-    });
-  }
-
   // ====== RENDER ALL ======
   function renderAll(){
     applyTheme();
@@ -682,17 +831,17 @@
     renderSpecial();
     bindSpecialForm();
     renderSettings();
+    renderMilestones();
   }
 
   // ====== INIT ======
   (function init(){
     applyTheme();
-    bindNav();
+    bindMenu();
     document.getElementById("btnAddEntry").addEventListener("click", addLog);
     document.getElementById("btnAddQuest").addEventListener("click", addQuest);
     bindChat();
     renderAll();
-    // Redraw stats on resize
     window.addEventListener("resize", ()=>{ if(document.getElementById("tab-dashboard").classList.contains("active")) renderStats(); });
   })();
   </script>
