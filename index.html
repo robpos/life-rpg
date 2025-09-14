@@ -13995,5 +13995,572 @@ window.completeMission = function(missionName, basePointsTotal){
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
   // Ich sage dir dann immer: "Füge Part X direkt ÜBER dem EXTENSION-POINT ein."
   </script>
+  <!-- === PATCH G : Kategorie-Verknüpfungen (projektbasiert) + Projekt-Zuweisung — direkt vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
+
+  if(!window.state){ console.warn("Patch G: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const S = window.state;
+  const TODAY = ()=> new Date().toISOString().slice(0,10);
+  const SAVE  = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+  const byId  = id => (S.categories && S.categories.list || []).find(c=>c.id===id);
+
+  // --------- Basis-Strukturen absichern ---------
+  S.categories = S.categories || { list:[], byQuest:{} };
+  S.projects   = S.projects   || { byQuest:{} };     // Zuordnung Quest -> Projekt/Mission-Key
+  S.catLinks   = S.catLinks   || [];                 // Verknüpfungen: {id,from,to,bonusType,amount,projectKey,active}
+
+  // Hilfen
+  function uniqueId(prefix="link"){
+    return prefix + "_" + Math.random().toString(36).slice(2,9);
+  }
+
+  // --------- Bonus-Anwendung beim Loggen (projektbasiert) ---------
+  function applyCategoryLinksFor(entry){
+    if(!entry || !entry.quest) return;
+
+    const qname  = entry.quest;
+    const fromId = (S.categories.byQuest||{})[qname];
+    if(!fromId) return; // Quest keiner Quelle-Kategorie zugeordnet
+
+    const projectKey = (S.projects.byQuest||{})[qname];
+    if(!projectKey) return; // keine Projektbindung -> keine globale Verknüpfung zulässig
+
+    const candidates = (S.catLinks||[]).filter(l=>
+      l.active && l.from===fromId && l.projectKey === projectKey && l.to && l.to!==fromId
+    );
+    if(candidates.length===0) return;
+
+    candidates.forEach(link=>{
+      const basePts = Number(entry.points||0);
+      if(basePts<=0) return; // nur auf positive Basis loggen
+
+      let bonus = 0;
+      if(link.bonusType==="percent"){
+        bonus = Math.round(basePts * (Number(link.amount||0)/100));
+      }else{
+        bonus = Math.round(Number(link.amount||0));
+      }
+      if(bonus<=0) return;
+
+      const fromName = (byId(link.from)?.name)||link.from;
+      const toName   = (byId(link.to)?.name)||link.to;
+      const bonusQuest = `Kategorie-Bonus: ${fromName} → ${toName} [${projectKey}]`;
+
+      // Bonus-Quest der Zielkategorie zuordnen (damit die Kategorien-Summen korrekt sind)
+      S.categories.byQuest[bonusQuest] = link.to;
+
+      // Doppelbuchung verhindern: Prüfe, ob für genau dieses Original-Log bereits Bonus mit dieser Link-ID existiert
+      const already = S.log.slice(-5).some(e=> e.meta && e.meta.catLinkId===link.id && e.meta.srcQuest===qname && e.date===entry.date);
+      if(already) return;
+
+      S.log.push({
+        date: entry.date,
+        quest: bonusQuest,
+        points: bonus,
+        meta: { catBonus:true, catLinkId:link.id, project:projectKey, srcQuest:qname }
+      });
+      SAVE();
+    });
+  }
+
+  // addLog wrappen (nach ALLEN anderen Patches)
+  (function wrapAddLog(){
+    if(S._catLinkPatched) return;
+    const old = window.addLog;
+    if(typeof old!=="function"){ console.warn("Patch G: addLog nicht gefunden."); return; }
+    window.addLog = function(){
+      const beforeLen = S.log.length;
+      old.apply(this, arguments);
+      const afterLen  = S.log.length;
+      if(afterLen>beforeLen){
+        const last = S.log[afterLen-1];
+        applyCategoryLinksFor(last);
+      }
+    };
+    S._catLinkPatched = true;
+  })();
+
+  // --------- Katalog: Projekt/Mission-Key je Quest editieren ---------
+  function injectProjectInputs(){
+    const list = document.getElementById("catalogList");
+    if(!list) return;
+    // Für jedes vorhandene Kategorie-Select (data-csel="<QuestName>") ein Projektfeld daneben setzen
+    list.querySelectorAll('select[data-csel]').forEach(sel=>{
+      const qname = sel.getAttribute('data-csel');
+      // Existiert schon?
+      if(sel.closest('.p-2.border.rounded').querySelector(`[data-proj="${CSS.escape(qname)}"]`)) return;
+
+      const wrap = document.createElement("div");
+      wrap.className = "mt-2";
+      wrap.innerHTML = `
+        <label class="text-xs text-slate-600">Projekt/Mission:
+          <input class="input text-xs" placeholder="z. B. Wohnzimmer" data-proj="${qname}">
+        </label>
+      `;
+      sel.parentElement.parentElement.appendChild(wrap);
+      const inp = wrap.querySelector(`[data-proj="${CSS.escape(qname)}"]`);
+      inp.value = (S.projects.byQuest||{})[qname] || "";
+      inp.addEventListener("change", ()=>{
+        const v = (inp.value||"").trim();
+        if(!S.projects.byQuest) S.projects.byQuest = {};
+        if(v) S.projects.byQuest[qname] = v;
+        else  delete S.projects.byQuest[qname];
+        SAVE();
+      });
+    });
+  }
+
+  // Bestehendes Katalog-Render um Projektfelder erweitern
+  (function wrapCatalog(){
+    const old = window.renderCatalog;
+    if(typeof old!=="function"){ console.warn("Patch G: renderCatalog nicht gefunden."); return; }
+    window.renderCatalog = function(){
+      old.apply(this, arguments);
+      try{ injectProjectInputs(); }catch(e){ console.warn("Patch G injectProjectInputs",e); }
+    };
+  })();
+
+  // --------- Settings: Manager für Kategorie-Verknüpfungen (projektbasiert) ---------
+  function renderCatLinkManager(){
+    const host = document.getElementById("tab-settings");
+    if(!host) return;
+
+    let box = document.getElementById("catLinkManager");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "catLinkManager";
+      box.className = "space-y-2 mt-4 p-3 border rounded bg-indigo-50";
+      host.appendChild(box);
+    }
+
+    const catOpts = (S.categories.list||[]).map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+
+    const rows = (S.catLinks||[]).map(l=>{
+      const from = byId(l.from)?.name || l.from;
+      const to   = byId(l.to)?.name   || l.to;
+      const bonusTxt = l.bonusType==="percent" ? `${l.amount}%` : `+${l.amount}`;
+      return `
+        <div class="p-2 border rounded bg-white flex items-center justify-between">
+          <div class="text-sm">
+            <b>${from}</b> ➜ <b>${to}</b>
+            <span class="ml-2">Projekt: <code>${l.projectKey}</code></span>
+            <span class="ml-2">Bonus: <b>${bonusTxt}</b></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs flex items-center gap-1">
+              Aktiv <input type="checkbox" data-link-on="${l.id}" ${l.active?'checked':''}>
+            </label>
+            <button class="btn text-xs text-red-700" data-link-del="${l.id}">Löschen</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    box.innerHTML = `
+      <h3 class="font-bold">Kategorie-Verknüpfungen (projektbasiert)</h3>
+      <div class="text-xs text-slate-600">
+        Wenn du eine Quest loggst, die der <b>Quelle</b>-Kategorie zugeordnet ist <u>und</u> denselben <b>Projekt/Mission-Key</b> trägt,
+        wird automatisch ein Bonus in der <b>Ziel</b>-Kategorie verbucht. Keine globalen Boni.
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-2 mt-2">
+        <label class="text-xs">Quelle
+          <select id="linkFrom" class="input text-xs">${catOpts}</select>
+        </label>
+        <label class="text-xs">Ziel
+          <select id="linkTo" class="input text-xs">${catOpts}</select>
+        </label>
+        <label class="text-xs">Projekt/Mission-Key
+          <input id="linkProject" class="input text-xs" placeholder="z. B. Wohnzimmer">
+        </label>
+        <label class="text-xs">Bonus-Typ
+          <select id="linkType" class="input text-xs">
+            <option value="percent">% vom Basis-Log</option>
+            <option value="flat">+ feste Punkte</option>
+          </select>
+        </label>
+        <label class="text-xs">Wert
+          <input id="linkAmount" type="number" class="input text-xs" value="20" step="1">
+        </label>
+      </div>
+      <button id="btnAddCatLink" class="btn bg-purple-600 text-white mt-2">+ Verknüpfung hinzufügen</button>
+
+      <div class="mt-3 space-y-2">${rows || `<div class="text-sm text-slate-500">Noch keine Verknüpfungen.</div>`}</div>
+    `;
+
+    // Add
+    box.querySelector("#btnAddCatLink").addEventListener("click", ()=>{
+      const from = box.querySelector("#linkFrom").value;
+      const to   = box.querySelector("#linkTo").value;
+      const projectKey = (box.querySelector("#linkProject").value||"").trim();
+      const bonusType  = box.querySelector("#linkType").value;
+      const amount     = Number(box.querySelector("#linkAmount").value||0);
+
+      if(!projectKey) return alert("Bitte einen Projekt/Mission-Key angeben (keine globalen Verknüpfungen).");
+      if(!from || !to) return alert("Bitte Quelle und Ziel wählen.");
+      if(from===to)    return alert("Quelle und Ziel dürfen nicht identisch sein.");
+      if(amount<=0)    return alert("Bitte einen Bonus > 0 angeben.");
+
+      S.catLinks.push({ id:uniqueId(), from, to, projectKey, bonusType, amount, active:true });
+      SAVE(); renderAll();
+    });
+
+    // Toggle
+    box.querySelectorAll("[data-link-on]").forEach(chk=>{
+      chk.addEventListener("change", ()=>{
+        const id = chk.getAttribute("data-link-on");
+        const l = (S.catLinks||[]).find(x=>x.id===id);
+        if(!l) return;
+        l.active = chk.checked;
+        SAVE();
+      });
+    });
+
+    // Delete
+    box.querySelectorAll("[data-link-del]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-link-del");
+        S.catLinks = (S.catLinks||[]).filter(x=>x.id!==id);
+        SAVE(); renderAll();
+      });
+    });
+  }
+
+  // Settings hooken
+  (function wrapSettings(){
+    const old = window.renderSettings;
+    if(typeof old!=="function"){ console.warn("Patch G: renderSettings nicht gefunden."); return; }
+    window.renderSettings = function(){
+      old.apply(this, arguments);
+      try{ renderCatLinkManager(); }catch(e){ console.warn("Patch G renderCatLinkManager",e); }
+    };
+  })();
+
+  // --------- Init ---------
+  try{
+    if(typeof window.renderAll==="function") window.renderAll();
+    else{
+      if(typeof window.renderSettings==="function") window.renderSettings();
+      if(typeof window.renderCatalog==="function")  window.renderCatalog();
+      if(typeof window.renderDashboard==="function")window.renderDashboard();
+    }
+  }catch(e){ console.warn("Patch G init:", e); }
+
+})();
+</script>
+<!-- === /PATCH G === -->
+<!-- === PATCH H : Negative Kategorien + doppelte Buchung + Milestone-Decay — direkt vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
+
+  if(!window.state){ console.warn("Patch H: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+
+  const S     = window.state;
+  const SAVE  = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+  const today = ()=> new Date().toISOString().slice(0,10);
+
+  // -------- Basis-Strukturen absichern --------
+  S.categories = S.categories || { list:[], byQuest:{} };
+  S.categories.list = Array.isArray(S.categories.list) ? S.categories.list : [];
+  S.categories.byQuest = S.categories.byQuest || {};
+  // pro Kategorie-Config (negativ?, ratio usw.)
+  S.categories.config = S.categories.config || {}; // { [catId]: { negative:boolean, ratio:number } }
+
+  // Hilfen
+  const findCatById   = id => (S.categories.list||[]).find(c=>c.id===id);
+  const findCatByName = name => (S.categories.list||[]).find(c=>(c.name||"").toLowerCase()===String(name||"").toLowerCase());
+
+  // Falls noch keine Kategorien existieren, minimal zwei vorschlagen
+  if(!S.categories.__seededH){
+    if(!S.categories.list || S.categories.list.length===0){
+      S.categories.list = [
+        { id:"cat_general", name:"Allgemein" },
+        { id:"cat_bad",     name:"Schlechter Lebensstil" }
+      ];
+      // Standard: "Schlechter Lebensstil" negativ mit Ratio 2 (z. B. +15 Kategorie, −30 Total)
+      S.categories.config["cat_bad"] = { negative:true, ratio:2 };
+    }else{
+      // vorhandene prüfen: falls eine mit Name "Schlechter Lebensstil" existiert, default negativ
+      const bad = findCatByName("Schlechter Lebensstil");
+      if(bad && !S.categories.config[bad.id]){
+        S.categories.config[bad.id] = { negative:true, ratio:2 };
+      }
+    }
+    S.categories.__seededH = true;
+    SAVE();
+  }
+
+  // -------- Negative Kategorie-Logik (doppelte Buchung) --------
+  /**
+   * Wenn der zuletzt geloggte Eintrag einer NEGATIVEN Kategorie zugeordnet ist:
+   *  - behalte KATEGORIE-Credit positiv (idealerweise "base" verwenden)
+   *  - buche zusätzlich einen Malus auf die Gesamtpunkte (−base*ratio)
+   *  Ergebnis: Kategorie sammelt +X, Gesamtpunkte sinken netto um (ratio*X − X) = (ratio−1)*X,
+   *  wenn der ursprüngliche Eintrag bereits +X war. Um **exakt** z. B. −30 bei +15 Credit zu erzeugen,
+   *  setzen wir den ursprünglichen Eintrag auf +catPts und buchen **zusätzlich** −(catPts*ratio + opt.ausgleich).
+   */
+  function applyNegativeCategoryDoubleEntry(last){
+    if(!last) return;
+
+    const qname = last.quest;
+    const catId = S.categories.byQuest[qname];
+    if(!catId) return;
+
+    const cfg = S.categories.config[catId] || { negative:false, ratio:2 };
+    if(!cfg.negative) return;
+
+    // Punkte-Basis: bevorzugt "base", sonst absoluter Wert der Punkte
+    const catPts = Math.max(0, Number(last.base ?? Math.abs(last.points) || 0));
+    const ratio  = Math.max(1, Number(cfg.ratio || 2));
+
+    // Keine doppelten Malus-Buchungen (z. B. mehrfaches Wrapping)
+    if(last.meta && last.meta.negSourceApplied) return;
+
+    // 1) Ursprünglichen Eintrag als KATEGORIE-Credit setzen (positiv, damit Kategorie-Summe stimmt)
+    last.points = catPts;
+    last.meta = Object.assign({}, last.meta, { negSourceApplied:true, negCategoryId:catId });
+
+    // 2) Zusätzlichen Malus buchen, der NICHT einer Kategorie zugeordnet ist
+    const penalty = -Math.round(catPts * ratio);
+    // Ausgleich vermeiden: Wir wollen GESAMT −30 (Beispiel), Kategorie +15 -> Netto total −30 +15 = −15 (falsch).
+    // Daher buchen wir den Malus separat und lassen den Credit stehen. Gesamt ändert sich um penalty (+ last.points).
+    // Beispiel catPts=15, ratio=2 -> last.points=+15, penalty=−30 -> Netto total −15.
+    // **Der Nutzerwunsch ist explizit −30 total**, die Kategorie soll aber +15 zeigen.
+    // Lösung: Wir buchen einen *zusätzlichen* Gegen-Ausgleich −(catPts) damit total = −30 und Kategorie bleibt +15:
+    //   total delta = +15 (Credit) −30 (Malus) −15 (Ausgleich) = −30
+    const compensation = -catPts;
+
+    // Malus-Questname und kein Kategorie-Mapping setzen
+    const malusName = `Malus (negativ): ${qname}`;
+    const compName  = `Malus Ausgleich: ${qname}`;
+    // Sicherstellen, dass diese Ausgleichsbuchungen NICHT in Kategorien zählen:
+    delete S.categories.byQuest[malusName];
+    delete S.categories.byQuest[compName];
+
+    S.log.push({
+      date: last.date,
+      quest: malusName,
+      points: penalty,
+      meta: { negPenalty:true, fromQuest:qname, catId }
+    });
+    S.log.push({
+      date: last.date,
+      quest: compName,
+      points: compensation,
+      meta: { negComp:true, fromQuest:qname, catId }
+    });
+
+    SAVE();
+  }
+
+  // addLog ein letztes Mal wrappen (nach allen anderen Patches),
+  // damit wir den final erzeugten Eintrag transformieren können.
+  (function wrapAddLogNegative(){
+    if(S.__patchH_addLogWrapped) return;
+    const old = window.addLog;
+    if(typeof old!=="function"){ console.warn("Patch H: addLog nicht gefunden."); return; }
+    window.addLog = function(){
+      const before = S.log.length;
+      old.apply(this, arguments);
+      const after = S.log.length;
+      if(after>before){
+        const last = S.log[after-1];
+        try{
+          applyNegativeCategoryDoubleEntry(last);
+        }catch(e){ console.warn("Patch H applyNegativeCategoryDoubleEntry", e); }
+        // (Optional) Re-Render
+        if(typeof window.renderAll==="function") window.renderAll();
+      }
+    };
+    S.__patchH_addLogWrapped = true;
+  })();
+
+  // -------- Settings: Kategorie-Manager (negativ/Ratio) --------
+  function renderNegativeCategoryManager(){
+    const host = document.getElementById("tab-settings");
+    if(!host) return;
+
+    // Container anlegen/holen
+    let box = document.getElementById("negCatManager");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "negCatManager";
+      box.className = "space-y-2 mt-4 p-3 border rounded bg-rose-50";
+      host.appendChild(box);
+    }
+
+    // Optionen rendern
+    const rows = (S.categories.list||[]).map(cat=>{
+      const cfg = S.categories.config[cat.id] || {};
+      const neg = !!cfg.negative;
+      const ratio = Number(cfg.ratio ?? 2);
+      return `
+        <div class="p-2 border rounded bg-white">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium">${cat.name}</div>
+              <div class="text-xs text-slate-500">ID: ${cat.id}</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <label class="text-xs flex items-center gap-1">
+                Negativ?
+                <input type="checkbox" data-neg="${cat.id}" ${neg?'checked':''}>
+              </label>
+              <label class="text-xs">Ratio
+                <input type="number" min="1" step="1" class="input text-xs w-20" data-ratio="${cat.id}" value="${ratio}">
+              </label>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    box.innerHTML = `
+      <h3 class="font-bold">Negative Kategorien</h3>
+      <div class="text-xs text-slate-700">
+        Für Kategorien, die <b>negativ</b> markiert sind (z. B. „Schlechter Lebensstil“),
+        wird beim Loggen automatisch doppelt gebucht:<br>
+        • Kategorie erhält <b>+X</b> Punkte (Credit) &nbsp;• Gesamtpunkte erhalten <b>−(X×Ratio)</b> und zusätzlich <b>−X</b> Ausgleich,<br>
+        sodass z. B. bei X=15 und Ratio=2 die Kategorie +15 zeigt, die Gesamtpunkte jedoch um −30 sinken.
+      </div>
+      ${rows || `<div class="text-sm text-slate-500">Noch keine Kategorien definiert.</div>`}
+      <div class="flex gap-2 mt-2">
+        <input id="newNegCatName" class="input text-xs flex-1" placeholder="Neue Kategorie (optional)">
+        <button id="btnAddNegCat" class="btn text-xs">+ Kategorie</button>
+      </div>
+    `;
+
+    // Events: toggles & ratio
+    box.querySelectorAll("[data-neg]").forEach(chk=>{
+      chk.addEventListener("change", ()=>{
+        const id = chk.getAttribute("data-neg");
+        const cfg = S.categories.config[id] || (S.categories.config[id]={});
+        cfg.negative = chk.checked;
+        if(cfg.negative && (cfg.ratio==null)) cfg.ratio = 2;
+        SAVE();
+      });
+    });
+    box.querySelectorAll("[data-ratio]").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const id = inp.getAttribute("data-ratio");
+        const cfg = S.categories.config[id] || (S.categories.config[id]={});
+        let v = Math.max(1, Number(inp.value||2));
+        cfg.ratio = v;
+        SAVE();
+      });
+    });
+
+    // Neue Kategorie anlegen (schnell)
+    const addBtn = box.querySelector("#btnAddNegCat");
+    const addInp = box.querySelector("#newNegCatName");
+    if(addBtn && addInp){
+      addBtn.addEventListener("click", ()=>{
+        const name = (addInp.value||"").trim();
+        if(!name) return;
+        const id = "cat_"+Math.random().toString(36).slice(2,9);
+        S.categories.list.push({id,name});
+        S.categories.config[id] = { negative:false, ratio:2 };
+        addInp.value="";
+        SAVE();
+        if(typeof window.renderAll==="function") window.renderAll();
+        else renderNegativeCategoryManager();
+      });
+    }
+  }
+
+  // Settings hooken
+  (function wrapSettings(){
+    const old = window.renderSettings;
+    if(typeof old!=="function"){ console.warn("Patch H: renderSettings nicht gefunden."); return; }
+    window.renderSettings = function(){
+      old.apply(this, arguments);
+      try{ renderNegativeCategoryManager(); }catch(e){ console.warn("Patch H renderNegativeCategoryManager", e); }
+    };
+  })();
+
+  // -------- Milestone-Decay: Wiedererreichen = 1/10 Belohnung --------
+  /**
+   * Ersetzt/erweitert checkMilestones so, dass:
+   *  - m.ok spiegelt den AKTUELLEN Zustand von m.check() wider
+   *  - Übergang false->true: Belohnung
+   *      * beim ersten Mal volle Belohnung
+   *      * wenn seitdem unterschritten (true->false) und erneut erreicht: nur 1/10
+   */
+  (function wrapMilestonesDecay(){
+    // Wenn kein Milestones-System existiert, still aussteigen
+    if(!Array.isArray(S.milestones)) return;
+
+    // Original, falls vorhanden
+    const orig = window.checkMilestones;
+
+    window.checkMilestones = function(){
+      let updated = false;
+      (S.milestones||[]).forEach(m=>{
+        try{
+          const nowOk = !!(m.check && m.check());
+          // interne Felder initialisieren
+          m.__ok  = (m.__ok===undefined) ? !!m.ok : m.__ok;
+          m.__awarded = m.__awarded || 0;            // wie oft schon belohnt
+          m.__lost    = m.__lost || false;           // seit letztem Award unterschritten?
+
+          // Übergänge feststellen
+          const prevOk = !!m.__ok;
+
+          if(!prevOk && nowOk){
+            // Wiedererreicht
+            let reward = Number(m.reward||0);
+            if(m.__awarded>=1 && m.__lost){
+              reward = Math.max(1, Math.round(reward * 0.1)); // 1/10
+            }
+            if(reward>0){
+              S.log.push({date:today(), quest:`Milestone erreicht: ${m.text}`, points:reward, meta:{milestone:true, id:m.id||m.text}});
+              updated = true;
+            }
+            m.__awarded += 1;
+            m.__lost = false;
+          }else if(prevOk && !nowOk){
+            // Unterschritten
+            m.__lost = true;
+          }
+
+          // Sichtbarer Status
+          m.ok   = nowOk;
+          m.__ok = nowOk;
+        }catch(e){
+          // robuste Prüfung: einzelne Milestones dürfen nicht alles blockieren
+          console.warn("Patch H milestone check error", e, m);
+        }
+      });
+
+      if(updated) SAVE();
+    };
+
+    // renderMilestones hooken (damit unser check läuft)
+    const oldRenderM = window.renderMilestones;
+    if(typeof oldRenderM === "function"){
+      window.renderMilestones = function(){
+        try{ window.checkMilestones(); }catch(e){ console.warn("Patch H checkMilestones run", e); }
+        oldRenderM.apply(this, arguments);
+      };
+    }
+  })();
+
+  // -------- Init einmalig ausführen --------
+  try{
+    if(typeof window.renderAll==="function") window.renderAll();
+    else{
+      if(typeof window.renderSettings==="function") window.renderSettings();
+      if(typeof window.renderDashboard==="function") window.renderDashboard();
+      if(typeof window.renderLog==="function") window.renderLog();
+      if(typeof window.renderCatalog==="function") window.renderCatalog();
+    }
+  }catch(e){ console.warn("Patch H init", e); }
+
+})();
+</script>
+<!-- === /PATCH H === -->
 </body>
 </html>
