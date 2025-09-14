@@ -11947,6 +11947,500 @@ window.completeMission = function(missionName, basePointsTotal){
 
 })();
 <!-- ==== /MISSION-BONUS + CHAT FIX ==== -->
+<!-- ==== KATEGORIEN: Summen, Zuordnung & Links (vor </script> einfügen) ==== -->
+(function(){
+
+  // ---------- Init ----------
+  state.categories = state.categories || [
+    {id:"sport",      name:"Sport",      type:"normal"},
+    {id:"handwerk",   name:"Handwerk",   type:"normal"},
+    {id:"haushalt",   name:"Haushalt",   type:"normal"},
+    {id:"ernaehrung", name:"Ernährung",  type:"normal"},
+    {id:"negativ",    name:"Schlechter Lebensstil", type:"negative"}
+  ];
+  // Verkettungen: A -> B mit ratio (0..1), nur als Kategorie-Credit für B
+  state.categoryLinks = state.categoryLinks || [
+    // Beispiel: 25% von Handwerk zählen zusätzlich zur Kategorie Sport (nur Anzeige/Credit)
+    // {from:"handwerk", to:"sport", ratio:0.25}
+  ];
+
+  // Für Quests: .cat (categoryId)
+  state.catalog = state.catalog || [];
+
+  // ---------- Helpers ----------
+  const byId = id => state.categories.find(c=>c.id===id);
+  function ensureId(name){
+    // mache aus Namen stabile id
+    return name.toLowerCase()
+               .replace(/\s+/g,"-")
+               .replace(/[^\w\-äöüÄÖÜß]/g,"")
+               .slice(0,40);
+  }
+  function saveSafe(){ try{ save(); }catch(e){} }
+
+  function getQuestByName(name){
+    return state.catalog.find(q => (q.name||"").toLowerCase() === (name||"").toLowerCase());
+  }
+
+  function questCategoryId(q){
+    return q && q.cat ? q.cat : null;
+  }
+
+  function entryCategoryId(e){
+    // 1) Direkt am Log-Eintrag?
+    if(e.cat) return e.cat;
+    // 2) Vom Quest ableiten
+    const q=getQuestByName(e.quest);
+    if(q && q.cat){ e.cat = q.cat; return q.cat; }
+    return null;
+  }
+
+  // ---------- Quests verschieben (inkl. rückwirkend) ----------
+  function moveQuestToCategory(questIndex, newCatId, retro=true){
+    const q = state.catalog[questIndex];
+    if(!q) return;
+    q.cat = newCatId || null;
+    if(retro){
+      const nameLower = (q.name||"").toLowerCase();
+      state.log.forEach(e=>{
+        if((e.quest||"").toLowerCase()===nameLower){
+          e.cat = newCatId || null;
+        }
+      });
+    }
+    saveSafe();
+    if(typeof renderAll==="function") renderAll();
+  }
+
+  // ---------- Kategorie-Summen berechnen ----------
+  // Ergebnis: { [catId]: {base:number, link:number, total:number} }
+  function computeCategorySums(){
+    const sums = {};
+    state.categories.forEach(c=>sums[c.id]={base:0, link:0, total:0});
+
+    // Basis aus Log
+    (state.log||[]).forEach(e=>{
+      const cid = entryCategoryId(e);
+      if(!cid || !sums[cid]) return;
+      sums[cid].base += Number(e.points||0);
+    });
+
+    // Link-Credits einrechnen (A → B * ratio)
+    (state.categoryLinks||[]).forEach(l=>{
+      if(!l || !l.from || !l.to || typeof l.ratio!=="number") return;
+      const from = sums[l.from]; const to = sums[l.to];
+      if(!from || !to) return;
+      const credit = Math.round(from.base * l.ratio);
+      to.link += credit;
+    });
+
+    // Total
+    Object.keys(sums).forEach(id=>{
+      sums[id].total = sums[id].base + sums[id].link;
+    });
+    return sums;
+  }
+
+  // ---------- Dashboard: Kategorie-Box ----------
+  function renderCategoryOverview(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+    const sums = computeCategorySums();
+
+    const box = document.createElement("div");
+    box.className = "mt-4 p-3 border rounded bg-slate-50";
+    let html = `<h3 class="font-bold mb-2">Kategorien (Punktesummen)</h3>`;
+    html += `<div class="space-y-1">` +
+      state.categories.map(c=>{
+        const s = sums[c.id] || {base:0,link:0,total:0};
+        const tag = c.type==="negative" ? "text-red-700" : "text-slate-700";
+        const linkInfo = s.link ? ` <span class="text-xs text-slate-500">(inkl. +${s.link} Link-Credit)</span>` : "";
+        return `<div class="flex justify-between items-baseline">
+                  <span class="${tag}">${c.name}</span>
+                  <span class="font-medium">${s.total}</span>${linkInfo}
+                </div>`;
+      }).join("") +
+      `</div>`;
+    box.innerHTML = html;
+    host.appendChild(box);
+  }
+
+  // Hook ins Dashboard
+  const oldRenderDashboard_cat = renderDashboard;
+  renderDashboard = function(){
+    oldRenderDashboard_cat();
+    renderCategoryOverview();
+  };
+
+  // ---------- Settings: Kategorie-Manager ----------
+  function renderCategoryManager(){
+    const host = document.getElementById("tab-settings");
+    if(!host) return;
+
+    // Container anhängen (unter bestehende Settings)
+    const wrap = document.createElement("div");
+    wrap.className = "mt-6 p-3 border rounded bg-white";
+    wrap.innerHTML = `
+      <h3 class="font-bold mb-2">Kategorien & Verknüpfungen</h3>
+
+      <div id="cm-cats" class="space-y-2"></div>
+      <button id="cm-add-cat" class="btn mt-2">+ Kategorie</button>
+
+      <div class="mt-4">
+        <h4 class="font-semibold mb-1">Verknüpfungen (nur Kategorie-Credit)</h4>
+        <div id="cm-links" class="space-y-2"></div>
+        <div class="grid grid-cols-5 gap-2 items-center">
+          <select id="cm-from" class="input col-span-2"></select>
+          <span class="text-center">→</span>
+          <select id="cm-to" class="input col-span-2"></select>
+          <input id="cm-ratio" type="number" step="0.05" min="0" max="1" class="input" placeholder="Anteil z. B. 0.25" />
+        </div>
+        <button id="cm-add-link" class="btn mt-2">+ Verknüpfung</button>
+      </div>
+    `;
+    host.appendChild(wrap);
+
+    // Kategorien-Liste
+    function drawCats(){
+      const area = wrap.querySelector("#cm-cats");
+      area.innerHTML = state.categories.map((c,i)=>`
+        <div class="grid grid-cols-6 gap-2 items-center">
+          <input data-i="${i}" data-k="name" class="input col-span-3" value="${c.name}">
+          <select data-i="${i}" data-k="type" class="input col-span-2">
+            <option value="normal" ${c.type==="normal"?"selected":""}>normal</option>
+            <option value="negative" ${c.type==="negative"?"selected":""}>negativ</option>
+          </select>
+          <button data-del="${i}" class="btn text-red-600">Löschen</button>
+        </div>
+      `).join("");
+
+      area.querySelectorAll("[data-k]").forEach(inp=>{
+        inp.addEventListener("change",()=>{
+          const i=+inp.getAttribute("data-i");
+          const k=inp.getAttribute("data-k");
+          let v=inp.value;
+          if(k==="name"){
+            // id stabilisieren, wenn neue Kategorie
+            if(!state.categories[i].id || state.categories[i].id===ensureId(state.categories[i].name)){
+              state.categories[i].id = ensureId(v);
+            }
+          }
+          state.categories[i][k]=v;
+          saveSafe();
+          // Aktualisiere DropDowns
+          fillCatOptions();
+          if(typeof renderAll==="function") renderAll();
+        });
+      });
+
+      area.querySelectorAll("[data-del]").forEach(btn=>{
+        btn.addEventListener("click",()=>{
+          const i=+btn.getAttribute("data-del");
+          const cat=state.categories[i];
+          if(!cat) return;
+          if(!confirm(`Kategorie "${cat.name}" löschen? Quests behalten ihre Zuordnung nicht.`)) return;
+          // Zuordnungen entfernen
+          state.catalog.forEach(q=>{ if(q.cat===cat.id) q.cat=null; });
+          state.log.forEach(e=>{ if(e.cat===cat.id) e.cat=null; });
+          state.categories.splice(i,1);
+          saveSafe();
+          drawCats(); fillCatOptions();
+          if(typeof renderAll==="function") renderAll();
+        });
+      });
+    }
+
+    wrap.querySelector("#cm-add-cat").addEventListener("click",()=>{
+      const name = prompt("Neue Kategorie (Name)?");
+      if(!name) return;
+      const id = ensureId(name);
+      if(state.categories.some(c=>c.id===id)){
+        alert("Diese Kategorie gibt es bereits.");
+        return;
+      }
+      state.categories.push({id,name,type:"normal"});
+      saveSafe(); drawCats(); fillCatOptions();
+      if(typeof renderAll==="function") renderAll();
+    });
+
+    // Links-Anzeige + Add
+    function drawLinks(){
+      const area = wrap.querySelector("#cm-links");
+      area.innerHTML = (state.categoryLinks||[]).length ? 
+        state.categoryLinks.map((l,i)=>{
+          const from = byId(l.from)?.name||l.from;
+          const to   = byId(l.to)?.name||l.to;
+          const r    = (Number(l.ratio)||0).toFixed(2);
+          return `<div class="flex justify-between items-center">
+                    <div>${from} → ${to} <span class="text-slate-500">(+${r}× als Kategorie-Credit)</span></div>
+                    <button data-del-link="${i}" class="btn text-red-600">Entfernen</button>
+                  </div>`;
+        }).join("")
+        : `<div class="text-sm text-slate-500">Keine Verknüpfungen</div>`;
+
+      area.querySelectorAll("[data-del-link]").forEach(btn=>{
+        btn.addEventListener("click",()=>{
+          const i=+btn.getAttribute("data-del-link");
+          state.categoryLinks.splice(i,1);
+          saveSafe(); drawLinks();
+          if(typeof renderAll==="function") renderAll();
+        });
+      });
+    }
+
+    function fillCatOptions(){
+      const fromSel = wrap.querySelector("#cm-from");
+      const toSel   = wrap.querySelector("#cm-to");
+      const opts = state.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+      fromSel.innerHTML = opts;
+      toSel.innerHTML   = opts;
+    }
+
+    wrap.querySelector("#cm-add-link").addEventListener("click",()=>{
+      const from = wrap.querySelector("#cm-from").value;
+      const to   = wrap.querySelector("#cm-to").value;
+      const ratio= Number(wrap.querySelector("#cm-ratio").value||0);
+      if(!from || !to || from===to) return alert("Bitte unterschiedliche Kategorien wählen.");
+      if(!(ratio>0)) return alert("Bitte einen Anteil > 0 angeben (z. B. 0.25).");
+      state.categoryLinks.push({from,to,ratio});
+      saveSafe(); drawLinks();
+      if(typeof renderAll==="function") renderAll();
+    });
+
+    drawCats();
+    fillCatOptions();
+    drawLinks();
+  }
+
+  // Hook ins Settings-Render
+  const oldRenderSettings_cat = renderSettings;
+  renderSettings = function(){
+    oldRenderSettings_cat();
+    renderCategoryManager();
+  };
+
+  // ---------- Catalog: Kategorie-Select je Quest ----------
+  function renderCatalogCategories(){
+    const list = document.getElementById("catalogList");
+    if(!list) return;
+
+    // Baue die Liste komplett neu (inkl. Timed-Quest-Button)
+    list.innerHTML = state.catalog.map((q,i)=>{
+      const catName = byId(q.cat)?.name || "— keine —";
+      return `
+        <div class="p-2 border rounded ${q.boss?'bg-yellow-50':'bg-white'}">
+          <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              ${q.boss?'👑 ':''}<b>${q.name}</b>
+              <span class="text-slate-500">(+${q.points} Punkte)</span>
+            </div>
+            <div class="flex gap-2 items-center">
+              <select class="input text-sm" data-cat-for="${i}">
+                <option value="">— keine —</option>
+                ${state.categories.map(c=>`<option value="${c.id}" ${q.cat===c.id?'selected':''}>${c.name}</option>`).join("")}
+              </select>
+              <button class="text-red-600 text-sm btn" data-del="${i}">Löschen</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("") + `
+      <button id="btnAddTimedQuest_cat" class="btn w-full bg-purple-600 text-white mt-2">+ Timed Quest</button>
+    `;
+
+    // Events
+    list.querySelectorAll("[data-cat-for]").forEach(sel=>{
+      sel.addEventListener("change",()=>{
+        const i = Number(sel.getAttribute("data-cat-for"));
+        const newCat = sel.value || null;
+        const retro = confirm("Soll die neue Kategorie rückwirkend auf bestehende Einträge dieses Quests angewendet werden?");
+        moveQuestToCategory(i, newCat, retro);
+      });
+    });
+
+    list.querySelectorAll("[data-del]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const i=Number(btn.getAttribute("data-del"));
+        if(!confirm(`Quest "${state.catalog[i]?.name}" löschen?`)) return;
+        state.catalog.splice(i,1);
+        saveSafe();
+        renderAll();
+      });
+    });
+
+    const btnT = document.getElementById("btnAddTimedQuest_cat");
+    if(btnT) btnT.addEventListener("click", ()=>{
+      if(typeof addTimedQuest==="function") addTimedQuest();
+    });
+  }
+
+  // Hook in Catalog-Render (nach bestehendem Rendering)
+  const oldRenderCatalog_cat = renderCatalog;
+  renderCatalog = function(){
+    oldRenderCatalog_cat();
+    renderCatalogCategories();
+  };
+
+  // ---------- Fertig ----------
+  saveSafe();
+
+})();
+<!-- ==== /KATEGORIEN ==== -->
+<!-- === PATCH A : Chat-Fix & Konsolidierung (vor </script> einfügen) === -->
+<script>
+(function(){
+  "use strict";
+
+  // 1) DOM sicherstellen / vereinheitlichen
+  const mainEl = document.querySelector("main") || document.body;
+
+  // a) Chat-Section sicherstellen
+  let chatSection = document.getElementById("tab-chat");
+  if(!chatSection){
+    chatSection = document.createElement("section");
+    chatSection.id = "tab-chat";
+    chatSection.className = "tab space-y-4";
+    chatSection.innerHTML = `
+      <div class="card p-3 space-y-2">
+        <div id="chatLog" class="h-64 overflow-y-auto border p-2 rounded bg-white text-sm"></div>
+        <div class="flex gap-2">
+          <input id="chatInput" class="input flex-1" placeholder="Schreib etwas wie 'Heute habe ich Sport gemacht'"/>
+          <button id="btnChatSend" class="btn bg-blue-600 text-white">Senden</button>
+        </div>
+      </div>
+    `;
+    mainEl.appendChild(chatSection);
+  }
+
+  // b) Chat-Container vereinheitlichen (chatLog bevorzugt, sonst chatWindow übernehmen)
+  let chatLog = document.getElementById("chatLog");
+  const legacyWin = document.getElementById("chatWindow");
+  if(!chatLog && legacyWin){
+    // Falls es nur #chatWindow gibt: als #chatLog "umwidmen"
+    legacyWin.id = "chatLog";
+    chatLog = legacyWin;
+  }
+  if(!chatLog){
+    // Falls gar nichts existiert, neu anlegen
+    const box = document.createElement("div");
+    box.id = "chatLog";
+    box.className = "h-64 overflow-y-auto border p-2 rounded bg-white text-sm";
+    chatSection.querySelector(".card")?.prepend(box);
+    chatLog = box;
+  }
+
+  // c) Input/Button vereinheitlichen
+  let chatInput = document.getElementById("chatInput");
+  if(!chatInput){
+    chatInput = document.createElement("input");
+    chatInput.id = "chatInput";
+    chatInput.className = "input flex-1";
+    chatInput.placeholder = "Schreib etwas…";
+    const row = chatSection.querySelector(".flex.gap-2") || chatSection;
+    row.appendChild(chatInput);
+  }
+  let btnSend = document.getElementById("btnChatSend");
+  if(!btnSend){
+    btnSend = document.createElement("button");
+    btnSend.id = "btnChatSend";
+    btnSend.className = "btn bg-blue-600 text-white";
+    btnSend.textContent = "Senden";
+    const row = chatSection.querySelector(".flex.gap-2") || chatSection;
+    row.appendChild(btnSend);
+  }
+
+  // d) Bottom-Nav: Chat-Button sicherstellen
+  const navGrid = document.querySelector("nav .grid");
+  if(navGrid && !navGrid.querySelector('[data-tab="chat"]')){
+    const btn = document.createElement("button");
+    btn.dataset.tab = "chat";
+    btn.className = "py-3";
+    btn.textContent = "Chat";
+    navGrid.appendChild(btn);
+  }
+
+  // 2) Rendering-Helfer (eine zentrale Funktion)
+  window.chatAddMessage = function(role, text, buttons){
+    // role: "user" | "bot"
+    const bubble = document.createElement("div");
+    bubble.className = role === "user" ? "text-right" : "text-left text-blue-700";
+    bubble.textContent = text;
+    chatLog.appendChild(bubble);
+
+    if(Array.isArray(buttons) && buttons.length){
+      const row = document.createElement("div");
+      row.className = "flex flex-wrap gap-2 my-1";
+      buttons.forEach(b=>{
+        const btn = document.createElement("button");
+        btn.className = "btn text-xs";
+        btn.textContent = (b.prefix || "➕ ") + (b.label ?? "");
+        btn.addEventListener("click", ()=>{
+          const today = (window.todayISO ? window.todayISO() : new Date().toISOString().slice(0,10));
+          const compute = (window.computePoints || ((x)=>x));
+          const pts = compute(b.points||0, today);
+          if(window.state){
+            window.state.log.push({date: today, quest: b.label||"Aktion", points: pts, base: b.points||pts});
+            (window.save||(()=>{}))();
+            (window.renderAll||(()=>{}))();
+          }
+          window.chatAddMessage("bot", `✅ Eingetragen: ${b.label} (+${pts} Punkte)`);
+        });
+        row.appendChild(btn);
+      });
+      chatLog.appendChild(row);
+    }
+
+    chatLog.scrollTop = chatLog.scrollHeight;
+  };
+
+  // 3) Einheitliche Sende-Logik
+  function unifiedSend(message){
+    const msg = (message||"").trim();
+    if(!msg) return;
+    window.chatAddMessage("user", msg);
+
+    // Fallback, falls processMessage fehlt
+    const pm = window.processMessage || (function(m){ return ["(Echo) "+m]; });
+
+    try{
+      const res = pm(msg);
+      // Viele deiner Handler geben ein Array mit Texten zurück.
+      // Manche rendern selbst Buttons und geben [] zurück – beides unterstützen:
+      if(Array.isArray(res) && res.length){
+        res.forEach(line => window.chatAddMessage("bot", line));
+      }
+    }catch(e){
+      console.error("Chat-Handler Fehler:", e);
+      window.chatAddMessage("bot", "⚠️ Da ist was schiefgelaufen. Versuch's nochmal.");
+    }
+  }
+
+  // 4) Alte Listener sauber umgehen & neue Listener setzen
+  // (Wir hängen UNSERE Listener einfach zusätzlich an; die alten existieren ggf. nicht mehr oder stören nicht.)
+  btnSend.addEventListener("click", ()=> unifiedSend(chatInput.value));
+  chatInput.addEventListener("keydown", (ev)=>{
+    if(ev.key === "Enter" && !ev.shiftKey){
+      ev.preventDefault();
+      unifiedSend(chatInput.value);
+      chatInput.value = "";
+    }
+  });
+
+  // Falls es einen alten #btnChat gab und noch Listener erwarten: wir ignorieren ihn.
+  // Wichtig ist, dass der Chat jetzt immer über #btnChatSend funktioniert.
+
+  // 5) Optional: Chat beim ersten Start kurz begrüßen (einmalig)
+  try{
+    if(window.state && !window.state.__chatGreeted){
+      window.chatAddMessage("bot","👋 Hi! Ich bin dein Life-RPG-Chat. Schreib z. B. „Empfehlung“, „zeige Level“, „Rückgängig“ oder „Statistik Woche“.");
+      window.state.__chatGreeted = true;
+      (window.save||(()=>{}))();
+    }
+  }catch{}
+
+})();
+</script>
+<!-- === /PATCH A === -->
 
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
