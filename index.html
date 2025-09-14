@@ -1,251 +1,189 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" class="h-full">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Life RPG</title>
-  <script>
-    tailwind = { config: { darkMode: 'class' } };
-  </script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind: Dark-Mode per .dark Klasse
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
   <style>
-    :root { --safe-top: env(safe-area-inset-top); }
-    html:not(.dark) body { background:#f8fafc; color:#000; }
+    :root {
+      --card-bg: #ffffff;
+      --text: #0b0f19;
+      --muted: #475569;
+      --border: #e2e8f0;
+    }
+    .dark :root, .dark {
+      --card-bg: #0f172a; /* slate-900 */
+      --text: #0b0f19; /* wir erzwingen schwarz nur auf weißen Cards (siehe .ach-card) */
+      --muted: #94a3b8;
+      --border: #1f2937;
+    }
+    html, body { height: 100%; }
+    body { background:#f8fafc; color:#111; }
     .dark body { background:#0b1220; color:#e5e7eb; }
-    .tab { display:none; } .tab.active { display:block; }
-    .btn { border-radius:.75rem; padding:.5rem 1rem; border:1px solid; border-color:#cbd5e1; background:#fff; color:#000; }
-    .dark .btn { border-color:#334155; background:#111827; color:#e5e7eb; }
-    .input { width:100%; border-radius:.75rem; border:1px solid #cbd5e1; padding:.5rem .75rem; background:#fff; color:#000; }
-    .dark .input { border-color:#334155; background:#0f172a; color:#e5e7eb; }
-    header.safe { padding-top: calc(var(--safe-top) + 28px); }
-    .card { border:1px solid; border-color:#e2e8f0; background:#fff; }
-    .dark .card { border-color:#334155; background:#0f172a; }
-    .ach { color:#000; } .dark .ach { color:#fff; }
-    .ach.ok { background:#fde68a; } .ach.nok { background:#f1f5f9; }
-    .dark .ach.ok { background:#7c5800; } .dark .ach.nok { background:#0f172a; border:1px solid #334155; }
-    .kpi { color:#000; } .dark .kpi { color:#fff; }
+    .btn { border-radius:.75rem; padding:.5rem 1rem; border:1px solid var(--border); background:#fff; }
+    .dark .btn { background:#111827; border-color:#374151; color:#e5e7eb; }
+    .input { width:100%; border-radius:.75rem; border:1px solid var(--border); padding:.5rem .75rem; background:#fff; color:#0b0f19; }
+    .dark .input { background:#0b1220; color:#e5e7eb; border-color:#374151; }
+    .tab { display:none; }
+    .tab.active { display:block; }
+    /* Header Safe Area */
+    header.safe { padding-top: calc(1rem + env(safe-area-inset-top)); }
+    /* Karten */
+    .card { background: var(--card-bg); border:1px solid var(--border); border-radius: .75rem; }
+    /* Achievements: immer schwarze Schrift auf weißem Kärtchen, auch im Dark-Mode */
+    .ach-card { background:#ffffff !important; color:#000000 !important; border:1px solid #e2e8f0; }
   </style>
 </head>
-<body>
-  <div class="max-w-xl mx-auto min-h-screen flex flex-col">
+<body class="h-full">
+  <div class="max-w-xl mx-auto min-h-full flex flex-col">
     <!-- Header -->
-    <header class="safe px-4 pt-4 pb-3 sticky top-0 bg-white/85 dark:bg-slate-900/85 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-700">
+    <header class="safe px-4 pt-6 pb-3 sticky top-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-800">
       <div class="flex items-center justify-between">
-        <button id="btnHome" class="btn text-sm">☰ Menü</button>
-        <h1 class="text-xl font-bold">🎮 Life RPG</h1>
-        <button id="themeToggle" class="btn text-sm">🌙/☀️</button>
+        <h1 class="text-2xl font-bold">🎮 Life RPG</h1>
+        <div class="flex items-center gap-2">
+          <button id="btnDark" class="btn">🌙</button>
+        </div>
       </div>
     </header>
 
     <!-- Main -->
-    <main class="flex-1 px-4 pb-8 space-y-4">
-      <!-- Hauptmenü -->
-      <section id="tab-home" class="tab active space-y-2">
-        <h2 class="text-lg font-bold">Hauptmenü</h2>
-        <div class="flex flex-col gap-2">
-          <button class="btn text-left" data-goto="dashboard">📊 Dashboard</button>
-          <button class="btn text-left" data-goto="log">📝 Log</button>
-          <button class="btn text-left" data-goto="catalog">📚 Katalog</button>
-          <button class="btn text-left" data-goto="special">⭐ Sonderaufgaben</button>
-          <button class="btn text-left" data-goto="categories">🏷️ Kategorien</button>
-          <button class="btn text-left" data-goto="continuity">♻️ Kontinuität</button>
-          <button class="btn text-left" data-goto="milestones">🎯 Meilensteine</button>
-          <button class="btn text-left" data-goto="settings">⚙️ Einstellungen</button>
-          <button class="btn text-left" data-goto="chat">💬 Chat</button>
-        </div>
-      </section>
-
+    <main class="flex-1 px-4 pb-28 space-y-4">
       <!-- Dashboard -->
-      <section id="tab-dashboard" class="tab space-y-4">
-        <div class="grid grid-cols-3 gap-3 text-sm">
-          <div class="card p-3 rounded">
-            <div>Punkte</div>
-            <div id="totalPoints" class="text-lg font-bold kpi">0</div>
+      <section id="tab-dashboard" class="tab active space-y-4">
+        <div class="card p-3">
+          <div class="grid grid-cols-3 gap-2 text-sm">
+            <div><div class="font-semibold text-black">Punkte</div><div id="totalPoints" class="text-black">0</div></div>
+            <div><div class="font-semibold text-black">Level</div><div id="currentLevel" class="text-black">1</div></div>
+            <div><div class="font-semibold text-black">Sparstand</div><div class="text-black">€<span id="savingsTotal">0.00</span></div></div>
           </div>
-          <div class="card p-3 rounded">
-            <div>Level</div>
-            <div id="currentLevel" class="text-lg font-bold kpi">1</div>
-          </div>
-          <div class="card p-3 rounded">
-            <div>Sparstand</div>
-            <div>€<span id="savingsTotal" class="text-lg font-bold kpi">0.00</span></div>
+          <div class="mt-2">
+            <div class="w-full bg-gray-200 dark:bg-slate-700 rounded h-3">
+              <div id="levelBar" class="bg-blue-500 h-3 rounded" style="width:0%"></div>
+            </div>
+            <div id="levelNext" class="text-xs mt-1 text-slate-600 dark:text-slate-300"></div>
           </div>
         </div>
 
-        <div>
-          <h3 class="font-bold">Level-Fortschritt</h3>
-          <div id="levelBar"></div>
+        <div class="card p-3">
+          <h3 class="font-bold mb-2">Achievements</h3>
+          <div id="achievements" class="space-y-2">
+            <!-- Achievements kommen als weiße Kärtchen mit schwarzer Schrift -->
+          </div>
         </div>
 
-        <div>
-          <h3 class="font-bold">Achievements</h3>
-          <div id="achievements" class="space-y-2"></div>
+        <div class="card p-3">
+          <h3 class="font-bold mb-2">Statistik (letzte 14 Tage)</h3>
+          <canvas id="statsChart" class="w-full h-40"></canvas>
         </div>
 
-        <div>
-          <h3 class="font-bold">Statistik (letzte 14 Tage)</h3>
-          <canvas id="statsChart" class="w-full h-40 rounded card"></canvas>
-        </div>
-
-        <div>
-          <h3 class="font-bold">Heute offen</h3>
+        <div class="card p-3">
+          <h3 class="font-bold mb-2">Heute offen</h3>
           <div id="todaySuggestions" class="space-y-2"></div>
         </div>
 
-        <div>
-          <h3 class="font-bold">Tagesziel</h3>
-          <div id="dailyGoalBox" class="p-2 rounded card text-sm"></div>
-        </div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        <div class="card p-3">
+          <h3 class="font-bold mb-2">Tagesziel</h3>
+          <div id="dailyGoalBox" class="p-2 border rounded bg-gray-50 dark:bg-slate-800 text-sm"></div>
         </div>
       </section>
 
       <!-- Log -->
       <section id="tab-log" class="tab space-y-4">
-        <div class="space-y-2">
-          <input type="date" id="logDate" class="input" />
-          <div class="grid gap-2">
-            <select id="logQuick" class="input">
-              <option value="">– Schnellauswahl aus Katalog –</option>
-            </select>
-            <div id="logChips" class="flex flex-wrap gap-2"></div>
-          </div>
-          <input type="text" id="logQuest" class="input" placeholder="Questname (oder aus Schnellauswahl wählen)" />
+        <div class="card p-3 space-y-2">
           <div class="grid grid-cols-2 gap-2">
+            <input type="date" id="logDate" class="input" />
             <input type="number" id="logPoints" class="input" placeholder="Punkte (optional)" />
-            <input type="number" id="logMalus" class="input" placeholder="Malus (z. B. -10)" />
           </div>
-          <div class="flex gap-2">
-            <button id="btnAddEntry" class="btn bg-blue-600 text-white">Eintragen</button>
-            <button id="btnUndoLast" class="btn">Letzten Eintrag löschen</button>
-          </div>
-        </div>
-        <div id="logList" class="space-y-1 text-sm"></div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
-        </div>
-      </section>
-
-      <!-- Katalog -->
-      <section id="tab-catalog" class="tab space-y-4">
-        <div class="space-y-2 card p-3 rounded">
-          <h3 class="font-bold">Neue Aufgabe</h3>
-          <input id="qName" class="input" placeholder="Questname" />
-          <input id="qPoints" type="number" class="input" placeholder="Punkte" />
-          <div class="flex items-center gap-2">
-            <label class="text-sm flex items-center gap-2"><input id="qBoss" type="checkbox" />Bossquest</label>
-            <label class="text-sm flex items-center gap-2"><input id="qNegative" type="checkbox" />Negativ</label>
-            <input id="qNegImpact" type="number" class="input" placeholder="Negativ-Impact (z. B. 30)" />
-          </div>
-
-          <!-- Mehrfach-Kategorie mit Multiplikator -->
           <div>
-            <h4 class="font-bold">Kategorien + Multiplikator</h4>
-            <div id="qCatRows" class="space-y-2"></div>
-            <button id="btnAddCatRow" class="btn text-sm">+ Kategorie hinzufügen</button>
+            <label class="text-sm block mb-1">Quest</label>
+            <select id="logQuestSelect" class="input"></select>
           </div>
-
-          <!-- Inaktivitätsregeln -->
-          <div class="flex items-center gap-2">
-            <label class="text-sm flex items-center gap-2"><input id="qPenalize" type="checkbox" checked />Inaktivität bestrafen</label>
-            <input id="qPenalty" type="number" class="input" placeholder="Abzug/Tag (z. B. 15)" value="15" />
-          </div>
-
-          <button id="btnAddQuest" class="btn bg-blue-600 text-white">Zur Liste hinzufügen</button>
-        </div>
-
-        <div id="catalogList" class="mt-2 space-y-2"></div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
-        </div>
-      </section>
-
-      <!-- Sonderaufgaben -->
-      <section id="tab-special" class="tab space-y-4">
-        <h3 class="font-bold text-lg">Sonderaufgaben (Cooldown)</h3>
-        <div class="grid grid-cols-3 gap-2 card p-3 rounded">
-          <input id="spName" class="input col-span-3" placeholder="Name (z. B. Blumen gießen)" />
-          <input id="spPoints" type="number" class="input" placeholder="Punkte" />
-          <input id="spDays" type="number" class="input" placeholder="Alle X Tage (z. B. 7)" />
-          <button id="btnAddSpecial" class="btn bg-blue-600 text-white col-span-3">Hinzufügen</button>
-        </div>
-        <p class="text-xs text-slate-500">Nach dem Erledigen wird die Aufgabe für die angegebene Anzahl Tage gesperrt.</p>
-
-        <div>
-          <h4 class="font-bold mt-2">Jetzt verfügbar</h4>
-          <div id="specialAvail" class="space-y-2"></div>
-        </div>
-
-        <div>
-          <h4 class="font-bold mt-4">Gesperrt</h4>
-          <div id="specialLocked" class="space-y-2 text-slate-600"></div>
-        </div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
-        </div>
-      </section>
-
-      <!-- Kategorien -->
-      <section id="tab-categories" class="tab space-y-4">
-        <h3 class="font-bold text-lg">Kategorien</h3>
-
-        <div class="card p-3 rounded space-y-2">
-          <h4 class="font-bold">Neue Kategorie (inkl. Verknüpfung)</h4>
           <div class="grid grid-cols-2 gap-2">
-            <input id="catName" class="input" placeholder="Name (z. B. Sport)" />
-            <select id="catType" class="input">
-              <option value="pos">Positiv</option>
-              <option value="neg">Negativ</option>
-            </select>
-            <select id="catLinkTo" class="input col-span-1"></select>
-            <input id="catLinkBonus" class="input" type="number" step="1" placeholder="Bonus % (z. B. 20)" />
-            <button id="btnAddCat" class="btn bg-blue-600 text-white col-span-2">Kategorie anlegen</button>
+            <input type="number" id="logMalus" class="input" placeholder="Malus (z. B. -10)" />
+            <button id="btnAddEntry" class="btn bg-blue-600 text-white">Eintragen</button>
           </div>
-          <p class="text-xs text-slate-500">„Keine Verknüpfung“ = keine Effekte. Verknüpfungen wirken nur auf Kategorie-Summen, nicht global.</p>
         </div>
 
-        <div class="card p-3 rounded space-y-2">
-          <h4 class="font-bold">Verknüpfungen</h4>
-          <div id="linkList" class="text-sm"></div>
-        </div>
-
-        <div>
-          <h4 class="font-bold">Übersicht</h4>
-          <div id="categoryTotals" class="space-y-2"></div>
-        </div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        <div class="card p-0 overflow-hidden">
+          <div class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <span class="font-semibold">Log</span>
+            <button id="btnUndo" class="btn text-sm">↩️ Rückgängig</button>
+          </div>
+          <div id="logList" class="divide-y divide-slate-200 dark:divide-slate-800">
+            <!-- Einträge -->
+          </div>
         </div>
       </section>
 
-      <!-- Kontinuität -->
-      <section id="tab-continuity" class="tab space-y-4">
-        <h3 class="font-bold text-lg">Kontinuität heute</h3>
-        <div id="contList" class="space-y-2"></div>
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+      <!-- Catalog -->
+      <section id="tab-catalog" class="tab space-y-4">
+        <div class="card p-3 space-y-3">
+          <h3 class="font-bold">Neue Quest</h3>
+          <input id="qName" class="input" placeholder="Questname (z. B. 'Keller aufräumen')" />
+          <div class="grid grid-cols-2 gap-2">
+            <input id="qPoints" type="number" class="input" placeholder="Punkte" />
+            <select id="qBoss" class="input">
+              <option value="false">Normale Quest</option>
+              <option value="true">Bossquest</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="font-semibold">Kategorien (Mehrfachauswahl)</label>
+            <div id="catMulti" class="mt-1 space-y-2">
+              <!-- Checkboxes + Multiplier-Felder -->
+            </div>
+            <button id="btnAddCategoryQuick" class="btn text-sm mt-1">+ Kategorie anlegen</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <input id="qCooldown" type="number" class="input" placeholder="Sperr-Tage (Sonderaufgabe)" />
+            <input id="qPenaltyDays" type="number" class="input" placeholder="Inaktivität bestrafen nach (Tagen)" />
+          </div>
+
+          <button id="btnAddQuest" class="btn bg-blue-600 text-white w-full">Zur Liste hinzufügen</button>
+        </div>
+
+        <div class="card p-0 overflow-hidden">
+          <div class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-semibold">Katalog</div>
+          <div id="catalogList" class="divide-y divide-slate-200 dark:divide-slate-800"></div>
         </div>
       </section>
 
-      <!-- Meilensteine -->
+      <!-- Milestones -->
       <section id="tab-milestones" class="tab space-y-4">
-        <h3 class="font-bold text-lg">Meilensteine (immer nur der nächste)</h3>
-        <div id="milestoneBoxes" class="space-y-3"></div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        <div class="card p-3">
+          <h3 class="font-bold mb-2">Meilensteine – Kategorien</h3>
+          <div id="milestoneCats" class="space-y-2"></div>
         </div>
       </section>
 
-      <!-- Einstellungen -->
+      <!-- Category Detail -->
+      <section id="tab-catdetail" class="tab space-y-4">
+        <div class="card p-3">
+          <div class="flex items-center justify-between">
+            <h3 id="catDetailTitle" class="font-bold">Kategorie</h3>
+            <button id="btnBackFromCat" class="btn text-sm">← Zurück</button>
+          </div>
+          <div id="catDetailSummary" class="text-sm text-slate-600 dark:text-slate-300 mt-1"></div>
+        </div>
+        <div class="card p-3">
+          <h4 class="font-semibold mb-2">Aufgaben in dieser Kategorie</h4>
+          <div id="catDetailQuests" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- Settings -->
       <section id="tab-settings" class="tab space-y-4">
-        <div class="space-y-2">
+        <div class="card p-3 space-y-2">
+          <h3 class="font-bold">Einstellungen</h3>
           <label class="text-sm">€ pro Punkt
             <input id="sEuro" type="number" step="0.01" class="input">
           </label>
@@ -255,1019 +193,481 @@
           <label class="text-sm">Wachstum (z. B. 0.1 = +10%)
             <input id="sGrowth" type="number" step="0.01" class="input">
           </label>
-          <label class="text-sm">Tagesziel (Einträge pro Tag)
+          <label class="text-sm">Tagesziel (Einträge)
             <input id="sDailyGoal" type="number" class="input">
           </label>
-          <label class="text-sm">Theme
-            <select id="sTheme" class="input">
-              <option value="light">Hell</option>
-              <option value="dark">Dunkel</option>
-              <option value="auto">System</option>
-            </select>
-          </label>
-        </div>
-        <div class="mt-4 space-y-2">
-          <button id="btnExport" class="btn">Export</button>
-          <input type="file" id="fileImport" class="hidden" accept="application/json" />
-          <button id="btnImport" class="btn">Import</button>
-          <button id="btnReset" class="btn bg-red-600 text-white">Alles löschen</button>
         </div>
 
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
-        </div>
-      </section>
-
-      <!-- Chat -->
-      <section id="tab-chat" class="tab space-y-3">
-        <div id="chatLog" class="h-64 overflow-y-auto card p-2 rounded text-sm"></div>
-        <div class="flex gap-2">
-          <input id="chatInput" class="input flex-1" placeholder="Frag nach Vorschlägen („Was soll ich machen?“) oder nenne eine Quest" />
-          <button id="btnChatSend" class="btn bg-blue-600 text-white">Senden</button>
-        </div>
-
-        <div class="pt-2">
-          <button class="btn" data-goto="home">⟵ Zurück zum Hauptmenü</button>
+        <div class="card p-3 space-y-2">
+          <h3 class="font-bold">Daten</h3>
+          <div class="flex gap-2">
+            <button id="btnExport" class="btn">Export</button>
+            <input type="file" id="fileImport" class="hidden" accept="application/json" />
+            <button id="btnImport" class="btn">Import</button>
+            <button id="btnReset" class="btn bg-red-600 text-white">Alles löschen</button>
+          </div>
         </div>
       </section>
     </main>
+
+    <!-- Bottom Nav -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+      <div class="max-w-xl mx-auto grid grid-cols-5 text-center">
+        <button data-tab="dashboard" class="py-3 text-blue-600">Dashboard</button>
+        <button data-tab="log" class="py-3">Log</button>
+        <button data-tab="catalog" class="py-3">Katalog</button>
+        <button data-tab="milestones" class="py-3">Meilensteine</button>
+        <button data-tab="settings" class="py-3">Einstellungen</button>
+      </div>
+    </nav>
   </div>
 
   <script>
-  // ====== STATE ======
-  const SKEY = "lifeRPG_p1";
-  const defaultState = {
-    log: [],
-    settings: { euro: 0.1, base: 100, growth: 0.1, dailyGoal: 3, theme: "light" },
-    catalog: [
-      {name:"Sport",points:20,boss:false,negative:false,negImpact:0,categories:[{name:"Sport",mult:100}],penalize:true,penalty:15},
-      {name:"Kein Essen bestellt",points:10,boss:false,negative:false,negImpact:0,categories:[{name:"Ernährung",mult:100}],penalize:true,penalty:15},
-      {name:"Aufräumen",points:5,boss:false,negative:false,negImpact:0,categories:[{name:"Ordnung",mult:100}],penalize:true,penalty:15}
+  // ============= State & Storage =============
+  const SKEY="lifeRPG_cleanV2";
+  const defaultState={
+    log:[],
+    catalog:[], // {id,name,points,boss:boolean,categories:[{id,mult}], cooldownDays?:number, penaltyDays?:number}
+    categories:[ // Start mit zwei Beispielen + "Sonstige" immer implizit 0
+      {id:"sport", name:"Sport", negative:false, linkTo:null},
+      {id:"handwerk", name:"Handwerk", negative:false, linkTo:null}
     ],
-    specialTasks: [], // {name, points, everyDays, lastDone}
-    milestonesClaimed: [],
-    categories: [ {name:"Sport",type:"pos"}, {name:"Ernährung",type:"pos"}, {name:"Ordnung",type:"pos"}, {name:"Sonstige",type:"pos"} ],
-    categoryLinks: [], // {from,to,bonus}
-    questProgress: {}, // name -> {xp,level,lastDone,streak}
-    lastDailyRun: ""
+    settings:{
+      euro:0.10, base:100, growth:0.10, dailyGoal:3,
+      dark:false,
+    }
   };
+  let state=load();
 
-  function load(){
-    try{
-      const s = JSON.parse(localStorage.getItem(SKEY));
-      if(!s) return structuredClone(defaultState);
-      return migrate(s);
-    }catch{ return structuredClone(defaultState); }
-  }
-  function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
+  function load(){ try{return JSON.parse(localStorage.getItem(SKEY))||defaultState;}catch{ return defaultState; } }
+  function save(){ localStorage.setItem(SKEY,JSON.stringify(state)); }
 
-  // Migration älterer Strukturen
-  function migrate(s){
-    s.settings = Object.assign({euro:0.1,base:100,growth:0.1,dailyGoal:3,theme:"light"}, s.settings||{});
-    s.catalog = (s.catalog||[]).map(q=>{
-      if(!q.categories){
-        const c = q.category ? [{name:q.category, mult:100}] : [];
-        delete q.category;
-        q.categories = c;
-      }
-      return Object.assign({boss:false,negative:false,negImpact:0,penalize:true,penalty:15}, q);
-    });
-    s.specialTasks = s.specialTasks || [];
-    s.milestonesClaimed = s.milestonesClaimed || [];
-    s.categories = s.categories || [];
-    if(!s.categories.some(c=>c.name==="Sonstige")) s.categories.push({name:"Sonstige",type:"pos"});
-    s.categoryLinks = s.categoryLinks || [];
-    s.questProgress = s.questProgress || {};
-    s.lastDailyRun = s.lastDailyRun || "";
-    return s;
-  }
-  let state = load();
+  // Migration (alte keys übernehmen)
+  (function migrate(){
+    if(!state.settings) state.settings = {euro:0.10, base:100, growth:0.10, dailyGoal:3, dark:false};
+    state.categories = state.categories||[];
+    state.catalog = state.catalog||[];
+    state.log = state.log||[];
+    save();
+  })();
 
-  // ====== HELPERS ======
-  const todayISO = () => new Date().toISOString().slice(0,10);
-  function euro(v){ return (v||0).toFixed(2); }
-  function totalPoints(){ return state.log.reduce((s,e)=>s+(e.points||0),0); }
+  // ============= Helpers =============
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  function totalPoints(){ return state.log.reduce((s,e)=>s+e.points,0); }
   function levelForPoints(p){
-    let lvl=1, need=state.settings.base;
-    while(p>=need){ lvl++; p-=need; need=Math.round(need*(1+state.settings.growth)); }
+    let lvl=1; let need=state.settings.base; let rem=p;
+    while(rem>=need){ lvl++; rem -= need; need = Math.round(need*(1+state.settings.growth)); }
     return lvl;
   }
-  function streakCount(){
-    const days=[...new Set(state.log.map(e=>e.date))].sort();
-    if(days.length===0) return 0;
-    let streak=1;
-    for(let i=days.length-1;i>0;i--){
-      const d1=new Date(days[i]), d0=new Date(days[i-1]);
-      const diff=(d1-d0)/(1000*60*60*24);
-      if(diff===1) streak++; else break;
-    }
-    return streak;
+  function levelProgress(p){
+    let need=state.settings.base; let rem=p; let lvl=1; let passed=0;
+    while(rem>=need){ lvl++; rem -= need; passed += need; need = Math.round(need*(1+state.settings.growth)); }
+    const pct = Math.min(100, Math.round((rem/need)*100));
+    return {lvl, pct, toNext: need-rem};
+  }
+  function questSumPoints(questName){
+    return state.log.filter(e=>e.quest===questName).reduce((s,e)=>s+e.points,0);
+  }
+  function questLevel(questName){
+    // 100, 110, 120, ... (arithm. Steigerung +10)
+    const sum = questSumPoints(questName);
+    let lvl=0, need=100, rem=sum;
+    while(rem>=need){ lvl++; rem-=need; need+=10; }
+    return {lvl, next:need, rem};
+  }
+  function sumCategoryPoints(catId){
+    // Summe aller Logpunkte für Quests, die diese Kategorie enthalten (zum Logzeitpunkt ggf. ohne Cat -> zählt nicht)
+    // Vereinfachung: wir werten nach aktuellem Katalog-Mapping
+    const namesInCat = new Set(state.catalog.filter(q=>(q.categories||[]).some(c=>c.id===catId)).map(q=>q.name));
+    return state.log.filter(e=>namesInCat.has(e.quest)).reduce((s,e)=>s+e.points,0);
   }
 
-  // Globaler Streak-Multiplikator
-  const STREAK_PER_DAY = 0.02, STREAK_MAX = 0.2;
-  function computeGlobalPoints(base){
-    const mult = Math.min(STREAK_MAX, streakCount()*STREAK_PER_DAY);
-    return Math.round((base||0) * (1+mult));
-  }
+  // ============= Dark Mode =============
+  function applyDark(){ document.documentElement.classList.toggle('dark', !!state.settings.dark); }
+  document.getElementById("btnDark").addEventListener("click",()=>{
+    state.settings.dark = !state.settings.dark; save(); applyDark();
+  });
+  applyDark();
 
-  // Pro-Quest Streak-Multiplikator (Kontinuität)
-  const Q_STREAK_PER_DAY = 0.05, Q_STREAK_MAX = 0.25;
-  function qp(name){ return state.questProgress[name] || (state.questProgress[name]={xp:0,level:1,lastDone:"",streak:0}); }
-  function questMul(name){
-    const q=qp(name);
-    return Math.min(Q_STREAK_MAX, q.streak*Q_STREAK_PER_DAY);
-  }
-  function nextQuestThreshold(level){ return 100 + (level-1)*10; }
-  function applyQuestXP(name, delta){
-    const q=qp(name);
-    q.xp = Math.max(0, (q.xp||0) + (delta||0));
-    let lvl=q.level||1, xp=q.xp||0, gained=0;
-    while(xp >= nextQuestThreshold(lvl)){ xp -= nextQuestThreshold(lvl); lvl++; gained++; }
-    q.level=lvl; q.xp=xp;
-    if(gained>0){
-      const bonus = 10 * gained;
-      state.log.push({date:todayISO(), quest:`Quest Level-Up: ${name} → L${lvl}`, points:bonus});
-    }
-  }
-
-  // Theme
-  function applyTheme(){
-    const t = state.settings.theme;
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const dark = (t==='dark') || (t==='auto' && prefersDark);
-    document.documentElement.classList.toggle('dark', dark);
-  }
-
-  // ====== DAILY SWEEP (Inaktivität gestern) ======
-  function didQuestOn(date, name){
-    return state.log.some(e=> e.date===date && e.quest===name);
-  }
-  function hasInactivityLog(date, name){
-    return state.log.some(e=> e.date===date && e.quest===`Inaktivität: ${name}`);
-  }
-  function dailySweep(){
-    const today=todayISO();
-    if(state.lastDailyRun===today) return;
-    const d=new Date(today); d.setDate(d.getDate()-1);
-    const y=d.toISOString().slice(0,10);
-
-    state.catalog.forEach(q=>{
-      if(q.negative) return;
-      if(q.penalize===false) return;
-      const name=q.name;
-      if(!didQuestOn(y, name) && !hasInactivityLog(y, name)){
-        const pen = Math.abs(q.penalty||15);
-        state.log.push({date:y, quest:`Inaktivität: ${name}`, points: -pen});
-        applyQuestXP(name, -pen);
-      }
-    });
-
-    state.lastDailyRun = today;
-    save();
-  }
-
-  // ====== NAV ======
-  function goto(tabId){
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-    document.getElementById("tab-"+tabId).classList.add("active");
-    if(tabId==='dashboard') renderStats();
-    if(tabId==='log') fillLogQuick();
-    if(tabId==='categories') renderCategories();
-    if(tabId==='continuity') renderContinuity();
-    if(tabId==='milestones') renderMilestones();
-  }
-  function bindMenu(){
-    document.getElementById("btnHome").onclick=()=>goto('home');
-    document.querySelectorAll("[data-goto]").forEach(b=> b.onclick=()=>goto(b.getAttribute("data-goto")));
-    document.getElementById("themeToggle").onclick=()=>{
-      state.settings.theme = state.settings.theme==='dark' ? 'light' : 'dark';
-      save(); applyTheme();
-    };
-  }
-
-  // ====== DASHBOARD ======
-  function renderLevelProgress(){
-    const total=totalPoints();
-    const lvl=levelForPoints(total);
-    let need=state.settings.base, sum=0;
-    for(let i=1;i<lvl;i++){ sum+=need; need=Math.round(need*(1+state.settings.growth)); }
-    const current = total - sum;
-    const pct = Math.min(100, Math.round((current/need)*100));
-    return `
-      <div class="w-full bg-gray-200 dark:bg-slate-800 rounded h-3 overflow-hidden">
-        <div class="bg-blue-500 h-3" style="width:${pct}%"></div>
-      </div>
-      <div class="text-xs mt-1">Noch ${Math.max(0,need-current)} Punkte bis Level ${lvl+1}</div>
-    `;
-  }
-  function renderAchievements(){
-    const total=totalPoints();
-    const s=streakCount();
-    const sportCount=state.log.filter(e=>(e.quest||"").toLowerCase().includes("sport")).length;
-    const list=[
-      {ok: total>=100, icon:"🏅", text:"100 Punkte erreicht"},
-      {ok: s>=5, icon:"🔥", text:"5 Tage Streak"},
-      {ok: sportCount>=10, icon:"💪", text:"10x Sport gemacht"}
-    ];
-    return list.map(a=>`
-      <div class="ach ${a.ok?'ok':'nok'} p-2 rounded border border-slate-200 dark:border-slate-700">
-        ${a.icon} ${a.text} ${a.ok?'✅':'❌'}
-      </div>
-    `).join("");
-  }
-  function renderStats(){
-    const cvs=document.getElementById("statsChart");
-    const ctx=cvs.getContext("2d");
-    const W=cvs.width=cvs.clientWidth||300;
-    const H=cvs.height=cvs.clientHeight||160;
-    const today=new Date();
-    const days=[];
-    for(let i=13;i>=0;i--){
-      const d=new Date(today); d.setDate(d.getDate()-i);
-      const iso=d.toISOString().slice(0,10);
-      const sum=state.log.filter(e=>e.date===iso).reduce((s,e)=>s+(e.points||0),0);
-      days.push({label:iso.slice(5), value:sum});
-    }
-    ctx.clearRect(0,0,W,H);
-    const max=Math.max(10,...days.map(d=>d.value));
-    const barW=W/days.length*0.6;
-    const dark=document.documentElement.classList.contains('dark');
-    days.forEach((d,i)=>{
-      const x=i*(W/days.length)+barW*0.2;
-      const h=(d.value/max)*(H-22);
-      const y=H-h-18;
-      ctx.fillStyle = dark ? "#60a5fa" : "#3b82f6";
-      ctx.fillRect(x,y,barW,h);
-      ctx.fillStyle = dark ? "#94a3b8" : "#64748b";
-      ctx.font="10px sans-serif";
-      if(i%2===0) ctx.fillText(d.label,x,H-5);
-    });
-  }
-  function renderTodaySuggestions(){
-    const box=document.getElementById("todaySuggestions");
-    const today=todayISO();
-    const done=new Set(state.log.filter(e=>e.date===today).map(e=>e.quest));
-    const available=state.catalog.filter(q=>!done.has(q.name)).slice(0,5);
-    box.innerHTML = available.length
-      ? available.map(q=>`<button data-sug="${q.name}" class="btn w-full text-left">➕ ${q.name} (+${q.points})</button>`).join("")
-      : `<div class="text-slate-500 text-sm">Alles erledigt 🎉</div>`;
-    box.querySelectorAll("[data-sug]").forEach(b=>{
-      b.onclick=()=> quickAdd(b.getAttribute("data-sug"));
-    });
-  }
-  function renderDailyGoal(){
-    const box=document.getElementById("dailyGoalBox");
-    const today=todayISO();
-    const count=state.log.filter(e=>e.date===today).length;
-    const goal=state.settings.dailyGoal||3;
-    if(count>=goal){ box.textContent = `✅ Tagesziel erreicht (${count}/${goal}) 🎉`; }
-    else{ box.textContent = `🔄 ${count}/${goal} erledigt – noch ${goal-count} offen`; }
-  }
+  // ============= Dashboard Render =============
   function renderDashboard(){
-    document.getElementById("totalPoints").textContent = totalPoints();
-    document.getElementById("currentLevel").textContent = levelForPoints(totalPoints());
-    document.getElementById("savingsTotal").textContent = euro(totalPoints()*state.settings.euro);
-    document.getElementById("levelBar").innerHTML = renderLevelProgress();
-    document.getElementById("achievements").innerHTML = renderAchievements();
+    const pts = totalPoints();
+    const {lvl,pct,toNext} = levelProgress(pts);
+    document.getElementById("totalPoints").textContent = pts;
+    document.getElementById("currentLevel").textContent = lvl;
+    document.getElementById("savingsTotal").textContent = (pts*state.settings.euro).toFixed(2);
+    document.getElementById("levelBar").style.width = pct+"%";
+    document.getElementById("levelNext").textContent = `Noch ${toNext} Punkte bis Level ${lvl+1}`;
+    renderAchievements();
     renderStats();
     renderTodaySuggestions();
     renderDailyGoal();
   }
 
-  // ====== LOG ======
-  function fillLogQuick(){
-    const sel=document.getElementById("logQuick");
-    const chips=document.getElementById("logChips");
-    sel.innerHTML = `<option value="">– Schnellauswahl aus Katalog –</option>` +
-      state.catalog.map(q=>`<option value="${q.name}">${q.boss?'👑 ':''}${q.name} (+${q.points})${q.categories?.length?` • ${q.categories.map(c=>c.name).join(', ')}`:''}${q.negative?' • Negativ':''}</option>`).join("");
-    sel.onchange=()=>{
-      const name=sel.value; if(!name) return;
-      const q=state.catalog.find(x=>x.name===name);
-      document.getElementById("logQuest").value = q.name;
-      document.getElementById("logPoints").value = q.points;
-    };
-    const stats={}; state.log.forEach(e=>{ stats[e.quest]=(stats[e.quest]||0)+1; });
-    const top=Object.entries(stats).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n])=>n);
-    chips.innerHTML = top.map(n=>`<button class="btn text-xs" data-chip="${n}">➕ ${n}</button>`).join("") ||
-      `<div class="text-xs text-slate-500">Noch keine Schnellvorschläge – trage ein paar Quests ein.</div>`;
-    chips.querySelectorAll("[data-chip]").forEach(b=> b.onclick=()=> quickAdd(b.getAttribute("data-chip")));
+  // Achievements (einfaches Beispiel; weiße Karten mit schwarzem Text)
+  function renderAchievements(){
+    const box = document.getElementById("achievements");
+    const total = totalPoints();
+    const lvl = levelForPoints(total);
+    const ach = [
+      {ok: total>=100, text:"100 Punkte erreicht"},
+      {ok: lvl>=5, text:"Level 5 erreicht"},
+      {ok: state.log.length>=20, text:"20 Einträge im Log"}
+    ];
+    box.innerHTML = ach.map(a=>`
+      <div class="ach-card p-2 rounded">
+        ${a.ok?'✅':'⬜️'} ${a.text}
+      </div>
+    `).join("");
   }
-  function renderLogList(){
+
+  // Stats (14 Tage Balken)
+  function renderStats(){
+    const cvs=document.getElementById("statsChart");
+    const ctx=cvs.getContext("2d");
+    const W=cvs.width=cvs.clientWidth||320;
+    const H=cvs.height=cvs.clientHeight||160;
+    const days=[];
+    const today=new Date();
+    for(let i=13;i>=0;i--){
+      const d=new Date(today); d.setDate(d.getDate()-i);
+      const iso=d.toISOString().slice(0,10);
+      const sum=state.log.filter(e=>e.date===iso).reduce((s,e)=>s+e.points,0);
+      days.push({label:iso.slice(5),value:sum});
+    }
+    ctx.clearRect(0,0,W,H);
+    const max=Math.max(10,...days.map(d=>d.value));
+    const barW=W/days.length*0.6;
+    days.forEach((d,i)=>{
+      const x=i*(W/days.length)+barW*0.2;
+      const h=(d.value/max)*(H-20);
+      const y=H-h-20;
+      ctx.fillStyle="#3b82f6";
+      ctx.fillRect(x,y,barW,h);
+      ctx.fillStyle="#94a3b8";
+      ctx.font="10px sans-serif";
+      if(i%2===0)ctx.fillText(d.label,x,H-5);
+    });
+  }
+  window.addEventListener("resize",renderStats);
+
+  // Heute offen
+  function renderTodaySuggestions(){
+    const box=document.getElementById("todaySuggestions");
+    const t=todayISO();
+    const doneToday=new Set(state.log.filter(e=>e.date===t).map(e=>e.quest));
+    const available=state.catalog.filter(q=>!doneToday.has(q.name));
+    box.innerHTML = available.slice(0,5).map(q=>
+      `<button data-sug="${q.name}" class="btn w-full text-left">➕ ${q.name} (+${q.points})</button>`
+    ).join("") || `<div class="text-slate-500 text-sm">Alles erledigt 🎉</div>`;
+    box.querySelectorAll("[data-sug]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        quickAdd(btn.getAttribute("data-sug"));
+      });
+    });
+  }
+
+  // Tagesziel
+  function renderDailyGoal(){
+    const el=document.getElementById("dailyGoalBox");
+    const t=todayISO();
+    const count=state.log.filter(e=>e.date===t).length;
+    const goal=state.settings.dailyGoal||3;
+    if(count>=goal){
+      el.innerHTML = `✅ Tagesziel erreicht (${count}/${goal}) 🎉`;
+      el.className="p-2 border rounded bg-green-100 text-sm";
+    }else{
+      el.innerHTML = `🔄 ${count}/${goal} erledigt – noch ${goal-count} offen`;
+      el.className="p-2 border rounded bg-yellow-100 text-sm";
+    }
+  }
+
+  // ============= Log =============
+  function renderLog(){
+    document.getElementById("logDate").value=todayISO();
+    // Quest Schnellwahl
+    const sel=document.getElementById("logQuestSelect");
+    sel.innerHTML = state.catalog.map(q=>`<option value="${q.name}">${q.boss?'👑 ':''}${q.name} (+${q.points})</option>`).join("");
+    // Liste
     const list=document.getElementById("logList");
-    list.innerHTML = state.log.map((e,i)=>{
-      const neg=e.points<0;
-      const cats = e.cats?.length ? ` <span class="text-xs opacity-70">(${e.cats.map(c=>`${c.name}${c.kp?` +${c.kp} KP`:''}`).join(', ')})</span>`:'';
-      return `<div class="p-2 rounded border flex items-center justify-between ${neg?'bg-red-50 dark:bg-red-900/30':'card'}">
-        <div>${e.date} • ${e.quest}${cats}
-          <span class="${neg?'text-red-600':''}"> ${e.points>=0?'+':''}${e.points}</span>
-        </div>
-        <button class="btn text-sm" data-del-log="${i}">🗑</button>
+    if(state.log.length===0){ list.innerHTML = `<div class="px-3 py-4 text-slate-500">Noch keine Einträge.</div>`; return; }
+    list.innerHTML = state.log.slice().reverse().map(e=>{
+      const neg = e.points<0;
+      return `<div class="px-3 py-2 ${neg?'bg-red-50 dark:bg-red-900/20':''}">
+        <div class="text-sm">${e.date} • ${e.quest} <span class="${neg?'text-red-600':'text-green-600'}">(${e.points>0?'+':''}${e.points})</span></div>
       </div>`;
-    }).join("") || "<div class='text-sm text-slate-500'>Noch keine Einträge.</div>";
-    list.querySelectorAll("[data-del-log]").forEach(b=>{
-      b.onclick=()=>{
-        const idx=Number(b.getAttribute("data-del-log"));
-        if(idx>=0){ state.log.splice(idx,1); save(); renderAll(); }
-      };
-    });
+    }).join("");
   }
+
   function addLog(){
-    const d=document.getElementById("logDate").value || todayISO();
-    const name=(document.getElementById("logQuest").value||"").trim();
-    const manualPts=Number(document.getElementById("logPoints").value||0);
+    const date=document.getElementById("logDate").value||todayISO();
+    const questName=document.getElementById("logQuestSelect").value;
+    const manual=Number(document.getElementById("logPoints").value||0);
     const malus=Number(document.getElementById("logMalus").value||0);
-    if(!name && !manualPts){ alert("Bitte Questname oder Punkte angeben."); return; }
-
-    const quest = state.catalog.find(q=> q.name.toLowerCase()===name.toLowerCase());
-    let base = manualPts>0 ? manualPts : (quest ? quest.points : 0);
-
-    let totalPts;
-    if(quest?.negative){
-      const impact = Math.abs(quest?.negImpact || base || 0);
-      totalPts = -(impact) + (malus||0);
-    }else{
-      const g = computeGlobalPoints(base||0);
-      const qmul = questMul(name);
-      totalPts = Math.round(g * (1+qmul)) + (malus||0);
-    }
-
-    const cats = [];
-    (quest?.categories||[]).forEach(c=>{
-      const kp = Math.round((base||0) * ((c.mult||0)/100));
-      if(kp>0) cats.push({name:c.name, kp});
-    });
-    // Fallback → Sonstige
-    if(cats.length===0 && !quest?.negative && base>0){
-      ensureCategory("Sonstige","pos");
-      cats.push({name:"Sonstige", kp:base});
-    }
-
-    state.log.push({date:d, quest: name||"(ohne Name)", points: totalPts, base: base||0, cats});
-    if(!quest?.negative){
-      const qpr=qp(name);
-      if(qpr.lastDone!==d){
-        const yd=new Date(d); yd.setDate(yd.getDate()-1);
-        qpr.streak = (qpr.lastDone===yd.toISOString().slice(0,10)) ? (qpr.streak||0)+1 : 1;
-        qpr.lastDone = d;
-      }
-      applyQuestXP(name, Math.max(0, totalPts));
-    }else{
-      applyQuestXP(name, Math.min(0, totalPts));
-    }
-
+    const q=state.catalog.find(x=>x.name===questName);
+    let base = manual>0?manual:(q?q.points:0);
+    let pts = base + malus;
+    if(!questName) return alert("Bitte eine Quest auswählen.");
+    state.log.push({date, quest: questName, points: Math.round(pts)});
     save(); renderAll();
-    document.getElementById("logQuest").value="";
     document.getElementById("logPoints").value="";
     document.getElementById("logMalus").value="";
-    document.getElementById("logQuick").value="";
   }
-  function quickAdd(questName){
-    const q = state.catalog.find(x=>x.name===questName);
-    if(!q){
-      const pts=Math.round(computeGlobalPoints(5));
-      // Sonstige, wenn unbekannt
-      state.log.push({date:todayISO(), quest:questName, points:pts, base:5, cats:[{name:"Sonstige",kp:5}]});
-      ensureCategory("Sonstige","pos");
-      applyQuestXP(questName, pts);
-      save(); renderAll(); return;
-    }
-    const base=q.points||0;
-    let totalPts;
-    if(q.negative){ totalPts = -(Math.abs(q.negImpact||base)); }
-    else { totalPts = Math.round(computeGlobalPoints(base) * (1+questMul(q.name))); }
+  document.getElementById("btnAddEntry").addEventListener("click",addLog);
+  document.getElementById("btnUndo").addEventListener("click",()=>{
+    if(!state.log.length) return;
+    state.log.pop(); save(); renderAll();
+  });
 
-    const cats = [];
-    (q.categories||[]).forEach(c=>{
-      const kp = Math.round((base) * ((c.mult||0)/100));
-      if(kp>0) cats.push({name:c.name, kp});
-    });
-    if(cats.length===0 && !q.negative && base>0){
-      ensureCategory("Sonstige","pos");
-      cats.push({name:"Sonstige", kp:base});
-    }
-
-    const today=todayISO();
-    state.log.push({date:today, quest:q.name, points:totalPts, base:base, cats});
-    const qpr=qp(q.name);
-    if(qpr.lastDone!==today){
-      const yd=new Date(today); yd.setDate(yd.getDate()-1);
-      qpr.streak = (qpr.lastDone===yd.toISOString().slice(0,10)) ? (qpr.streak||0)+1 : 1;
-      qpr.lastDone=today;
-    }
-    applyQuestXP(q.name, Math.max(0,totalPts));
+  function quickAdd(name){
+    const q=state.catalog.find(x=>x.name===name);
+    if(!q) return;
+    const pts=q.points;
+    state.log.push({date:todayISO(), quest:q.name, points:pts});
     save(); renderAll();
   }
 
-  // ====== KATALOG ======
-  function ensureCategory(name, type="pos"){
-    if(!name) return;
-    if(!state.categories.some(c=>c.name.toLowerCase()===name.toLowerCase())){
-      state.categories.push({name, type});
+  // ============= Catalog & Categories =============
+  function ensureCategoryList(){
+    // Fügt „Sonstige“ als virtuellen Sammelpunkt im Milestone-View hinzu (nicht in state.categories speichern).
+    return [{id:"__none", name:"Sonstige (ohne Kategorie)", negative:false, linkTo:null}].concat(state.categories);
+  }
+
+  function renderCatMulti(){
+    const el=document.getElementById("catMulti");
+    const cats=state.categories;
+    if(cats.length===0){
+      el.innerHTML = `<div class="text-sm text-slate-500">Noch keine Kategorien. Lege über „+ Kategorie anlegen“ eine neue an.</div>`;
+      return;
     }
+    el.innerHTML = cats.map(c=>`
+      <label class="flex items-center gap-2">
+        <input type="checkbox" class="cat-check" data-id="${c.id}">
+        <span>${c.name}${c.negative?' (negativ)':''}</span>
+        <input type="number" step="0.1" class="input cat-mult flex-1" data-id="${c.id}" placeholder="Multiplikator (z.B. 1.0)" />
+      </label>
+    `).join("");
   }
-  function renderCatSelectOptions(includeNone=false){
-    const names=[...new Set(state.categories.map(c=>c.name))].sort((a,b)=>a.localeCompare(b));
-    return (includeNone?`<option value="">(keine Verknüpfung)</option>`:'') +
-      names.map(n=>`<option value="${n}">${n}</option>`).join("");
-  }
-  function addCatRowUI(row){
-    const div=document.createElement("div");
-    div.className="flex items-center gap-2";
-    div.innerHTML = `
-      <select class="input qCatSel"></select>
-      <input class="input qCatMult" type="number" step="1" placeholder="Multiplikator % (z. B. 100)" value="100" />
-      <button class="btn text-sm qCatDel">✖</button>
-    `;
-    row.appendChild(div);
-    div.querySelector(".qCatSel").innerHTML = renderCatSelectOptions(false);
-    div.querySelector(".qCatDel").onclick=()=> div.remove();
-  }
-  function initCatRows(){
-    const wrap=document.getElementById("qCatRows");
-    wrap.innerHTML="";
-    addCatRowUI(wrap);
-    document.getElementById("btnAddCatRow").onclick=()=> addCatRowUI(wrap);
-  }
-  function renderCatalog(){
-    const list=document.getElementById("catalogList");
-    list.innerHTML = state.catalog.map((q,i)=>`
-      <div class="p-2 rounded border ${q.boss?'bg-yellow-50 dark:bg-yellow-900/30':'card'}">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-medium">${q.boss?'👑 ':''}${q.name} (+${q.points})</div>
-            <div class="text-xs opacity-70">
-              ${q.categories?.length? q.categories.map(c=>`${c.name}×${c.mult}%`).join(", ") : 'Ohne Kategorie → Sonstige'}
-              ${q.negative?' • Negativ':''}${q.negative && q.negImpact?` • Impact-${q.negImpact}`:''}
-              ${q.penalize?` • Inaktivität: -${q.penalty}/Tag`:''}
-            </div>
-          </div>
-          <div class="flex gap-2">
-            <button class="btn text-sm" data-quick="${i}">➕</button>
-            <button class="btn text-sm" data-edit="${i}">✎</button>
-            <button class="btn text-sm text-red-600" data-del="${i}">Löschen</button>
-          </div>
-        </div>
-      </div>
-    `).join("") || "<div class='text-sm text-slate-500'>Noch keine Einträge im Katalog.</div>";
 
-    list.querySelectorAll("[data-quick]").forEach(b=>{
-      b.onclick=()=> quickAdd(state.catalog[Number(b.getAttribute("data-quick"))].name);
-    });
-    list.querySelectorAll("[data-del]").forEach(b=>{
-      b.onclick=()=>{
-        const idx=Number(b.getAttribute("data-del"));
-        state.catalog.splice(idx,1); save(); renderAll();
-      };
-    });
-    list.querySelectorAll("[data-edit]").forEach(b=>{
-      b.onclick=()=>{
-        const idx=Number(b.getAttribute("data-edit"));
-        const q=state.catalog[idx];
-
-        const name=prompt("Name:", q.name); if(name===null) return;
-        const pts=prompt("Punkte:", q.points); if(pts===null) return;
-
-        const catCSV = prompt("Kategorien (Name:Mult, ...)", (q.categories||[]).map(c=>`${c.name}:${c.mult}`).join(", "));
-        let cats=[];
-        if(catCSV!==null && catCSV.trim()!==""){
-          cats = catCSV.split(",").map(x=>{
-            const [n,m]=(x||"").trim().split(":");
-            return {name:(n||"").trim(), mult: Math.max(0, Number(m||100)) };
-          }).filter(c=>c.name);
-        }else if(catCSV===""){ cats=[]; } else { cats = q.categories||[]; }
-
-        const boss=confirm("Bossquest? (OK = Ja, Abbrechen = Nein)") ? true : false;
-        const neg=confirm("Negativ-Kategorie? (OK = Ja, Abbrechen = Nein)") ? true : false;
-        let negImp = q.negImpact||0;
-        if(neg){
-          const t = prompt("Negativ-Impact (Abzug von Gesamtpunkten, z. B. 30):", String(q.negImpact||0));
-          if(t===null) return;
-          negImp = Number(t)||0;
-        }
-        let penalize = q.penalize!==false;
-        let penalty = q.penalty||15;
-        const p1 = confirm("Inaktivität bestrafen? (OK = Ja, Abbrechen = Nein)");
-        penalize = p1;
-        if(penalize){
-          const pv = prompt("Abzug pro Tag (z. B. 15):", String(penalty));
-          if(pv===null) return;
-          penalty = Math.max(0, Number(pv)||penalty);
-        }
-
-        Object.assign(q,{
-          name: (name||"").trim()||q.name,
-          points: Number(pts)||q.points,
-          categories: cats,
-          boss: boss,
-          negative: neg,
-          negImpact: neg ? Math.abs(negImp) : 0,
-          penalize, penalty
-        });
-        // Kategorie-Stammliste auffüllen
-        (q.categories||[]).forEach(c=> ensureCategory(c.name,"pos"));
-        save(); renderAll();
-      };
-    });
-  }
   function addQuest(){
-    const name=(document.getElementById("qName").value||"").trim();
+    const name=document.getElementById("qName").value.trim();
     const points=Number(document.getElementById("qPoints").value||0);
-    const boss=document.getElementById("qBoss").checked;
-    const negative=document.getElementById("qNegative").checked;
-    const negImpact=Math.abs(Number(document.getElementById("qNegImpact").value||0));
-    const penalize=document.getElementById("qPenalize").checked;
-    const penalty=Math.max(0, Number(document.getElementById("qPenalty").value||15));
-
+    const boss=document.getElementById("qBoss").value==="true";
+    const cooldownDays=Number(document.getElementById("qCooldown").value||0);
+    const penaltyDays=Number(document.getElementById("qPenaltyDays").value||0);
+    if(!name) return alert("Bitte Questname eingeben");
     const cats=[];
-    document.querySelectorAll("#qCatRows .qCatSel").forEach((sel,i)=>{
-      const cn=sel.value;
-      const mult = Math.max(0, Number(document.querySelectorAll("#qCatRows .qCatMult")[i].value||0));
-      if(cn) { cats.push({name:cn, mult}); ensureCategory(cn,"pos"); }
+    document.querySelectorAll("#catMulti .cat-check").forEach(ch=>{
+      if(ch.checked){
+        const id=ch.getAttribute("data-id");
+        const multInput=document.querySelector(`#catMulti .cat-mult[data-id="${id}"]`);
+        const mult=parseFloat(multInput.value||"1.0");
+        cats.push({id, mult:isFinite(mult)?mult:1.0});
+      }
     });
-
-    if(!name || !points){ alert("Bitte Name und Punkte angeben."); return; }
-    state.catalog.push({name,points,boss,negative,negImpact,categories:cats,penalize,penalty});
+    state.catalog.push({id:name.toLowerCase().replace(/\s+/g,'_')+"_"+Date.now(), name, points, boss, categories:cats, cooldownDays, penaltyDays});
     save(); renderAll();
     document.getElementById("qName").value="";
     document.getElementById("qPoints").value="";
-    document.getElementById("qBoss").checked=false;
-    document.getElementById("qNegative").checked=false;
-    document.getElementById("qNegImpact").value="";
-    document.getElementById("qPenalize").checked=true;
-    document.getElementById("qPenalty").value="15";
-    initCatRows();
+    document.getElementById("qCooldown").value="";
+    document.getElementById("qPenaltyDays").value="";
+    // uncheck
+    document.querySelectorAll("#catMulti .cat-check").forEach(ch=>ch.checked=false);
+    document.querySelectorAll("#catMulti .cat-mult").forEach(mi=>mi.value="");
   }
+  document.getElementById("btnAddQuest").addEventListener("click",addQuest);
 
-  // ====== SONDERAUFGABEN ======
-  const daysBetween=(a,b)=> Math.floor((new Date(b)-new Date(a))/(1000*60*60*24));
-  function spIsAvailable(t){ if(!t.lastDone) return true; return daysBetween(t.lastDone,todayISO()) >= Number(t.everyDays||1); }
-  function spNextDate(t){ if(!t.lastDone) return todayISO(); const d=new Date(t.lastDone); d.setDate(d.getDate()+Number(t.everyDays||1)); return d.toISOString().slice(0,10); }
-  function renderSpecial(){
-    const avail=document.getElementById("specialAvail");
-    const lock=document.getElementById("specialLocked");
-    const list=state.specialTasks.map((t,i)=>({...t,i}));
-    const available=list.filter(spIsAvailable), locked=list.filter(t=>!spIsAvailable(t));
-
-    avail.innerHTML = available.length ? available.map(t=>`
-      <div class="p-2 rounded card flex items-center justify-between">
+  function renderCatalog(){
+    const list=document.getElementById("catalogList");
+    if(state.catalog.length===0){ list.innerHTML = `<div class="px-3 py-4 text-slate-500">Noch keine Quests.</div>`; return; }
+    list.innerHTML = state.catalog.map((q,i)=>`
+      <div class="px-3 py-2 flex items-start justify-between">
         <div>
-          <div class="font-medium">⭐ ${t.name}</div>
-          <div class="text-xs opacity-70">+${t.points} Punkte • alle ${t.everyDays} Tage</div>
-        </div>
-        <div class="flex gap-2">
-          <button class="btn text-sm" data-sp-done="${t.i}">Erledigt</button>
-          <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
-          <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
-        </div>
-      </div>
-    `).join("") : `<div class="text-sm text-slate-500">Zurzeit nichts verfügbar.</div>`;
-
-    lock.innerHTML = locked.length ? locked.map(t=>{
-      const nd=spNextDate(t);
-      const rest=Math.max(0, daysBetween(todayISO(), nd));
-      return `<div class="p-2 rounded border bg-gray-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 flex items-center justify-between">
-        <div><div class="font-medium">⛔ ${t.name}</div>
-        <div class="text-xs">wieder am ${nd}${rest>0?` (in ${rest} Tagen)`:''}</div></div>
-        <div class="flex gap-2">
-          <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
-          <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
-        </div>
-      </div>`;
-    }).join("") : `<div class="text-sm text-slate-500">Keine gesperrten Aufgaben.</div>`;
-
-    document.querySelectorAll("[data-sp-done]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-sp-done"));
-        const t=state.specialTasks[i]; if(!t) return;
-        const base=Number(t.points||0);
-        const pts=Math.round(computeGlobalPoints(base));
-        state.log.push({date:todayISO(), quest:`Sonder: ${t.name}`, points:pts, base, cats:[{name:"Sonstige",kp:base}]});
-        ensureCategory("Sonstige","pos");
-        applyQuestXP(`Sonder: ${t.name}`, pts);
-        t.lastDone=todayISO(); save(); renderAll();
-      };
-    });
-    document.querySelectorAll("[data-sp-del]").forEach(b=>{
-      b.onclick=()=>{ const i=Number(b.getAttribute("data-sp-del")); if(confirm("Löschen?")){ state.specialTasks.splice(i,1); save(); renderAll(); } };
-    });
-    document.querySelectorAll("[data-sp-edit]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-sp-edit"));
-        const t=state.specialTasks[i]; if(!t) return;
-        const name=prompt("Name:", t.name); if(name===null) return;
-        const pts=prompt("Punkte:", t.points); if(pts===null) return;
-        const days=prompt("Alle wie viele Tage?", t.everyDays); if(days===null) return;
-        Object.assign(t,{ name:(name||"").trim()||t.name, points:Number(pts)||t.points, everyDays:Math.max(1,Number(days)||t.everyDays) });
-        save(); renderAll();
-      };
-    });
-  }
-  function bindSpecialForm(){
-    const btn=document.getElementById("btnAddSpecial");
-    btn.onclick=()=>{
-      const name=(document.getElementById("spName").value||"").trim();
-      const pts=Number(document.getElementById("spPoints").value||0);
-      let days=Number(document.getElementById("spDays").value||0);
-      if(!days) days=7;
-      if(!name || !pts){ alert("Bitte Name und Punkte ausfüllen."); return; }
-      state.specialTasks.push({name:name, points:pts, everyDays:Math.max(1,days), lastDone:null});
-      save(); renderAll();
-      document.getElementById("spName").value="";
-      document.getElementById("spPoints").value="";
-      document.getElementById("spDays").value="";
-    };
-  }
-
-  // ====== KATEGORIEN ======
-  function categoryTotals(){
-    const totals = {};
-    const add=(cat, val)=>{ if(!cat) return; totals[cat]=(totals[cat]||0)+(val||0); };
-    state.log.forEach(e=> e.cats?.forEach(c=> add(c.name, c.kp||0)));
-    state.categoryLinks.forEach(link=>{
-      const from=link.from, to=link.to, bonus=Number(link.bonus||0)/100;
-      if(!from||!to||!bonus) return;
-      const fromSum = totals[from]||0;
-      add(to, Math.round(fromSum*bonus));
-    });
-    return totals;
-  }
-  function renderCategories(){
-    const sel=document.getElementById("catLinkTo");
-    sel.innerHTML = `<option value="">(keine Verknüpfung)</option>` + renderCatSelectOptions(false);
-
-    const totals = categoryTotals();
-    const list=document.getElementById("categoryTotals");
-    const cats = [...new Set([
-      ...state.categories.map(c=>c.name),
-      ...state.catalog.flatMap(q=> (q.categories||[]).map(c=>c.name)),
-      "Sonstige",
-      ...Object.keys(totals)
-    ])].filter(Boolean).sort((a,b)=>a.localeCompare(b));
-    if(!state.categories.some(c=>c.name==="Sonstige")) state.categories.push({name:"Sonstige",type:"pos"});
-
-    list.innerHTML = cats.map(name=>{
-      const type = (state.categories.find(c=>c.name===name)?.type)||'pos';
-      const sum = totals[name]||0;
-      return `<div class="p-2 rounded card flex justify-between items-center">
-        <button class="text-left" data-cat-open="${name}">${type==='neg'?'🚫':'🏷️'} ${name}</button>
-        <span class="font-bold">${sum} KP</span>
-      </div>`;
-    }).join("") || "<div class='text-sm text-slate-500'>Noch keine Kategorien.</div>";
-
-    const ll=document.getElementById("linkList");
-    ll.innerHTML = state.categoryLinks.length
-      ? state.categoryLinks.map((l,i)=>`<div class="flex justify-between items-center">
-          <span>🔗 ${l.from} → ${l.to} (+${l.bonus}% nur Kategorien)</span>
-          <button class="btn text-sm" data-link-del="${i}">Löschen</button>
-        </div>`).join("")
-      : `<div class="text-sm text-slate-500">Keine Verknüpfungen angelegt.</div>`;
-    ll.querySelectorAll("[data-link-del]").forEach(b=>{
-      b.onclick=()=>{ state.categoryLinks.splice(Number(b.getAttribute("data-link-del")),1); save(); renderCategories(); };
-    });
-
-    list.querySelectorAll("[data-cat-open]").forEach(b=>{
-      b.onclick=()=> openCategoryDetail(b.getAttribute("data-cat-open"));
-    });
-  }
-  function openCategoryDetail(catName){
-    const qs = state.catalog.filter(q=> (q.categories||[]).some(c=>c.name===catName) || (catName==="Sonstige" && (!q.categories || q.categories.length===0)));
-    const totals = categoryTotals();
-    const container = document.createElement("div");
-    container.className="fixed inset-0 bg-black/50 flex items-end justify-center z-50";
-    container.innerHTML = `
-      <div class="w-full max-w-xl bg-white dark:bg-slate-900 p-4 rounded-t-2xl space-y-3">
-        <div class="flex justify-between items-center">
-          <div class="font-bold text-lg">🏷️ ${catName} — Meilensteine & Aufgaben</div>
-          <button class="btn" id="catClose">Schließen</button>
-        </div>
-        <div class="p-2 rounded card">
-          <div class="font-medium">Kategorie-KP: <b>${totals[catName]||0}</b></div>
-          <div id="catMilestone"></div>
-        </div>
-        <div class="space-y-2" id="catTasks"></div>
-      </div>
-    `;
-    document.body.appendChild(container);
-    container.querySelector("#catClose").onclick=()=> container.remove();
-
-    const steps=[100,250,500,1000,2000,5000];
-    const claimed=state.milestonesClaimed;
-    const next = steps.find(c=> !claimed.includes(`cat:${catName}-${c}`));
-    const cur = totals[catName]||0;
-    const box=container.querySelector("#catMilestone");
-    if(!next){
-      box.innerHTML=`<div class="text-sm text-slate-500">Alle Meilensteine für diese Kategorie eingelöst ✅</div>`;
-    }else{
-      const reward = Math.round(next*0.1);
-      box.innerHTML=`
-        <div class="text-sm">Nächster Meilenstein: ${next} KP • Belohnung: +${reward} Punkte • Fortschritt: ${cur}/${next}</div>
-        ${cur>=next ? `<button class="btn bg-green-600 text-white" id="catClaim">Einlösen</button>` : `<div class="text-xs text-slate-500">Noch nicht erreicht</div>`}
-      `;
-      const claim=box.querySelector("#catClaim");
-      if(claim){
-        claim.onclick=()=>{
-          state.milestonesClaimed.push(`cat:${catName}-${next}`);
-          state.log.push({date:todayISO(), quest:`Cat Milestone: ${catName} ${next}`, points:reward});
-          save(); renderAll();
-          container.remove();
-          openCategoryDetail(catName);
-        };
-      }
-    }
-
-    const tasks=container.querySelector("#catTasks");
-    tasks.innerHTML = qs.map(q=>{
-      const pr=qp(q.name);
-      const th=nextQuestThreshold(pr.level||1);
-      const pct = Math.min(100, Math.round(((pr.xp||0)/th)*100));
-      return `<div class="p-2 rounded card">
-        <div class="flex justify-between items-center">
-          <div class="font-medium">${q.boss?'👑 ':''}${q.name} (+${q.points})</div>
-          <button class="btn text-sm" data-quick="${q.name}">➕</button>
-        </div>
-        <div class="text-xs opacity-70">Quest-Level: L${pr.level||1} • XP: ${(pr.xp||0)}/${th} • Streak: ${pr.streak||0} (${Math.round(questMul(q.name)*100)}% Bonus)</div>
-        <div class="w-full bg-gray-200 dark:bg-slate-800 rounded h-2 mt-1 overflow-hidden">
-          <div class="bg-blue-500 h-2" style="width:${pct}%"></div>
-        </div>
-      </div>`;
-    }).join("") || `<div class="text-sm text-slate-500">Keine Aufgaben in dieser Kategorie.</div>`;
-    tasks.querySelectorAll("[data-quick]").forEach(b=> b.onclick=()=>{ quickAdd(b.getAttribute("data-quick")); container.remove(); });
-  }
-  function bindCategoriesForm(){
-    document.getElementById("btnAddCat").onclick=()=>{
-      const name=(document.getElementById("catName").value||"").trim();
-      const type=document.getElementById("catType").value||"pos";
-      const linkTo=document.getElementById("catLinkTo").value||"";
-      const bonus=Math.max(0, Number(document.getElementById("catLinkBonus").value||0));
-      if(!name){ alert("Bitte Namen angeben."); return; }
-      if(state.categories.some(c=>c.name.toLowerCase()===name.toLowerCase())){
-        // Typ ggf. aktualisieren
-        state.categories = state.categories.map(c=> c.name.toLowerCase()===name.toLowerCase()? {...c,type}: c);
-      }else{
-        state.categories.push({name, type});
-      }
-      if(linkTo && linkTo!==name && bonus>0){
-        const exists = state.categoryLinks.some(l=> l.from===name && l.to===linkTo);
-        if(!exists) state.categoryLinks.push({from:name, to:linkTo, bonus});
-      }
-      save(); renderCategories();
-      document.getElementById("catName").value="";
-      document.getElementById("catType").value="pos";
-      document.getElementById("catLinkTo").value="";
-      document.getElementById("catLinkBonus").value="";
-      alert("Kategorie gespeichert.");
-    };
-  }
-
-  // ====== MEILENSTEINE (global & pro Kategorie; immer nur der nächste) ======
-  const MS = {
-    quests:  [ {count:100,reward:100},{count:200,reward:400},{count:500,reward:2500},{count:1000,reward:10000} ],
-    boss:    [ {count:10,reward:100},{count:20,reward:200},{count:50,reward:2500},{count:100,reward:10000} ]
-  };
-  const msKey=(group,count)=>`${group}-${count}`;
-
-  function countQuestsDone(){ return state.log.filter(e=>typeof e.points==='number').length; }
-  function countBossDone(){
-    const bossNames=new Set(state.catalog.filter(q=>q.boss).map(q=>q.name));
-    return state.log.filter(e=> bossNames.has(e.quest)).length;
-  }
-  function nextMilestone(group, done){
-    const conf=MS[group]; if(!conf) return null;
-    for(const m of conf){
-      const key=msKey(group,m.count);
-      if(!state.milestonesClaimed.includes(key)) return {key, ...m, reached: done>=m.count};
-    }
-    return null;
-  }
-  function categoryNextMilestone(catName, sum){
-    const steps=[100,250,500,1000,2000,5000];
-    const next=steps.find(c=> !state.milestonesClaimed.includes(`cat:${catName}-${c}`));
-    if(!next) return null;
-    const reward=Math.round(next*0.1);
-    return {key:`cat:${catName}-${next}`, count:next, reward, reached: (sum||0)>=next};
-  }
-
-  function renderMilestones(){
-    const qDone=countQuestsDone();
-    const bDone=countBossDone();
-    const box=document.getElementById("milestoneBoxes");
-
-    // Globale Gruppen
-    const groups=[
-      {id:'quests',title:'📚 Quests gesamt', done:qDone},
-      {id:'boss',title:'👑 Bossquests', done:bDone}
-    ];
-    let html = groups.map(g=>{
-      const nxt=nextMilestone(g.id, g.done);
-      if(!nxt) return `<div class="p-2 rounded card">${g.title}: Alles eingelöst ✅</div>`;
-      return `<div class="p-2 rounded card flex items-center justify-between">
-        <div>
-          <div class="font-bold">${g.title}</div>
-          <div class="text-sm">Ziel: ${nxt.count} • Belohnung: +${nxt.reward} Punkte</div>
-          <div class="text-xs opacity-70">Fortschritt: ${g.done}/${nxt.count}</div>
-        </div>
-        <div>
-          ${nxt.reached
-            ? `<button class="btn bg-green-600 text-white" data-claim="${g.id}|${nxt.count}|${nxt.reward}">Einlösen</button>`
-            : `<span class="text-slate-500">Noch nicht erreicht</span>`}
-        </div>
-      </div>`;
-    }).join("");
-
-    // Kategorie-Meilensteine (inkl. Sonstige)
-    const totals = categoryTotals();
-    const catNames=[...new Set([ ...state.categories.map(c=>c.name), "Sonstige", ...Object.keys(totals) ])].sort((a,b)=>a.localeCompare(b));
-    html += `<h4 class="font-bold mt-2">🏷️ Kategorien</h4>`;
-    const catHtml = catNames.map(name=>{
-      const sum=totals[name]||0;
-      const nxt = categoryNextMilestone(name, sum);
-      if(!nxt) return `<div class="p-2 rounded card flex items-center justify-between"><div><b>${name}</b><div class="text-xs opacity-70">Alle Meilensteine eingelöst ✅</div></div></div>`;
-      return `<div class="p-2 rounded card flex items-center justify-between">
-        <div>
-          <div class="font-bold">${name}</div>
-          <div class="text-sm">Ziel: ${nxt.count} KP • Belohnung: +${nxt.reward} Punkte</div>
-          <div class="text-xs opacity-70">Fortschritt: ${sum}/${nxt.count}</div>
-        </div>
-        <div>
-          ${nxt.reached
-            ? `<button class="btn bg-green-600 text-white" data-claim="cat|${name}|${nxt.count}|${nxt.reward}">Einlösen</button>`
-            : `<span class="text-slate-500">Noch nicht erreicht</span>`}
-        </div>
-      </div>`;
-    }).join("");
-    html += catHtml || `<div class="text-sm text-slate-500">Keine Kategorien vorhanden.</div>`;
-
-    box.innerHTML = html;
-
-    // Claim-Handler
-    box.querySelectorAll("[data-claim]").forEach(b=>{
-      b.onclick=()=>{
-        const parts=b.getAttribute("data-claim").split("|");
-        if(parts[0]==="cat"){
-          const [,name,count,reward]=parts;
-          const key=`cat:${name}-${Number(count)}`;
-          if(!state.milestonesClaimed.includes(key)){
-            state.milestonesClaimed.push(key);
-            state.log.push({date:todayISO(), quest:`Cat Milestone: ${name} ${count}`, points:Number(reward)});
-            save(); renderAll();
-          }
-        }else{
-          const [id,count,reward]=[parts[0], Number(parts[1]), Number(parts[2])];
-          const key=msKey(id,count);
-          if(!state.milestonesClaimed.includes(key)){
-            state.milestonesClaimed.push(key);
-            state.log.push({date:todayISO(), quest:`Milestone: ${id} ${count}`, points:reward});
-            save(); renderAll();
-          }
-        }
-      };
-    });
-  }
-
-  // ====== KONTINUITÄT ======
-  function renderContinuity(){
-    const today=todayISO();
-    const list=document.getElementById("contList");
-    const items = state.catalog
-      .filter(q=> !q.negative)
-      .map(q=>{
-        const doneToday = state.log.some(e=> e.date===today && e.quest===q.name);
-        const pr = qp(q.name);
-        const risk = q.penalize!==false ? q.penalty||15 : 0;
-        const streakPct = Math.round(questMul(q.name)*100);
-        return {q, doneToday, pr, risk, streakPct};
-      })
-      .sort((a,b)=> (a.doneToday===b.doneToday ? 0 : a.doneToday?1:-1));
-
-    list.innerHTML = items.map(it=>`
-      <div class="p-2 rounded card flex items-center justify-between">
-        <div>
-          <div class="font-medium">${it.q.name} ${it.doneToday? '✅' : '⏳'}</div>
-          <div class="text-xs opacity-70">
-            Streak: ${it.pr.streak||0} Tage • Bonus: +${it.streakPct}% 
-            ${!it.doneToday && it.risk? `• Gefahr heute: -${it.risk}` : ''}
+          <div class="font-medium">${q.boss?'👑 ':''}${q.name} <span class="text-slate-500 dark:text-slate-400">(+${q.points})</span></div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">
+            Kategorien: ${(q.categories&&q.categories.length)?q.categories.map(cId=>{
+              const c=state.categories.find(x=>x.id===cId.id);
+              return c?`${c.name}${c.negative?' (negativ)':''}×${cId.mult}`:`?×${cId.mult}`;
+            }).join(", "):'—'}
+            ${q.cooldownDays?` • Sperre: ${q.cooldownDays}T`:''}
+            ${q.penaltyDays?` • Strafe nach: ${q.penaltyDays}T`:''}
           </div>
         </div>
-        <div>
-          ${it.doneToday? '' : `<button class="btn text-sm" data-cont="${it.q.name}">Jetzt erledigen</button>`}
+        <div class="flex items-center gap-2">
+          <button data-del="${i}" class="text-red-600 text-sm">Löschen</button>
         </div>
       </div>
-    `).join("") || `<div class="text-sm text-slate-500">Noch keine Aufgaben.</div>`;
-
-    list.querySelectorAll("[data-cont]").forEach(b=> b.onclick=()=> quickAdd(b.getAttribute("data-cont")));
+    `).join("");
+    list.querySelectorAll("[data-del]").forEach(b=>{
+      b.addEventListener("click",()=>{
+        state.catalog.splice(Number(b.getAttribute("data-del")),1);
+        save(); renderAll();
+      });
+    });
   }
 
-  // ====== EINSTELLUNGEN ======
-  function renderSettings(){
+  // Schnell „Kategorie anlegen“
+  document.getElementById("btnAddCategoryQuick").addEventListener("click",()=>{
+    const name = prompt("Kategoriename?");
+    if(!name) return;
+    const id = name.toLowerCase().replace(/\s+/g,'_');
+    const negative = confirm("Ist dies eine NEGATIVE Kategorie? (OK = ja)");
+    state.categories.push({id, name, negative, linkTo:null});
+    save(); renderAll();
+  });
+
+  // ============= Meilensteine =============
+  function renderMilestones(){
+    const box=document.getElementById("milestoneCats");
+    const cats = ensureCategoryList();
+    box.innerHTML = cats.map(c=>{
+      const sum = c.id==="__none"
+        ? state.log.filter(e=>{
+            // Quests ohne Kategorie:
+            const q=state.catalog.find(x=>x.name===e.quest);
+            return !q || !(q.categories&&q.categories.length);
+          }).reduce((s,e)=>s+e.points,0)
+        : sumCategoryPoints(c.id);
+
+      // auto milestones (Beispiel: 100/400/2500/… analog deiner Staffelung)
+      const tiers=[100,400,2500,10000].filter(t=>sum>=t);
+      const next = [100,400,2500,10000,50000].find(t=>t>sum) || "∞";
+
+      return `
+        <button class="w-full text-left p-3 border-b last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800"
+          data-catopen="${c.id}">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-semibold">${c.name}</div>
+              <div class="text-xs text-slate-600 dark:text-slate-300">Punkte in Kategorie: ${sum}</div>
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+              Erreicht: ${tiers.length} • Nächstes: ${next}
+            </div>
+          </div>
+        </button>
+      `;
+    }).join("");
+
+    box.querySelectorAll("[data-catopen]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        openCategoryDetail(btn.getAttribute("data-catopen"));
+      });
+    });
+  }
+
+  // Kategorie-Detailseite
+  function openCategoryDetail(catId){
+    const cats = ensureCategoryList();
+    const cat = cats.find(c=>c.id===catId);
+    document.getElementById("catDetailTitle").textContent = cat ? cat.name : "Kategorie";
+    // Quests der Kategorie:
+    const quests = catId==="__none"
+      ? state.catalog.filter(q=>!(q.categories&&q.categories.length))
+      : state.catalog.filter(q=>(q.categories||[]).some(c=>c.id===catId));
+
+    // Summe in Kategorie
+    const sum = catId==="__none"
+      ? state.log.filter(e=>{
+          const q=state.catalog.find(x=>x.name===e.quest);
+          return !q || !(q.categories&&q.categories.length);
+        }).reduce((s,e)=>s+e.points,0)
+      : sumCategoryPoints(catId);
+
+    document.getElementById("catDetailSummary").textContent = `Punkte in dieser Kategorie: ${sum}`;
+
+    const wrap=document.getElementById("catDetailQuests");
+    if(quests.length===0){
+      wrap.innerHTML = `<div class="text-slate-500">Keine Aufgaben in dieser Kategorie.</div>`;
+    }else{
+      wrap.innerHTML = quests.map(q=>{
+        const qs = questLevel(q.name); // {lvl,next,rem}
+        const pct = Math.min(100, Math.round((qs.next-qs.rem)/qs.next*100));
+        return `
+          <div class="p-2 border rounded">
+            <div class="flex items-center justify-between">
+              <div class="font-medium">${q.boss?'👑 ':''}${q.name}</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Quest-Level: ${qs.lvl}</div>
+            </div>
+            <div class="mt-2">
+              <div class="w-full bg-gray-200 dark:bg-slate-700 rounded h-2">
+                <div class="bg-blue-500 h-2 rounded" style="width:${pct}%"></div>
+              </div>
+              <div class="text-xs mt-1 text-slate-600 dark:text-slate-300">Noch ${qs.rem} / ${qs.next} bis Level ${qs.lvl+1}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    switchTab("catdetail");
+  }
+  document.getElementById("btnBackFromCat").addEventListener("click",()=>switchTab("milestones"));
+
+  // ============= Settings =============
+  function bindSettings(){
     const s=state.settings;
-    s.euro ??= 0.1; s.base ??= 100; s.growth ??= 0.1; s.dailyGoal ??= 3; s.theme ??= "light";
-    document.getElementById("sEuro").value=s.euro;
-    document.getElementById("sBase").value=s.base;
-    document.getElementById("sGrowth").value=s.growth;
-    document.getElementById("sDailyGoal").value=s.dailyGoal;
-    document.getElementById("sTheme").value=s.theme;
+    const sEuro=document.getElementById("sEuro");
+    const sBase=document.getElementById("sBase");
+    const sGrowth=document.getElementById("sGrowth");
+    const sGoal=document.getElementById("sDailyGoal");
+    sEuro.value=s.euro; sBase.value=s.base; sGrowth.value=s.growth; sGoal.value=s.dailyGoal;
+    sEuro.onchange=()=>{ s.euro=Number(sEuro.value||0); save(); renderAll(); }
+    sBase.onchange=()=>{ s.base=Number(sBase.value||100); save(); renderAll(); }
+    sGrowth.onchange=()=>{ s.growth=Number(sGrowth.value||0.1); save(); renderAll(); }
+    sGoal.onchange=()=>{ s.dailyGoal=Number(sGoal.value||1); save(); renderAll(); }
 
-    document.getElementById("sEuro").onchange=e=>{ s.euro=Number(e.target.value||0); save(); renderAll(); };
-    document.getElementById("sBase").onchange=e=>{ s.base=Number(e.target.value||100); save(); renderAll(); };
-    document.getElementById("sGrowth").onchange=e=>{ s.growth=Number(e.target.value||0.1); save(); renderAll(); };
-    document.getElementById("sDailyGoal").onchange=e=>{ s.dailyGoal=Number(e.target.value||1); save(); renderAll(); };
-    document.getElementById("sTheme").onchange=e=>{ s.theme=e.target.value; save(); applyTheme(); };
-
-    document.getElementById("btnExport").onclick=()=>{
-      const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="life_rpg_backup.json"; a.click();
-    };
-    document.getElementById("btnImport").onclick=()=> document.getElementById("fileImport").click();
-    document.getElementById("fileImport").onchange=(e)=>{
+    document.getElementById("btnExport").addEventListener("click",()=>{
+      const blob=new Blob([JSON.stringify(state)],{type:"application/json"});
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download="life_rpg_backup.json";
+      a.click();
+    });
+    document.getElementById("btnImport").addEventListener("click",()=>{
+      document.getElementById("fileImport").click();
+    });
+    document.getElementById("fileImport").addEventListener("change",e=>{
       const f=e.target.files[0]; if(!f) return;
       const r=new FileReader();
-      r.onload=()=>{ try{ state=migrate(JSON.parse(r.result)); save(); renderAll(); alert("Import erfolgreich."); }catch{ alert("Fehler beim Import."); } };
+      r.onload=()=>{
+        try{ state=JSON.parse(r.result); save(); renderAll(); }
+        catch{ alert("Fehler beim Import"); }
+      };
       r.readAsText(f);
-    };
-    document.getElementById("btnReset").onclick=()=>{
-      if(confirm("Alles wirklich löschen?")){ state=structuredClone(defaultState); save(); renderAll(); }
-    };
+    });
+    document.getElementById("btnReset").addEventListener("click",()=>{
+      if(confirm("Alles wirklich löschen?")){
+        state=JSON.parse(JSON.stringify(defaultState));
+        save(); renderAll();
+      }
+    });
   }
 
-  // ====== CHAT (leicht) ======
-  function chatAdd(msg, from="bot"){
-    const log=document.getElementById("chatLog");
-    const row=document.createElement("div");
-    row.className=from==="user"?"text-right":"text-left text-blue-700";
-    row.textContent=msg; log.appendChild(row); log.scrollTop=log.scrollHeight;
+  // ============= Tabs =============
+  function switchTab(name){
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.getElementById("tab-"+name).classList.add("active");
+    document.querySelectorAll("nav [data-tab]").forEach(b=>b.classList.remove("text-blue-600"));
+    const btn = document.querySelector(`nav [data-tab="${name}"]`);
+    if(btn) btn.classList.add("text-blue-600");
   }
-  function processMessage(msg){
-    const t=(msg||"").trim().toLowerCase();
-    if((t.includes("was")&&t.includes("machen"))||t.includes("vorschlag")){
-      const today=todayISO();
-      const done=new Set(state.log.filter(e=>e.date===today).map(e=>e.quest));
-      const open=state.catalog.filter(q=>!done.has(q.name)).slice(0,5);
-      if(open.length===0) return ["🎉 Alles erledigt!"];
-      open.forEach(q=> chatAdd(`➕ ${q.name} (+${q.points})`,"bot"));
-      return ["👉 Vorschläge oben als Liste."];
-    }
-    if(t.includes("rückgängig")||t.includes("letzte quest")){
-      if(state.log.length===0) return ["Kein Eintrag vorhanden."]; const last=state.log.pop(); save(); renderAll();
-      return [`🗑️ Letzte Quest gelöscht: ${last.quest} (${last.points})`];
-    }
-    if(t.startsWith("zeige ")){
-      const q=t.replace("zeige ","").trim();
-      const res=state.log.filter(e=> (e.quest||"").toLowerCase().includes(q));
-      if(res.length===0) return ["❌ Nichts gefunden."];
-      return ["🔍 Ergebnisse:", ...res.slice(-10).map(e=>`${e.date} • ${e.quest} (${e.points})`)];
-    }
-    const found=state.catalog.find(q=> t.includes(q.name.toLowerCase()));
-    if(found){ quickAdd(found.name); return [`✅ Eingetragen: ${found.name}`]; }
-    if(msg.trim()){
-      state.catalog.push({name:msg.trim(), points:5, boss:false, negative:false, negImpact:0, categories:[], penalize:true, penalty:15});
-      ensureCategory("Sonstige","pos");
-      quickAdd(msg.trim());
-      return [`➕ Neue Quest angelegt & eingetragen: ${msg.trim()} (+5)`];
-    }
-    return ["Ich habe dich nicht verstanden 😅"];
-  }
-  function bindChat(){
-    const input=document.getElementById("chatInput");
-    document.getElementById("btnChatSend").onclick=()=>{
-      const txt=(input.value||"").trim(); if(!txt) return;
-      chatAdd(txt,"user"); const res=processMessage(txt); (res||[]).forEach(r=>chatAdd(r,"bot")); input.value="";
-    };
-  }
+  document.querySelectorAll("nav [data-tab]").forEach(btn=>{
+    btn.addEventListener("click",()=>switchTab(btn.getAttribute("data-tab")));
+  });
 
-  // ====== RENDER ALL ======
+  // ============= Render All =============
   function renderAll(){
-    applyTheme();
-    dailySweep();
-    // Dashboard
     renderDashboard();
-    // Log
-    document.getElementById("logDate").value=todayISO();
-    fillLogQuick(); renderLogList();
-    document.getElementById("btnAddEntry").onclick=addLog;
-    document.getElementById("btnUndoLast").onclick=()=>{ if(state.log.length){ state.log.pop(); save(); renderAll(); } };
-    // Catalog
-    renderCatalog(); initCatRows();
-    document.getElementById("btnAddQuest").onclick=addQuest;
-    // Special
-    renderSpecial(); bindSpecialForm();
-    // Categories
-    renderCategories(); bindCategoriesForm();
-    // Continuity
-    renderContinuity();
-    // Settings
-    renderSettings();
-    // Milestones
+    renderLog();
+    renderCatMulti();
+    renderCatalog();
     renderMilestones();
+    bindSettings();
   }
 
-  // ====== INIT ======
-  (function init(){
-    bindMenu();
-    bindChat();
-    renderAll();
-    window.addEventListener("resize", ()=>{ if(document.getElementById("tab-dashboard").classList.contains("active")) renderStats(); });
-  })();
+  // Init
+  renderAll();
   </script>
 </body>
 </html>
