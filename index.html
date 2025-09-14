@@ -15227,5 +15227,661 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH J === -->
+<!-- === FINALPATCH K–Z : Kategorien (negativ), Per-Quest-Level, Missionen, Auto-Meilensteine, Chat-Fix === -->
+<script>
+(function(){
+  "use strict";
+
+  // --- Guards & Core shortcuts ---
+  if(!window.state){ console.warn("FinalPatch: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const S = window.state;
+  const save = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  const isArr = Array.isArray;
+
+  // --- Soft migration defaults ---
+  S.log = isArr(S.log) ? S.log : [];
+  S.catalog = isArr(S.catalog) ? S.catalog : [];
+  S.settings = S.settings || {};
+  S.settings.dailyGoal = Number(S.settings.dailyGoal||3);
+
+  // =========================================================================================
+  // K) NEGATIVE KATEGORIEN (z. B. „Schlechter Lebensstil“)
+  //    - Kategorie-Punkte gehen hoch (Kategorie-Summen)
+  //    - Gesamtpunkte gehen herunter (Malus), Standard-Faktor 2:1
+  // =========================================================================================
+  S.categories = S.categories || {};
+  S.categories.list    = isArr(S.categories.list) ? S.categories.list : [];
+  S.categories.byQuest = S.categories.byQuest || {};
+  S.categories.linkByQuest = S.categories.linkByQuest || {}; // (aus Patch J)
+  S.categories.negRatio = Number(S.categories.negRatio||2);   // +15 Kategorie -> −30 Gesamt
+
+  // Minimal-Defaults, falls es noch keine Kategorien gibt
+  if(S.categories.list.length===0){
+    S.categories.list = [
+      {id:"sport",    name:"Sport",    type:"normal"},
+      {id:"handwerk", name:"Handwerk", type:"normal"},
+      {id:"haushalt", name:"Haushalt", type:"normal"},
+      {id:"neg",      name:"Schlechter Lebensstil", type:"negative"}
+    ];
+  }
+
+  function catById(id){ return S.categories.list.find(c=>c.id===id); }
+
+  function isSystemEntry(e){
+    const q = (e.quest||"").toLowerCase();
+    return (
+      q.startsWith("malus") ||
+      q.startsWith("reward") ||
+      q.startsWith("event-") ||
+      q.startsWith("tagesziel") ||
+      q.startsWith("milestone erreicht") ||
+      q.startsWith("timed quest verpasst") ||
+      (e.meta && (e.meta.negPenalty || e.meta.negComp || e.meta.milestone || e.meta.systemQuest))
+    );
+  }
+
+  function categoryTotals(){
+    const totals = {};
+    S.categories.list.forEach(c=> totals[c.id]=0);
+    S.log.forEach(e=>{
+      if(!e || isSystemEntry(e)) return;
+      const p = Number(e.points||0);
+      const primaryCatId = S.categories.byQuest[e.quest];
+      if(primaryCatId && p>0){
+        totals[primaryCatId] = (totals[primaryCatId]||0) + p;
+      }
+      if(e.meta && isArr(e.meta.catExtra)){
+        e.meta.catExtra.forEach(x=>{
+          if(x && x.catId){
+            totals[x.catId] = (totals[x.catId]||0) + Number(x.points||0);
+          }
+        });
+      }
+    });
+    return totals;
+  }
+
+  // Hook: addLog → negative Kategorie transformieren
+  const oldAddLogNeg = window.addLog;
+  window.addLog = function(){
+    const before = S.log.length;
+    if(typeof oldAddLogNeg==="function") oldAddLogNeg.apply(this, arguments);
+    const after = S.log.length;
+    if(after<=before) return;
+
+    const last = S.log[after-1];
+    if(!last || !last.quest) return;
+
+    const catId = S.categories.byQuest[last.quest];
+    const cat = catById(catId);
+
+    // Per-Quest-Verknüpfungen (aus Patch J) – catExtra bereits dort hinzugefügt.
+    // Negative Kategorie: Kategorie += pos, Gesamtpunkte = −ratio * pos
+    if(cat && cat.type==="negative"){
+      const pos = Math.abs(Number(last.points||0)) || 0;
+      last.meta = last.meta || {};
+      last.meta.catExtra = last.meta.catExtra || [];
+      // Kategorie-Punkte explizit: +pos
+      last.meta.catExtra.push({catId:cat.id, points: pos});
+      // Gesamtpunkte ersetzen durch −ratio*pos
+      last.points = -Math.round(S.categories.negRatio * pos);
+      last.meta.negPenalty = true;
+      save();
+      // Flag für "nächster Milestone nur 1/10" setzen
+      S.milestonesAuto = S.milestonesAuto || {};
+      S.milestonesAuto.penaltyFlag = true;
+      save();
+    }
+  };
+
+  // =========================================================================================
+  // L) PER-QUEST-LEVELSYSTEM + TÄGLICHER VERFALL (−15), WENN NICHT ERLEDIGT
+  // =========================================================================================
+  S.questXP = S.questXP || {};           // { [questName]: { xp, level, lastDone, lastDecayDate } }
+  S.questDecayDate = S.questDecayDate || ""; // global: wann Verfall zuletzt ausgeführt
+
+  function questThresholdForLevel(level){
+    // Level 1->2: 100, 2->3: 110, 3->4: 120 ...
+    return 100 + (Math.max(level,1)-1)*10;
+  }
+  function questLevelFromXP(xp){
+    let lvl=1, need=questThresholdForLevel(lvl);
+    let rest=Math.max(0, xp|0);
+    while(rest>=need){
+      rest -= need;
+      lvl += 1;
+      need = questThresholdForLevel(lvl);
+    }
+    return {level:lvl, progress:rest, nextNeed:need};
+  }
+
+  function applyDailyQuestDecayIfNeeded(){
+    const today = todayISO();
+    if(S.questDecayDate === today) return;
+    // Einmal pro Tag: Für alle bekannten Quests, die HEUTE nicht erledigt wurden, −15
+    const didToday = new Set(S.log.filter(e=>!isSystemEntry(e) && e.points>0 && e.date===today).map(e=>e.quest));
+    Object.keys(S.questXP).forEach(q=>{
+      const prog = S.questXP[q];
+      if(!didToday.has(q)){
+        prog.xp = Math.max(0, Number(prog.xp||0) - 15);
+      }
+      prog.lastDecayDate = today;
+    });
+    S.questDecayDate = today;
+    save();
+  }
+
+  // Hook: addLog → per-Quest XP updaten (nur für echte Quests, nicht System)
+  const oldAddLogXP = window.addLog;
+  window.addLog = function(){
+    const before = S.log.length;
+    if(typeof oldAddLogXP==="function") oldAddLogXP.apply(this, arguments);
+    const after = S.log.length;
+    if(after<=before) return;
+
+    const last = S.log[after-1];
+    if(!last || isSystemEntry(last)) return;
+
+    // Nur positive Punkte erhöhen per-Quest-XP
+    const pos = Math.max(0, Number(last.points||0));
+    const qn = last.quest;
+
+    // System-Quests (Mission-Schritte) kennzeichnen → keine per-Quest-XP
+    if(last.meta && last.meta.systemQuest) return;
+
+    S.questXP[qn] = S.questXP[qn] || {xp:0, level:1, lastDone:null, lastDecayDate:null};
+    S.questXP[qn].xp = Number(S.questXP[qn].xp||0) + pos;
+    S.questXP[qn].lastDone = last.date||todayISO();
+    // Level neu berechnen
+    const lv = questLevelFromXP(S.questXP[qn].xp);
+    const prevLevel = Number(S.questXP[qn].level||1);
+    S.questXP[qn].level = lv.level;
+    save();
+
+    // Kleiner Toast bei Level-Up
+    if(lv.level>prevLevel){
+      try{
+        const t=document.createElement("div");
+        t.textContent = `🏅 ${qn}: Level ${lv.level} erreicht!`;
+        t.className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded shadow-lg";
+        document.body.appendChild(t);
+        setTimeout(()=>t.remove(),1800);
+      }catch{}
+    }
+  };
+
+  // Katalog-Liste um Lvl-Badge ergänzen
+  const oldRenderCatalogLvl = window.renderCatalog;
+  window.renderCatalog = function(){
+    if(typeof oldRenderCatalogLvl==="function") oldRenderCatalogLvl.apply(this, arguments);
+    const list = document.getElementById("catalogList");
+    if(!list) return;
+    // einfache Ergänzung: hinter jedes Item ein Lvl/XP-Hinweis
+    [...list.querySelectorAll("div.p-2.border.rounded.flex.justify-between, div.p-2.border.rounded.mb-1")].forEach((row, idx)=>{
+      const span = row.querySelector("span");
+      if(!span) return;
+      const name = (span.textContent||"").replace(/^[👑\s]+/,"").replace(/\(\+\d+ Punkte\).*/,"").trim();
+      const prog = S.questXP[name] || {xp:0, level:1};
+      if(!row.querySelector(".qbadge")){
+        const b=document.createElement("span");
+        b.className="qbadge text-xs ml-2 px-2 py-0.5 rounded bg-purple-50 border border-purple-200";
+        const lv = questLevelFromXP(prog.xp);
+        b.textContent = `Lvl ${lv.level} • ${lv.progress}/${lv.nextNeed}`;
+        span.appendChild(b);
+      }
+    });
+  };
+
+  // Dashboard-Hook: täglicher Verfall + Kategorie-Badges (falls Patch J nicht da ist)
+  const oldRenderDashboardDecay = window.renderDashboard;
+  window.renderDashboard = function(){
+    applyDailyQuestDecayIfNeeded();
+    if(typeof oldRenderDashboardDecay==="function") oldRenderDashboardDecay.apply(this, arguments);
+
+    // Minimal-Kategorie-Badges (für den Fall, dass Patch J nicht aktiv ist)
+    if(!document.getElementById("catBadgesDash")){
+      const host=document.getElementById("tab-dashboard");
+      if(host){
+        const totals=categoryTotals();
+        const box=document.createElement("div");
+        box.id="catBadgesDash";
+        box.className="mt-4 p-3 border rounded bg-white";
+        box.innerHTML = `<h3 class="font-bold mb-2">Kategorien – Punkteübersicht</h3>
+          <div class="flex flex-wrap gap-2">
+            ${(S.categories.list||[]).map(c=>{
+              const val = totals[c.id]||0;
+              const cls = c.type==="negative" ? "bg-red-50 border-red-200 text-red-700" : "bg-slate-50 border-slate-200";
+              return `<span class="px-2 py-1 rounded border ${cls}">${c.name} • Σ ${val} P</span>`;
+            }).join("")}
+          </div>`;
+        host.appendChild(box);
+      }
+    }
+  };
+
+  // =========================================================================================
+  // M) MISSIONEN (verkettete/alternative Schritte, 4× Bonus am Ende)
+  // =========================================================================================
+  S.missions = isArr(S.missions) ? S.missions : [];
+  function uid(){ return Math.random().toString(36).slice(2,9); }
+
+  // Tab & Nav anlegen (falls nicht vorhanden)
+  function ensureMissionsTab(){
+    if(!document.getElementById("tab-missions")){
+      const sec=document.createElement("section");
+      sec.id="tab-missions";
+      sec.className="tab space-y-4";
+      sec.innerHTML=`
+        <div class="p-3 border rounded bg-white">
+          <h3 class="font-bold mb-2">Missionen</h3>
+          <div class="text-sm text-slate-600 mb-3">
+            Schritte werden automatisch freigeschaltet. Alternative Pfade möglich.
+          </div>
+          <div class="flex gap-2 mb-3">
+            <button id="btnMissionNew" class="btn">+ Mission</button>
+            <button id="btnMissionImport" class="btn">Import</button>
+            <input id="missionFile" type="file" class="hidden" accept="application/json" />
+            <button id="btnMissionExport" class="btn">Export</button>
+          </div>
+          <div id="missionsList" class="space-y-3"></div>
+        </div>
+      `;
+      const main=document.querySelector("main");
+      if(main) main.appendChild(sec);
+    }
+    const navGrid = document.querySelector("nav .grid");
+    if(navGrid && !navGrid.querySelector('[data-tab="missions"]')){
+      const b=document.createElement("button");
+      b.setAttribute("data-tab","missions");
+      b.className="py-3";
+      b.textContent="Missionen";
+      navGrid.appendChild(b);
+      b.addEventListener("click",()=>{
+        document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+        document.getElementById("tab-missions").classList.add("active");
+        navGrid.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("text-blue-600"));
+        b.classList.add("text-blue-600");
+      });
+    }
+  }
+
+  function recomputeUnlocks(m){
+    // Einfache Logik:
+    // - Schritt ohne Voraussetzung: sichtbar, falls nicht erledigt
+    // - Schritt mit requiresAnyOf: sichtbar, wenn mind. einer davon erledigt
+    // - Schritt mit requiresAllOf: sichtbar, wenn alle erledigt
+    const byId={}; (m.steps||[]).forEach(s=>byId[s.id]=s);
+    (m.steps||[]).forEach(s=>{
+      if(s.done){ s.visible=false; return;}
+      const any = isArr(s.requiresAnyOf) && s.requiresAnyOf.length>0;
+      const all = isArr(s.requiresAllOf) && s.requiresAllOf.length>0;
+      if(!any && !all){ s.visible=true; return; }
+      if(any){
+        s.visible = s.requiresAnyOf.some(id=>byId[id] && byId[id].done);
+      }else{
+        s.visible = s.requiresAllOf.every(id=>byId[id] && byId[id].done);
+      }
+    });
+    // Mission fertig?
+    m.complete = (m.steps||[]).every(s=>s.done || (!s.visible && (s.requiresAnyOf||s.requiresAllOf)));
+  }
+
+  function missionBonus(m){
+    const sum = (m.steps||[]).reduce((s,st)=> s + Number(st.points||0), 0);
+    return 4*sum; // Anforderung: 4x so viele Punkte
+  }
+
+  function missionPayBonusIfComplete(m){
+    if(m.complete && !m.bonusPaid){
+      S.log.push({date:todayISO(), quest:`Mission abgeschlossen: ${m.name}`, points: missionBonus(m), meta:{systemQuest:true}});
+      m.bonusPaid = true;
+      save();
+      if(window.renderAll) window.renderAll();
+    }
+  }
+
+  function renderMissions(){
+    ensureMissionsTab();
+    const host = document.getElementById("missionsList");
+    if(!host) return;
+    host.innerHTML="";
+    S.missions.forEach((m,mi)=>{
+      recomputeUnlocks(m);
+      const box=document.createElement("div");
+      box.className="p-3 border rounded bg-slate-50";
+      const visibleSteps = (m.steps||[]).filter(s=>s.visible && !s.done);
+      const doneSteps = (m.steps||[]).filter(s=>s.done).length;
+      box.innerHTML=`
+        <div class="flex justify-between items-center">
+          <div class="font-bold">🗺️ ${m.name}</div>
+          <div class="text-sm text-slate-600">${doneSteps}/${(m.steps||[]).length} erledigt</div>
+        </div>
+        <div class="mt-2 space-y-2">
+          ${visibleSteps.length? visibleSteps.map(s=>`
+            <div class="p-2 border rounded bg-white flex justify-between items-center">
+              <div>
+                <div class="font-medium">${s.text}</div>
+                <div class="text-xs text-slate-600">+${s.points} Punkte ${s.tag?`• ${s.tag}`:""}</div>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn text-xs" data-ms-done="${mi}:${s.id}">Erledigt</button>
+              </div>
+            </div>
+          `).join("") : `<div class="text-sm text-slate-500">Keine Schritte sichtbar – erledige vorherige Schritte oder alternative Pfade.</div>`}
+        </div>
+        <div class="mt-2 flex gap-2">
+          <button class="btn text-xs" data-ms-add="${mi}">+ Schritt</button>
+          <button class="btn text-xs" data-ms-alt="${mi}">+ Alternative zu letztem Schritt</button>
+          <button class="btn text-xs" data-ms-del="${mi}">Mission löschen</button>
+        </div>
+      `;
+      host.appendChild(box);
+    });
+
+    // Events
+    host.querySelectorAll("[data-ms-done]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const [mi,id] = btn.getAttribute("data-ms-done").split(":");
+        const m = S.missions[Number(mi)];
+        if(!m) return;
+        const s = (m.steps||[]).find(x=>x.id===id);
+        if(!s||s.done) return;
+        s.done=true;
+        // Log als System-Quest, damit per-Quest-Level nicht greift
+        const pts = Number(s.points||0);
+        S.log.push({date:todayISO(), quest:`Mission: ${m.name} – ${s.text}`, points: pts, meta:{systemQuest:true}});
+        save();
+        recomputeUnlocks(m);
+        missionPayBonusIfComplete(m);
+        renderMissions();
+        if(window.renderAll) window.renderAll();
+      });
+    });
+
+    host.querySelectorAll("[data-ms-add]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const mi = Number(btn.getAttribute("data-ms-add"));
+        const m = S.missions[mi]; if(!m) return;
+        const text = prompt("Schritt-Titel?");
+        if(!text) return;
+        const pts = Number(prompt("Punkte?")||0);
+        // Standard: hängt an den letzten vorhandenen Schritt als Voraussetzung (lineare Kette)
+        const all = (m.steps||[]);
+        const lastId = all.length? all[all.length-1].id : null;
+        const step = {id:uid(), text, points:pts, done:false, visible: lastId? false:true};
+        if(lastId) step.requiresAllOf=[lastId];
+        m.steps = all.concat(step);
+        recomputeUnlocks(m);
+        save(); renderMissions();
+      });
+    });
+
+    host.querySelectorAll("[data-ms-alt]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const mi = Number(btn.getAttribute("data-ms-alt"));
+        const m = S.missions[mi]; if(!m) return;
+        const text = prompt("Alternative Schritt-Titel?");
+        if(!text) return;
+        const pts = Number(prompt("Punkte?")||0);
+        // Alternative zu letztem "original" Schritt: gleiche Voraussetzung (requiresAllOf/AnyOf übernehmen)
+        const all = (m.steps||[]);
+        if(all.length===0){ alert("Erst einen ersten Schritt anlegen."); return; }
+        const base = all[all.length-1];
+        const step = {id:uid(), text, points:pts, done:false, visible:false};
+        if(base.requiresAllOf){ step.requiresAllOf=[...base.requiresAllOf]; }
+        if(base.requiresAnyOf){ step.requiresAnyOf=[...base.requiresAnyOf]; }
+        if(!step.requiresAllOf && !step.requiresAnyOf){
+          // Falls der letzte Schritt keine Voraussetzung hatte, dann definieren wir Alternative zu ihm:
+          step.requiresAnyOf = [base.id];
+        }
+        m.steps = all.concat(step);
+        recomputeUnlocks(m);
+        save(); renderMissions();
+      });
+    });
+
+    host.querySelectorAll("[data-ms-del]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const mi = Number(btn.getAttribute("data-ms-del"));
+        const m = S.missions[mi]; if(!m) return;
+        if(!confirm(`Mission „${m.name}“ wirklich löschen?`)) return;
+        S.missions.splice(mi,1);
+        save(); renderMissions();
+      });
+    });
+  }
+
+  // Mission-Buttons (neu/export/import)
+  function wireMissionShell(){
+    ensureMissionsTab();
+    const btnNew = document.getElementById("btnMissionNew");
+    const btnExp = document.getElementById("btnMissionExport");
+    const btnImp = document.getElementById("btnMissionImport");
+    const file   = document.getElementById("missionFile");
+
+    if(btnNew && !btnNew._wired){
+      btnNew._wired=true;
+      btnNew.addEventListener("click",()=>{
+        const name = prompt("Missions-Name?");
+        if(!name) return;
+        const m = {id:uid(), name, steps:[], complete:false, bonusPaid:false};
+        S.missions.push(m);
+        save(); renderMissions();
+      });
+    }
+    if(btnExp && !btnExp._wired){
+      btnExp._wired=true;
+      btnExp.addEventListener("click",()=>{
+        const blob=new Blob([JSON.stringify({missions:S.missions},null,2)],{type:"application/json"});
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(blob);
+        a.download="missions_export.json";
+        a.click();
+      });
+    }
+    if(btnImp && !btnImp._wired){
+      btnImp._wired=true;
+      btnImp.addEventListener("click",()=>{
+        file.click();
+      });
+    }
+    if(file && !file._wired){
+      file._wired=true;
+      file.addEventListener("change",e=>{
+        const f=e.target.files[0];
+        if(!f) return;
+        const rd=new FileReader();
+        rd.onload=()=>{
+          try{
+            const obj=JSON.parse(rd.result||"{}");
+            if(isArr(obj.missions)){ S.missions = obj.missions; save(); renderMissions(); }
+          }catch{ alert("Import fehlgeschlagen.");}
+        };
+        rd.readAsText(f);
+      });
+    }
+  }
+
+  // =========================================================================================
+  // N) AUTO-MEILENSTEINE (Quests, Bossquests, Missionen, Kategorien) inkl. 1/10-Regel nach „negativ”
+  // =========================================================================================
+  S.milestonesAuto = S.milestonesAuto || { paid:{}, penaltyFlag:false };
+
+  function questCount(){ return S.log.filter(e=>!isSystemEntry(e) && e.points>0).length; }
+  function bossCount(){
+    const isBoss = new Set(S.catalog.filter(q=>q.boss).map(q=>q.name));
+    return S.log.filter(e=>!isSystemEntry(e) && e.points>0 && isBoss.has(e.quest)).length;
+  }
+  function missionsCompletedCount(){ return (S.missions||[]).filter(m=>m.complete).length; }
+
+  // Tiers & Rewards
+  const TIERS_QUEST  = [100,200,500,1000,2000,5000];
+  const TIERS_BOSS   = [10,20,50,100,200];
+  const TIERS_MISS   = [5,10,20,50,100];
+  const TIERS_CAT    = [100,200,500,1000,2000,5000];
+
+  function rewardQuests(n){ // Beispiele: 100->100, 200->400, 500->2500
+    // Formel: (n/100)^2 * 100  (100→100, 200→400, 500→2500)
+    return Math.round((n/100)*(n/100)*100);
+  }
+  function rewardBoss(n){   // Beispiele: 10->100, 20->200, 50->2500
+    if(n<50) return n*10;
+    return n*n; // 50->2500, 100->10000
+  }
+  function rewardMissions(n){ // Beispiele: 5→25, 10→100, 20→400, 50→2500
+    return n*n;
+  }
+  function rewardCategory(points){ // 20% der erreichten Kategoriensumme als Bonus
+    return Math.round(points*0.2);
+  }
+
+  function highestTierReached(val, tiers){
+    let t=0;
+    tiers.forEach(x=>{ if(val>=x) t=Math.max(t,x); });
+    return t;
+  }
+
+  function payMilestone(key,label,baseReward){
+    const tenX = S.milestonesAuto.penaltyFlag ? 0.1 : 1;
+    const reward = Math.max(1, Math.round(baseReward * tenX));
+    S.log.push({date:todayISO(), quest:`Milestone erreicht: ${label}`, points: reward, meta:{milestone:true}});
+    S.milestonesAuto.penaltyFlag = false; // konsumiert
+    save();
+    if(window.renderAll) window.renderAll();
+    try{
+      const t=document.createElement("div");
+      t.textContent = `🎯 ${label} • +${reward} Punkte`;
+      t.className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-2 rounded shadow-lg";
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),2000);
+    }catch{}
+  }
+
+  function evalAutoMilestones(){
+    S.milestonesAuto.paid = S.milestonesAuto.paid || {};
+
+    // Quests
+    const qCnt = questCount();
+    const qTier = highestTierReached(qCnt, TIERS_QUEST);
+    if(qTier && S.milestonesAuto.paid.quests !== qTier){
+      if(!S.milestonesAuto.paid.quests || qTier>S.milestonesAuto.paid.quests){
+        payMilestone("quests", `${qTier} Quests`, rewardQuests(qTier));
+        S.milestonesAuto.paid.quests = qTier;
+      }
+    }
+    // Bossquests
+    const bCnt = bossCount();
+    const bTier = highestTierReached(bCnt, TIERS_BOSS);
+    if(bTier && S.milestonesAuto.paid.boss !== bTier){
+      if(!S.milestonesAuto.paid.boss || bTier>S.milestonesAuto.paid.boss){
+        payMilestone("boss", `${bTier} Bossquests`, rewardBoss(bTier));
+        S.milestonesAuto.paid.boss = bTier;
+      }
+    }
+    // Missionen
+    const mCnt = missionsCompletedCount();
+    const mTier = highestTierReached(mCnt, TIERS_MISS);
+    if(mTier && S.milestonesAuto.paid.missions !== mTier){
+      if(!S.milestonesAuto.paid.missions || mTier>S.milestonesAuto.paid.missions){
+        payMilestone("missions", `${mTier} Missionen`, rewardMissions(mTier));
+        S.milestonesAuto.paid.missions = mTier;
+      }
+    }
+    // Kategorien (für jede)
+    const totals = categoryTotals();
+    (S.categories.list||[]).forEach(cat=>{
+      const val = totals[cat.id]||0;
+      const cTier = highestTierReached(val, TIERS_CAT);
+      const key = "cat_"+cat.id;
+      if(cTier && S.milestonesAuto.paid[key] !== cTier){
+        if(!S.milestonesAuto.paid[key] || cTier>S.milestonesAuto.paid[key]){
+          payMilestone(key, `Kategorie ${cat.name}: ${cTier} Punkte`, rewardCategory(cTier));
+          S.milestonesAuto.paid[key] = cTier;
+        }
+      }
+    });
+    save();
+  }
+
+  // Dashboard-Box (ersetzt evtl. alte statische Meilensteine)
+  function renderMilestonesPanel(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+    let box = document.getElementById("autoMilestonesBox");
+    if(box) box.remove();
+    box = document.createElement("div");
+    box.id="autoMilestonesBox";
+    box.className="mt-4 p-3 border rounded bg-white";
+    const totals = categoryTotals();
+    box.innerHTML = `
+      <h3 class="font-bold mb-2">🎯 Meilensteine (automatisch)</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+        <div class="p-2 border rounded bg-slate-50">Quests erledigt: ${questCount()}</div>
+        <div class="p-2 border rounded bg-slate-50">Bossquests erledigt: ${bossCount()}</div>
+        <div class="p-2 border rounded bg-slate-50">Missionen abgeschlossen: ${missionsCompletedCount()}</div>
+        <div class="p-2 border rounded bg-slate-50">
+          Kategorien: ${(S.categories.list||[]).map(c=>`${c.name} Σ ${totals[c.id]||0}P`).join(" • ")}
+        </div>
+      </div>
+      <div class="text-xs text-slate-500 mt-2">
+        Hinweis: Nach einem negativen Ereignis (z. B. „Schlechter Lebensstil“) wird <b>der nächste</b> Meilenstein nur mit <b>10%</b> der Belohnung ausgeschüttet.
+      </div>
+    `;
+    host.appendChild(box);
+  }
+
+  const oldRenderDashboardMS = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof oldRenderDashboardMS==="function") oldRenderDashboardMS.apply(this, arguments);
+    // Auszahlen (falls Tiers erreicht) & Panel darstellen
+    evalAutoMilestones();
+    renderMilestonesPanel();
+  };
+
+  // =========================================================================================
+  // P) CHAT-FIX (falls ID-Unterschiede)
+  // =========================================================================================
+  (function chatFix(){
+    const btn1 = document.getElementById("btnChat");
+    const btn2 = document.getElementById("btnChatSend");
+    const input = document.getElementById("chatInput");
+    const process = window.processMessage;
+    const renderChat = window.renderChat || function(msg,from="user"){
+      const box=document.createElement("div");
+      box.className=from==="user"?"text-right":"text-left text-blue-700";
+      box.textContent=msg;
+      const log=document.getElementById("chatLog") || document.getElementById("chatWindow");
+      if(log){ log.appendChild(box); log.scrollTop=log.scrollHeight; }
+    };
+    function send(){
+      if(!process || !input) return;
+      const txt=(input.value||"").trim();
+      if(!txt) return;
+      renderChat(txt,"user");
+      const res = process(txt) || [];
+      res.forEach(r=>renderChat(r,"bot"));
+      input.value="";
+    }
+    if(btn1 && !btn1._wired){ btn1._wired=true; btn1.addEventListener("click",send); }
+    if(btn2 && !btn2._wired){ btn2._wired=true; btn2.addEventListener("click",send); }
+    if(input && !input._wired){ input._wired=true; input.addEventListener("keydown",e=>{ if(e.key==="Enter") send(); }); }
+  })();
+
+  // =========================================================================================
+  // Q) INITIAL RENDER / WIRING
+  // =========================================================================================
+  // Mission UI initialisieren
+  ensureMissionsTab();
+  wireMissionShell();
+  renderMissions();
+
+  // Erstes Dashboard zeichnen (zieht auch Milestones & Badges & Decay)
+  if(window.renderAll) window.renderAll();
+  else if(window.renderDashboard) window.renderDashboard();
+
+})();
+</script>
+<!-- === /FINALPATCH === -->
 </body>
 </html>
