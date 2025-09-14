@@ -1311,6 +1311,202 @@ renderSettings = function(){
 
   // 4) Canvas bereits im CSS gefixt – kein weiteres JS nötig.
 })();
+/* ==== PATCH: Sonderaufgaben (Cooldown-Tab) ==== */
+(function(){
+  // --- State & Helpers ---
+  state.specialTasks = state.specialTasks || []; // [{name, points, everyDays, lastDone}]
+  const today = () => todayISO();
+  const daysBetween = (a,b) => Math.floor((new Date(b)-new Date(a))/(1000*60*60*24));
+
+  function isAvailable(t){
+    if(!t.lastDone) return true; // sofort verfügbar, solange nicht erledigt
+    return daysBetween(t.lastDone, today()) >= Number(t.everyDays||1);
+  }
+  function nextDate(t){
+    if(!t.lastDone){
+      // sofort verfügbar -> "heute" als nextDate anzeigen
+      return today();
+    }
+    const d = new Date(t.lastDone);
+    d.setDate(d.getDate() + Number(t.everyDays||1));
+    return d.toISOString().slice(0,10);
+  }
+
+  // --- Tab erzeugen, falls nicht vorhanden ---
+  if(!document.getElementById('tab-special')){
+    const sec = document.createElement('section');
+    sec.id='tab-special';
+    sec.className='tab space-y-4';
+    sec.innerHTML = `
+      <div class="space-y-2">
+        <h3 class="font-bold text-lg">Sonderaufgaben (Cooldown)</h3>
+        <div class="grid grid-cols-3 gap-2">
+          <input id="spName" class="input col-span-3" placeholder="Name (z. B. Blumen gießen)" />
+          <input id="spPoints" type="number" class="input" placeholder="Punkte" />
+          <input id="spDays" type="number" class="input" placeholder="Alle X Tage" />
+          <button id="btnAddSpecial" class="btn bg-blue-600 text-white">Hinzufügen</button>
+        </div>
+        <p class="text-xs text-slate-500">Nach dem Erledigen wird die Aufgabe für die angegebene Anzahl Tage gesperrt.</p>
+      </div>
+
+      <div>
+        <h4 class="font-bold mt-2">Jetzt verfügbar</h4>
+        <div id="specialAvail" class="space-y-2"></div>
+      </div>
+
+      <div>
+        <h4 class="font-bold mt-4">Gesperrt</h4>
+        <div id="specialLocked" class="space-y-2 text-slate-600"></div>
+      </div>
+    `;
+    // ans Ende von <main>
+    const main = document.querySelector('main');
+    if(main) main.appendChild(sec);
+  }
+
+  // --- Nav-Button ergänzen & Grid anpassen ---
+  const navGrid = document.querySelector('nav .grid');
+  if(navGrid && !navGrid.querySelector('[data-tab="special"]')){
+    const btn = document.createElement('button');
+    btn.textContent = 'Sonder';
+    btn.className = 'py-3';
+    btn.setAttribute('data-tab','special');
+    navGrid.appendChild(btn);
+
+    // Grid-Spalten erhöhen (robust alle grid-cols-* entfernen, dann neu setzen)
+    navGrid.className = navGrid.className.replace(/grid-cols-\d+/g,'').trim() + ' grid-cols-6';
+
+    // Click-Handler nur für neuen Button
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.getElementById('tab-special').classList.add('active');
+      navGrid.querySelectorAll('[data-tab]').forEach(b=>b.classList.remove('text-blue-600'));
+      btn.classList.add('text-blue-600');
+    });
+  }
+
+  // --- Render-Funktion für den Tab ---
+  function renderSpecial(){
+    const avail = document.getElementById('specialAvail');
+    const lock  = document.getElementById('specialLocked');
+    if(!avail || !lock) return;
+
+    const list = state.specialTasks.map((t,i)=>({...t,i}));
+    const available = list.filter(isAvailable);
+    const locked    = list.filter(t=>!isAvailable(t));
+
+    avail.innerHTML = available.length
+      ? available.map(t=>`
+        <div class="p-2 border rounded flex items-center justify-between bg-white">
+          <div>
+            <div class="font-medium">⭐ ${t.name}</div>
+            <div class="text-xs text-slate-500">+${t.points} Punkte • alle ${t.everyDays} Tage</div>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn text-sm" data-sp-done="${t.i}">Erledigt</button>
+            <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
+            <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
+          </div>
+        </div>
+      `).join('')
+      : `<div class="text-sm text-slate-500">Zurzeit nichts verfügbar.</div>`;
+
+    lock.innerHTML = locked.length
+      ? locked.map(t=>{
+          const nd = nextDate(t);
+          const rest = Math.max(0, daysBetween(today(), nd));
+          return `
+          <div class="p-2 border rounded bg-gray-50 flex items-center justify-between">
+            <div>
+              <div class="font-medium">⛔ ${t.name}</div>
+              <div class="text-xs">wieder am ${nd}${rest>0?` (in ${rest} Tagen)`:''}</div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
+              <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="text-sm text-slate-500">Keine gesperrten Aufgaben.</div>`;
+
+    // Button-Events binden
+    document.querySelectorAll('[data-sp-done]').forEach(b=>{
+      b.onclick = ()=>{
+        const idx = Number(b.getAttribute('data-sp-done'));
+        const t = state.specialTasks[idx];
+        if(!t) return;
+        const pts = computePoints(Number(t.points||0), today());
+        state.log.push({date: today(), quest: `Sonder: ${t.name}`, points: pts, base: Number(t.points||0)});
+        t.lastDone = today();
+        save(); renderAll();
+      };
+    });
+    document.querySelectorAll('[data-sp-del]').forEach(b=>{
+      b.onclick = ()=>{
+        const idx = Number(b.getAttribute('data-sp-del'));
+        if(confirm('Sonderaufgabe wirklich löschen?')){
+          state.specialTasks.splice(idx,1);
+          save(); renderAll();
+        }
+      };
+    });
+    document.querySelectorAll('[data-sp-edit]').forEach(b=>{
+      b.onclick = ()=>{
+        const idx = Number(b.getAttribute('data-sp-edit'));
+        const t = state.specialTasks[idx];
+        if(!t) return;
+        const name = prompt('Name:', t.name); if(name===null) return;
+        const points = prompt('Punkte:', t.points); if(points===null) return;
+        const days = prompt('Alle wie viele Tage?', t.everyDays); if(days===null) return;
+        Object.assign(t,{
+          name: name.trim() || t.name,
+          points: Number(points)||t.points,
+          everyDays: Math.max(1, Number(days)||t.everyDays)
+        });
+        save(); renderAll();
+      };
+    });
+  }
+
+  // --- Add-Form binden ---
+  function bindSpecialForm(){
+    const btn = document.getElementById('btnAddSpecial');
+    if(btn && !btn._bound){
+      btn._bound = true;
+      btn.addEventListener('click',()=>{
+        const name = (document.getElementById('spName').value||'').trim();
+        const points = Number(document.getElementById('spPoints').value||0);
+        const days = Math.max(1, Number(document.getElementById('spDays').value||0));
+        if(!name || !points || !days){
+          alert('Bitte Name, Punkte und Tage ausfüllen.');
+          return;
+        }
+        state.specialTasks.push({
+          name, points, everyDays: days, lastDone: null
+          // Wenn du neue Aufgaben direkt sperren willst:
+          // lastDone: today()  // <-- aktivieren, dann sind neue Aufgaben erstmal gesperrt
+        });
+        save();
+        document.getElementById('spName').value='';
+        document.getElementById('spPoints').value='';
+        document.getElementById('spDays').value='';
+        renderAll();
+      });
+    }
+  }
+
+  // --- In globalen Render-Zyklus einhängen ---
+  const _oldRenderAll = renderAll;
+  renderAll = function(){
+    _oldRenderAll();
+    renderSpecial();
+    bindSpecialForm();
+  };
+
+  // Initialer Render
+  renderSpecial();
+  bindSpecialForm();
+})();
   })();
   </script>
 </body>
