@@ -13169,6 +13169,229 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH C === -->
+<!-- === PATCH D : Quest-spezifisches Levelsystem + täglicher Abzug — vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
+
+  // ---- Guards / Utils ----
+  if(!window.state){ console.warn("Patch D: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+  const TODAY = ()=> new Date().toISOString().slice(0,10);
+  const SAVE  = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+
+  // Ab Tag X bis (aber ohne) Tag Y iterieren
+  function* eachDay(fromISO, toISO){ // fromISO exklusiv, bis toISO exklusiv
+    const d=new Date(fromISO); d.setDate(d.getDate()+1);
+    const end=new Date(toISO);
+    while(d<end){ yield d.toISOString().slice(0,10); d.setDate(d.getDate()+1); }
+  }
+
+  // Prüfen, ob an Tag iso eine Log-Zeile für Quest existiert (positive Punkte)
+  function hasQuestOnDate(questName, iso){
+    const S=window.state;
+    return S.log.some(e=> e.date===iso && e.quest===questName && (e.points||0)>0);
+  }
+
+  // Level-Formel: L1=100, L2=+110, L3=+120, ...
+  function questLevelFromXp(xp){
+    let level=0, need=100, rem=xp;
+    while(rem>=need){ rem-=need; level++; need+=10; }
+    return { level, inLevel: rem, next: need };
+  }
+
+  // ---- State-Erweiterung ----
+  const S = window.state;
+  S.questLevels = S.questLevels || {}; // Map <questName> -> { xp, lastDone, lastPenaltyCheck }
+
+  // ---- XP/Decay: zentrales Handling bei neuen Log-Einträgen ----
+  function isCatalogNormalQuest(name){
+    const q=(S.catalog||[]).find(x=>x.name===name);
+    return !!(q && !q.boss); // nur "normale" Quests leveln/decayen
+  }
+
+  function onLogEntry(e){
+    if(!e || typeof e.quest!=="string") return;
+    if(!isCatalogNormalQuest(e.quest)) return;         // nur normale Katalog-Quests
+    if((e.points||0) <= 0) return;                    // nur positive Punkte geben XP
+
+    const rec = S.questLevels[e.quest] || {xp:0,lastDone:null,lastPenaltyCheck: TODAY()};
+    rec.xp = Math.max(0, (rec.xp||0) + (e.points||0));
+    rec.lastDone = e.date || TODAY();
+
+    // Erste Initialisierung des Prüftages: mindestens letzter Done-Tag, sonst heute
+    if(!rec.lastPenaltyCheck){
+      rec.lastPenaltyCheck = rec.lastDone || TODAY();
+    }else{
+      // falls Eintrag von "gestern" o.ä. nachgetragen wird und lastPenaltyCheck hinterherhinkt,
+      // lassen wir die tägliche Routine unten sauber abarbeiten
+    }
+
+    S.questLevels[e.quest] = rec;
+  }
+
+  // Patch: state.log.push hooken (auch nach Import robust halten)
+  function patchLogPush(){
+    const st=window.state;
+    if(!st || !st.log || st._logPushPatched) return;
+    const orig = st.log.push.bind(st.log);
+    st.log.push = function(...items){
+      const res = orig(...items);
+      items.forEach(onLogEntry);
+      SAVE();
+      return res;
+    };
+    st._logPushPatched = true;
+  }
+  patchLogPush();
+  // falls via Import der Array ersetzt wurde, regelmäßig sicherstellen
+  setInterval(()=>{ if(window.state && !window.state._logPushPatched) patchLogPush(); }, 1500);
+
+  // ---- Täglicher Abzug (-15 XP pro Tag ohne Erfüllung) ----
+  function reconcileQuestDecay(){
+    const today = TODAY();
+    Object.entries(S.questLevels).forEach(([name,rec])=>{
+      // nur normale Katalog-Quests decayen
+      if(!isCatalogNormalQuest(name)) return;
+
+      // Initialisieren, falls noch nie geprüft
+      if(!rec.lastPenaltyCheck){ rec.lastPenaltyCheck = today; }
+
+      // Für alle Tage seit letztem Check bis gestern prüfen
+      for(const iso of eachDay(rec.lastPenaltyCheck, today)){
+        if(!hasQuestOnDate(name, iso)){
+          rec.xp = Math.max(0, (rec.xp||0) - 15);
+        }
+      }
+      rec.lastPenaltyCheck = today;
+      S.questLevels[name] = rec;
+    });
+    SAVE();
+  }
+
+  // bei App-Start einmal ausführen
+  reconcileQuestDecay();
+
+  // täglicher Tick (erkennt Datumswechsel)
+  let _lastDay = TODAY();
+  setInterval(()=>{
+    const t = TODAY();
+    if(t !== _lastDay){
+      _lastDay = t;
+      reconcileQuestDecay();
+      if(typeof window.renderAll==="function") window.renderAll();
+    }
+  }, 60*1000);
+
+  // ---- UI: Katalog-Zeilen um Level-Badge erweitern ----
+  function augmentCatalogWithLevels(){
+    const list = document.getElementById("catalogList");
+    if(!list) return;
+    // Finde alle <div class="p-2 border ...">, hole erstes <span> = Titel
+    const rows = list.querySelectorAll("div.p-2.border.rounded");
+    rows.forEach(row=>{
+      const titleSpan = row.querySelector("span");
+      if(!titleSpan) return;
+
+      // Questnamen aus dem Text herauslösen: "👑? <name> (+X Punkte)"
+      let raw = (titleSpan.textContent||"").trim();
+      raw = raw.replace("👑","").trim();
+      const m = raw.match(/^(.*?)\s*\(\+\d+/);
+      const questName = (m ? m[1] : raw).trim();
+      if(!questName) return;
+
+      const rec = S.questLevels[questName] || {xp:0};
+      const info = questLevelFromXp(rec.xp||0);
+
+      // schon vorhanden? (bei erneutem Render vermeiden wir Duplikate)
+      if(titleSpan.querySelector(".ql-badge")) return;
+
+      const badge = document.createElement("span");
+      badge.className = "ql-badge ml-2 inline-block text-[10px] px-2 py-0.5 rounded-full border bg-slate-50";
+      badge.textContent = `LVL ${info.level} · ${info.inLevel}/${info.next}`;
+      titleSpan.appendChild(badge);
+    });
+  }
+
+  // hook in renderCatalog
+  const _oldRenderCatalog_D = window.renderCatalog;
+  window.renderCatalog = function(){
+    if(typeof _oldRenderCatalog_D==="function") _oldRenderCatalog_D();
+    augmentCatalogWithLevels();
+  };
+
+  // ---- UI: Dashboard-Kurzüberblick (Top 5 gelevelte Quests) ----
+  function renderQuestLevelSummary(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+
+    // Container (einmalig anlegen, dann nur Inhalt ersetzen)
+    let box = document.getElementById("dashQuestLevelBox");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "dashQuestLevelBox";
+      box.className = "mt-4";
+      host.appendChild(box);
+    }
+
+    const entries = Object.entries(S.questLevels)
+      .map(([name,rec])=>({name, xp:rec.xp||0, info:questLevelFromXp(rec.xp||0)}))
+      .sort((a,b)=> (b.info.level - a.info.level) || (b.info.inLevel - a.info.inLevel))
+      .slice(0,5);
+
+    if(entries.length===0){
+      box.innerHTML = `<h3 class="font-bold">Quest-Levels</h3>
+      <div class="text-sm text-slate-500">Noch keine gelevelten Quests.</div>`;
+      return;
+    }
+
+    box.innerHTML = `<h3 class="font-bold">Quest-Levels (Top 5)</h3>` +
+      entries.map(e=>{
+        const pct = Math.min(100, Math.round((e.info.inLevel / e.info.next)*100));
+        return `
+          <div class="mt-2">
+            <div class="flex justify-between text-sm">
+              <span>${e.name}</span>
+              <span>LVL ${e.info.level} · ${e.info.inLevel}/${e.info.next}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded h-2">
+              <div class="bg-blue-500 h-2 rounded" style="width:${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+  }
+
+  // hook in renderDashboard
+  const _oldRenderDashboard_D = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof _oldRenderDashboard_D==="function") _oldRenderDashboard_D();
+    renderQuestLevelSummary();
+  };
+
+  // ---- Initial pass: existierende Log-Einträge einmalig auf XP heben ----
+  // (Nur wenn noch keine Levels vorhanden; ansonsten nicht anfassen)
+  if(Object.keys(S.questLevels).length===0 && Array.isArray(S.log)){
+    S.log.forEach(e=>{
+      if(e && e.quest && (e.points||0)>0 && isCatalogNormalQuest(e.quest)){
+        const rec = S.questLevels[e.quest] || {xp:0,lastDone:null,lastPenaltyCheck: TODAY()};
+        rec.xp += e.points;
+        rec.lastDone = e.date || rec.lastDone;
+        S.questLevels[e.quest] = rec;
+      }
+    });
+    SAVE();
+  }
+
+  // Sofort initial rendern
+  try{
+    if(typeof window.renderAll==="function") window.renderAll();
+    else { window.renderCatalog && window.renderCatalog(); window.renderDashboard && window.renderDashboard(); }
+  }catch(e){ console.warn("Patch D initial render:", e); }
+
+})();
+</script>
+<!-- === /PATCH D === -->
+
   // =======>>>>>  // [EXTENSION-POINT] FÜR KÜNFTIGE TEILE  <<<<<=======
   // Ab Schritt 2 werden neue Features genau HIER eingefügt.
   // Ich sage dir dann immer: "Füge Part X direkt ÜBER dem EXTENSION-POINT ein."
