@@ -655,7 +655,219 @@
 
     // Exponiere für Debug (optional)
     window._lifeRPG = { get state(){return state;}, save: saveV2, showView };
+    /* =========================
+       PHASE 2 PATCH — LOG & CATALOG
+       ========================== */
+    ;(() => {
+      // Wir befinden uns noch im selben IIFE, daher Zugriff auf state/save/renderAll möglich.
+      const $  = sel => document.querySelector(sel);
+      const $$ = sel => Array.from(document.querySelectorAll(sel));
 
+      // ------- LOG: Suche & Schnellauswahl UI einmalig einbauen -------
+      let logFilter = ""; // aktueller Textfilter
+
+      function ensureLogEnhancementsUI() {
+        const view = $("#view-log");
+        if (!view) return;
+
+        // 1) Schnellauswahl-Block (unter dem Eingabe-Form-Card)
+        if (!$("#quickLogWrap")) {
+          const formCard = view.querySelector(".card"); // erste Card im Log-View
+          if (formCard) {
+            const wrap = document.createElement("div");
+            wrap.id = "quickLogWrap";
+            wrap.className = "mt-3 p-3 card";
+
+            wrap.innerHTML = `
+              <div class="font-semibold mb-2">Schnellauswahl aus Katalog</div>
+              <div class="grid md:grid-cols-4 gap-2 items-center">
+                <select id="quickQuest" class="input md:col-span-2"></select>
+                <input id="quickPts" type="number" class="input" placeholder="Punkte" />
+                <button id="btnQuickAdd" class="btn btn-primary">Eintragen</button>
+              </div>
+            `;
+            formCard.after(wrap);
+
+            // Events werden unten in bindLogEnhancementEvents() gesetzt
+          }
+        }
+
+        // 2) Suchfeld (über der Verlaufsliste in der zweiten Card)
+        const listCard = view.querySelectorAll(".card")[1];
+        if (listCard && !$("#logSearchWrap")) {
+          const s = document.createElement("div");
+          s.id = "logSearchWrap";
+          s.className = "mb-3 flex items-center gap-2";
+          s.innerHTML = `
+            <input id="logSearch" class="input" placeholder="Suchen (Name oder Datum z.B. 2025-09-01)" />
+            <button id="logSearchClear" class="btn">Leeren</button>
+          `;
+          listCard.prepend(s);
+        }
+      }
+
+      function bindLogEnhancementEvents() {
+        // Katalogoptionen befüllen
+        const sel = $("#quickQuest");
+        const pts = $("#quickPts");
+        if (sel && pts) {
+          sel.innerHTML = (state.catalog.length
+            ? state.catalog.map((q,i)=>`<option value="${i}">${q.name} (+${q.points})</option>`).join("")
+            : `<option value="">— Keine Vorlagen —</option>`
+          );
+          // Punkte-Autofill
+          sel.addEventListener("change", () => {
+            const idx = Number(sel.value);
+            const q = state.catalog[idx];
+            pts.value = q ? (q.points || 0) : "";
+          });
+          // Initial setzen
+          if (state.catalog[0]) pts.value = state.catalog[0].points || 0;
+
+          // Eintragen aus Schnellauswahl
+          const btnQ = $("#btnQuickAdd");
+          if (btnQ) {
+            btnQ.onclick = () => {
+              const idx = Number(sel.value);
+              const q = state.catalog[idx];
+              const valPts = Number(pts.value || (q?.points || 0));
+              if (!q) { alert("Bitte eine Vorlage wählen."); return; }
+              const d = $("#logDate")?.value || new Date().toISOString().slice(0,10);
+              state.log.push({date:d, quest:q.name, points:valPts, base:q.points});
+              saveV2();
+              renderAll();
+            };
+          }
+        }
+
+        // Suche
+        const inp = $("#logSearch");
+        const clr = $("#logSearchClear");
+        if (inp) {
+          inp.oninput = () => {
+            logFilter = (inp.value || "").trim().toLowerCase();
+            renderLogEnhancedList(); // nur Liste neu zeichnen
+          };
+        }
+        if (clr) {
+          clr.onclick = () => {
+            logFilter = "";
+            if (inp) inp.value = "";
+            renderLogEnhancedList();
+          };
+        }
+      }
+
+      // Hilfsfunktion: Filter anwenden und Liste mit Löschbuttons rendern
+      function renderLogEnhancedList() {
+        const list = $("#logList");
+        if (!list) return;
+
+        let items = state.log.slice(); // von alt nach neu
+        if (logFilter) {
+          items = items.filter(e =>
+            (e.quest || "").toLowerCase().includes(logFilter) ||
+            (e.date || "").toLowerCase().includes(logFilter)
+          );
+        }
+
+        if (items.length === 0) {
+          list.innerHTML = `<div class="text-slate-500 dark:text-slate-300">Keine passenden Einträge.</div>`;
+          return;
+        }
+
+        // Wir zeigen neueste zuerst (reverse) — brauchen Original-Index zum Löschen.
+        list.innerHTML = items.slice().reverse().map(e => {
+          const idxOriginal = state.log.indexOf(e); // stabil, weil Referenzen identisch
+          return `
+            <div class="row flex items-center justify-between">
+              <div>${e.date} • ${e.quest}</div>
+              <div class="flex items-center gap-2">
+                <div class="mono font-semibold">+${e.points}</div>
+                <button class="btn text-xs" data-del="${idxOriginal}" title="Eintrag löschen">🗑️</button>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        // Lösch-Events binden
+        list.querySelectorAll("[data-del]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.getAttribute("data-del"));
+            if (idx >= 0 && idx < state.log.length) {
+              state.log.splice(idx, 1);
+              saveV2();
+              renderAll();
+            }
+          });
+        });
+      }
+
+      // Wir hängen uns an die bestehende renderLog() an
+      const _renderLog = renderLog;
+      renderLog = function() {
+        _renderLog();
+        ensureLogEnhancementsUI();
+        bindLogEnhancementEvents();
+        renderLogEnhancedList(); // ersetzt die einfache Liste
+      };
+
+      // ------- KATALOG: Löschen & Eintragen -------
+      const _renderCatalog = renderCatalog;
+      renderCatalog = function() {
+        const wrap = $("#catalogList");
+        if (!wrap) return;
+
+        if (state.catalog.length === 0) {
+          wrap.innerHTML = `<div class="text-slate-500 dark:text-slate-300">Noch keine Vorlagen.</div>`;
+          return;
+        }
+
+        wrap.innerHTML = state.catalog.map((q,i) => `
+          <div class="row flex items-center justify-between gap-2">
+            <div>📌 ${q.name} <span class="text-slate-500 dark:text-slate-300">(+${q.points})</span></div>
+            <div class="flex gap-2">
+              <button class="btn text-xs" data-use="${i}">Eintragen</button>
+              <button class="btn text-xs btn-danger" data-del="${i}">Löschen</button>
+            </div>
+          </div>
+        `).join("");
+
+        // Eintragen
+        wrap.querySelectorAll("[data-use]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const q = state.catalog[Number(btn.dataset.use)];
+            if (!q) return;
+            const d = new Date().toISOString().slice(0,10);
+            state.log.push({date:d, quest:q.name, points:Number(q.points)||0, base:q.points});
+            saveV2();
+            renderAll();
+            showView("log", true);
+          });
+        });
+
+        // Löschen
+        wrap.querySelectorAll("[data-del]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const i = Number(btn.dataset.del);
+            if (i >= 0) {
+              state.catalog.splice(i,1);
+              saveV2();
+              renderAll();
+            }
+          });
+        });
+      };
+
+      // Beim ersten Laden gleich aufräumen
+      // (Falls Log-View schon aktiv ist)
+      if ($("#view-log").classList.contains("active")) {
+        ensureLogEnhancementsUI();
+        bindLogEnhancementEvents();
+        renderLogEnhancedList();
+      }
+    })();
+    /* ===== END PHASE 2 PATCH ===== */
     /* === PATCHES ANCHOR — DO NOT REMOVE === */
   })();
   </script>
