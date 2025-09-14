@@ -1256,6 +1256,61 @@ renderSettings = function(){
   // (Falls du lieber Dashboard starten willst, kommentiere die nächste Zeile aus)
   // goto('home');
 })();
+/* ==== PATCH: Safe-Area Header + FAB-Position + Canvas-Fix ==== */
+(function(){
+  // 1) CSS für Safe-Area & FAB injizieren
+  const css = `
+    header.safe-header{
+      /* Safe-Area für iOS-Notch */
+      padding-top: calc(env(safe-area-inset-top, 0px) + 1rem) !important;
+      padding-left: calc(env(safe-area-inset-left, 0px) + 1rem) !important;
+      padding-right: calc(env(safe-area-inset-right, 0px) + 1rem) !important;
+    }
+    /* Legacy iOS fallback */
+    @supports (padding-top: constant(safe-area-inset-top)) {
+      header.safe-header{
+        padding-top: calc(constant(safe-area-inset-top) + 1rem) !important;
+        padding-left: calc(constant(safe-area-inset-left) + 1rem) !important;
+        padding-right: calc(constant(safe-area-inset-right) + 1rem) !important;
+      }
+    }
+
+    /* FAB-Button unten rechts, mit Safe-Area */
+    .fab-home{
+      position: fixed !important;
+      z-index: 30;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+      right:  calc(env(safe-area-inset-right,  0px) + 12px) !important;
+      border-radius: 9999px;
+    }
+
+    /* Canvas aus dem Layout rausnehmen (Overlay) */
+    #fx{
+      position: fixed !important;
+      inset: 0 !important;
+      pointer-events: none !important;
+      z-index: 5 !important;
+      display: block !important;
+    }
+  `;
+  const st=document.createElement('style');
+  st.appendChild(document.createTextNode(css));
+  document.head.appendChild(st);
+
+  // 2) Header Safe-Area aktivieren
+  const hdr=document.querySelector('header');
+  if(hdr) hdr.classList.add('safe-header');
+
+  // 3) FAB in die Ecke ziehen (überschreibt frühere Tailwind-bottom/right Klassen)
+  const fab=document.getElementById('fabHome');
+  if(fab){
+    fab.classList.add('fab-home');
+    fab.style.bottom = 'calc(env(safe-area-inset-bottom, 0px) + 12px)'; // inline > utility
+    fab.style.right  = 'calc(env(safe-area-inset-right,  0px) + 12px)';
+  }
+
+  // 4) Canvas bereits im CSS gefixt – kein weiteres JS nötig.
+})();
   })();
   </script>
 </body>
