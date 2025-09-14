@@ -14562,5 +14562,371 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH H === -->
+<!-- === PATCH I : Dynamische Meilenstein-Leitern — direkt vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
+
+  if(!window.state){ console.warn("Patch I: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+
+  const S    = window.state;
+  const save = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+
+  // ---------- Sanity ----------
+  S.milestones   = Array.isArray(S.milestones) ? S.milestones : [];
+  S.mLadders     = S.mLadders || { ladders:{}, lastSync: null };
+  S.categories   = S.categories || { list:[], byQuest:{}, config:{} };
+  S.catalog      = Array.isArray(S.catalog) ? S.catalog : [];
+
+  // Falls alte Milestones ohne Text existieren: freundliche Defaults setzen
+  S.milestones.forEach(m=>{
+    if(!m.text){
+      const id = m.id || "milestone";
+      m.text = "Meilenstein: "+id;
+    }
+  });
+
+  // ---------- Fortschritt aus State berechnen ----------
+  function isSystemEntry(e){
+    const q = (e.quest||"").toLowerCase();
+    return (
+      q.startsWith("malus") ||
+      q.startsWith("reward") ||
+      q.startsWith("event-") ||
+      q.startsWith("tagesziel") ||
+      q.startsWith("milestone erreicht") ||
+      q.startsWith("timed quest verpasst") ||
+      (e.meta && (e.meta.negPenalty || e.meta.negComp || e.meta.milestone))
+    );
+  }
+
+  function progressSnapshot(){
+    const log = Array.isArray(S.log) ? S.log : [];
+
+    // "User-Quests" (keine System-/Hilfsbuchungen), nur positive Abschlüsse zählen
+    const userEntries = log.filter(e => e && typeof e.quest==="string" && !isSystemEntry(e) && Number(e.points||0) > 0);
+
+    // Quest-Zähler
+    const questsDone = userEntries.length;
+
+    // Bossquests: aus Katalog ableiten
+    const bossSet = new Set(S.catalog.filter(q=>q && q.boss).map(q=>q.name));
+    const bossDone = userEntries.filter(e => bossSet.has(e.quest)).length;
+
+    // Missionen abgeschlossen
+    let missionsDone = 0;
+    if(Array.isArray(S.missions)){
+      missionsDone = S.missions.filter(m=>m && m.done===true).length;
+    }else{
+      // Fallback: Log-Einträge mit Hinweis
+      missionsDone = log.filter(e => (e.meta && e.meta.missionDone) || String(e.quest||"").toLowerCase().startsWith("mission abgeschlossen")).length;
+    }
+
+    // Kategorie-Zähler (Anzahl erledigter Einträge je Kategorie)
+    const catCounts = {};
+    userEntries.forEach(e=>{
+      const catId = S.categories.byQuest[e.quest];
+      if(catId){
+        catCounts[catId] = (catCounts[catId]||0) + 1;
+      }
+    });
+
+    return { questsDone, bossDone, missionsDone, catCounts };
+  }
+
+  // ---------- Ladder-Generator ----------
+  // Ein Ladder-Step wird als Meilenstein im bestehenden System angelegt (mit eigener id & check-Funktion),
+  // damit Patch H (Decay 1/10 bei Wiedererreichen) automatisch gilt.
+  function ensureLadderSteps(opts){
+    // opts: { type, key, label, thresholds[], rewardFn, progressFn }
+    const { type, key, label, thresholds, rewardFn, progressFn } = opts;
+    const ladderId = `${type}:${key||"__"}`;
+
+    // in Registry halten
+    S.mLadders.ladders[ladderId] = S.mLadders.ladders[ladderId] || { created:new Set(), lastSeries:[] };
+    const L = S.mLadders.ladders[ladderId];
+
+    // Bereits vorhandene Meilenstein-IDs im State für Lookup
+    const existingIds = new Set(S.milestones.map(m=>m.id));
+
+    // Steps anlegen
+    thresholds.forEach(T=>{
+      const id = `LADDER:${type}:${key||"-"}:${T}`;
+      if(existingIds.has(id) || L.created.has(id)) return;
+
+      const text = `${label} – ${T}`;
+      const rew  = Number(rewardFn(T))||0;
+
+      // Dynamische Check-Funktion liest IMMER live den Fortschritt
+      const check = (function(threshold,progressFn){
+        return function(){
+          try{ return Number(progressFn()) >= Number(threshold); }
+          catch(_){ return false; }
+        };
+      })(T, progressFn);
+
+      S.milestones.push({ id, text, reward: rew, ok:false, check });
+      L.created.add(id);
+    });
+
+    // Merke Serie (für spätere Erweiterung)
+    L.lastSeries = thresholds.slice();
+  }
+
+  // "Unendlich" erweitern: Wenn der höchste Step "ok" ist, weitere generieren.
+  function extendLadderIfCompleted(opts){
+    const { type, key, nextFn, label, rewardFn, progressFn } = opts;
+    const ladderPrefix = `LADDER:${type}:${key||"-"}:`;
+
+    const ladderSteps = S.milestones
+      .filter(m => (m.id||"").startsWith(ladderPrefix))
+      .sort((a,b)=> Number(a.id.split(":").pop()) - Number(b.id.split(":").pop()));
+
+    if(ladderSteps.length===0) return;
+
+    const last = ladderSteps[ladderSteps.length-1];
+    // Wenn der höchste Step bereits erfüllt, nächsten erzeugen
+    try{
+      const nowOk = last.check && last.check();
+      if(nowOk){
+        const lastT = Number(last.id.split(":").pop());
+        const nextT = nextFn(lastT);
+        // id prüfen
+        const nid = `${ladderPrefix}${nextT}`;
+        if(!S.milestones.some(m=>m.id===nid)){
+          const text = `${label} – ${nextT}`;
+          const rew  = Number(rewardFn(nextT))||0;
+          const check = (function(threshold,progressFn){
+            return function(){
+              try{ return Number(progressFn()) >= Number(threshold); }
+              catch(_){ return false; }
+            };
+          })(nextT, progressFn);
+          S.milestones.push({ id:nid, text, reward:rew, ok:false, check });
+        }
+      }
+    }catch(e){ /* robust */ }
+  }
+
+  // ---------- Ladders definieren ----------
+  function syncAllLadders(){
+    const prog = progressSnapshot();
+
+    // 1) Missionen (Beispielfolge + unendlich durch Verdopplung)
+    const missBase = [5,10,20,50,100,200,500,1000];
+    ensureLadderSteps({
+      type:"missions",
+      key:"_",
+      label:"🏁 Missionen abgeschlossen",
+      thresholds: missBase,
+      rewardFn: T => T*T,                 // 5→25, 10→100, 20→400, 50→2500, ...
+      progressFn: ()=> progressSnapshot().missionsDone
+    });
+    extendLadderIfCompleted({
+      type:"missions",
+      key:"_",
+      label:"🏁 Missionen abgeschlossen",
+      rewardFn: T => T*T,
+      progressFn: ()=> progressSnapshot().missionsDone,
+      nextFn: last => last<50 ? (last===5?10:last===10?20:50) : last*2
+    });
+
+    // 2) Quests gesamt
+    const questBase = [100,200,500,1000,2000,5000,10000];
+    ensureLadderSteps({
+      type:"quests",
+      key:"_",
+      label:"✅ Quests erledigt (gesamt)",
+      thresholds: questBase,
+      rewardFn: T => Math.round((T*T)/100),  // 100→100, 200→400, 500→2500, ...
+      progressFn: ()=> progressSnapshot().questsDone
+    });
+    extendLadderIfCompleted({
+      type:"quests",
+      key:"_",
+      label:"✅ Quests erledigt (gesamt)",
+      rewardFn: T => Math.round((T*T)/100),
+      progressFn: ()=> progressSnapshot().questsDone,
+      nextFn: last => (last>=5000 ? last+5000 : (last>=1000 ? last*2 : (last===500?1000:last*2)))
+    });
+
+    // 3) Bossquests
+    const bossBase = [10,20,50,100,200,500];
+    ensureLadderSteps({
+      type:"boss",
+      key:"_",
+      label:"👑 Bossquests erledigt",
+      thresholds: bossBase,
+      rewardFn: T => T*T,                 // 10→100, 20→400, 50→2500, ...
+      progressFn: ()=> progressSnapshot().bossDone
+    });
+    extendLadderIfCompleted({
+      type:"boss",
+      key:"_",
+      label:"👑 Bossquests erledigt",
+      rewardFn: T => T*T,
+      progressFn: ()=> progressSnapshot().bossDone,
+      nextFn: last => (last>=200 ? last*2 : (last===50?100:last*2))
+    });
+
+    // 4) Kategorien: Für JEDE Kategorie eine Ladder
+    const cats = Array.isArray(S.categories.list) ? S.categories.list : [];
+    cats.forEach(cat=>{
+      const catId = cat.id;
+      const catName = cat.name || "Kategorie";
+      const base = [25,50,100,200,500,1000];
+      ensureLadderSteps({
+        type:"cat",
+        key: catId,
+        label:`🏷️ ${catName} – erledigte Quests`,
+        thresholds: base,
+        rewardFn: T => Math.round((T*T)/25),  // 25→25, 50→100, 100→400, 200→1600, ...
+        progressFn: ()=> (progressSnapshot().catCounts[catId]||0)
+      });
+      extendLadderIfCompleted({
+        type:"cat",
+        key: catId,
+        label:`🏷️ ${catName} – erledigte Quests`,
+        rewardFn: T => Math.round((T*T)/25),
+        progressFn: ()=> (progressSnapshot().catCounts[catId]||0),
+        nextFn: last => (last>=500 ? last*2 : (last===200?500:last*2))
+      });
+    });
+
+    S.mLadders.lastSync = todayISO();
+    save();
+  }
+
+  // Ersten Sync durchführen
+  syncAllLadders();
+
+  // ---------- Anzeige im Dashboard (zusätzlich zum bestehenden Milestone-Block) ----------
+  function renderLadderPanel(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+
+    // Altes Panel entfernen (Re-Render)
+    let panel = document.getElementById("ladderPanel");
+    if(panel) panel.remove();
+
+    panel = document.createElement("div");
+    panel.id = "ladderPanel";
+    panel.className = "mt-4 p-3 border rounded bg-orange-50";
+
+    const P = progressSnapshot();
+
+    // Helper: nächsten Step finden
+    function nextStepOf(prefix, current){
+      const steps = S.milestones
+        .filter(m => (m.id||"").startsWith(prefix))
+        .map(m => Number(m.id.split(":").pop()))
+        .sort((a,b)=>a-b);
+      for(const t of steps){
+        if(current < t) return t;
+      }
+      return steps[steps.length-1] || null;
+    }
+
+    // Missions-NEXT
+    const missCur = P.missionsDone;
+    const missNext = nextStepOf("LADDER:missions:_:", missCur);
+    const missRew  = missNext ? (missNext*missNext) : 0;
+
+    // Quests-NEXT
+    const qCur = P.questsDone;
+    const qNext = nextStepOf("LADDER:quests:_:", qCur);
+    const qRew  = qNext ? Math.round((qNext*qNext)/100) : 0;
+
+    // Boss-NEXT
+    const bCur = P.bossDone;
+    const bNext = nextStepOf("LADDER:boss:_:", bCur);
+    const bRew  = bNext ? (bNext*bNext) : 0;
+
+    // Kategorien – Top 3 (nach offenem Δ)
+    const catRows = [];
+    (Array.isArray(S.categories.list)?S.categories.list:[]).forEach(cat=>{
+      const cCur = P.catCounts[cat.id] || 0;
+      const cNext = nextStepOf(`LADDER:cat:${cat.id}:`, cCur);
+      if(cNext){
+        catRows.push({
+          name: cat.name||"Kategorie",
+          cur: cCur,
+          next: cNext,
+          rew: Math.round((cNext*cNext)/25)
+        });
+      }
+    });
+    catRows.sort((a,b)=> (a.next-a.cur) - (b.next-b.cur)); // „nächster Meilenstein am nächsten“ nach oben
+    const catTop = catRows.slice(0,3);
+
+    panel.innerHTML = `
+      <h3 class="font-bold">🎯 Nächste Meilensteine</h3>
+      <div class="grid grid-cols-1 gap-2 text-sm">
+        <div class="p-2 rounded bg-white border">
+          🏁 Missionen: <b>${missCur}/${missNext||"-"}</b>
+          ${missNext?`<span class="text-xs text-slate-600">– Nächste Belohnung: +${missRew} Punkte</span>`:""}
+        </div>
+        <div class="p-2 rounded bg-white border">
+          ✅ Quests gesamt: <b>${qCur}/${qNext||"-"}</b>
+          ${qNext?`<span class="text-xs text-slate-600">– Nächste Belohnung: +${qRew} Punkte</span>`:""}
+        </div>
+        <div class="p-2 rounded bg-white border">
+          👑 Bossquests: <b>${bCur}/${bNext||"-"}</b>
+          ${bNext?`<span class="text-xs text-slate-600">– Nächste Belohnung: +${bRew} Punkte</span>`:""}
+        </div>
+        ${catTop.length?`
+          <div class="p-2 rounded bg-white border">
+            🏷️ Kategorien (Top):
+            ${catTop.map(c=>
+              `<div class="mt-1">• ${c.name}: <b>${c.cur}/${c.next}</b>
+                <span class="text-xs text-slate-600">(+${c.rew})</span></div>`).join("")}
+          </div>`:""}
+      </div>
+      <div class="text-xs text-slate-500 mt-2">
+        Hinweis: Wird ein Meilenstein unterschritten und später erneut erreicht, beträgt die Belohnung nur <b>1/10</b> (Decay).
+      </div>
+    `;
+
+    host.appendChild(panel);
+  }
+
+  // ---------- Hooks: vor Rendern Ladders syncen & prüfen ----------
+  function safe(fn){ try{ fn(); }catch(e){ console.warn("Patch I:",e); } }
+
+  // checkMilestones läuft (inkl. Decay) bereits in Patch H – wir stellen sicher,
+  // dass unsere Ladders vorher existieren & ggf. erweitert werden.
+  const oldRenderMilestones = window.renderMilestones;
+  if(typeof oldRenderMilestones === "function"){
+    window.renderMilestones = function(){
+      safe(syncAllLadders);
+      // Patch-H-check wird im originalen renderMilestones bereits getriggert (via Wrapper) – ansonsten:
+      if(typeof window.checkMilestones === "function"){
+        safe(window.checkMilestones);
+      }
+      oldRenderMilestones.apply(this, arguments);
+      safe(renderLadderPanel);
+    };
+  }else{
+    // Falls es kein separates renderMilestones gibt, hängen wir uns an Dashboard
+    const oldDash = window.renderDashboard;
+    window.renderDashboard = function(){
+      safe(syncAllLadders);
+      if(typeof window.checkMilestones === "function"){
+        safe(window.checkMilestones);
+      }
+      if(oldDash) oldDash.apply(this, arguments);
+      safe(renderLadderPanel);
+    };
+  }
+
+  // Beim Initial-Load einmal anzeigen
+  if(typeof window.renderDashboard === "function"){
+    safe(()=>window.renderDashboard());
+  }
+
+})();
+</script>
+<!-- === /PATCH I === -->
 </body>
 </html>
