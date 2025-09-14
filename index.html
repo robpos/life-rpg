@@ -14928,5 +14928,304 @@ window.completeMission = function(missionName, basePointsTotal){
 })();
 </script>
 <!-- === /PATCH I === -->
+<!-- === PATCH J : Kategorien & per-Quest-Links — direkt vor </body> einfügen === -->
+<script>
+(function(){
+  "use strict";
+
+  if(!window.state){ console.warn("Patch J: state nicht gefunden – bitte nach dem Hauptscript laden."); return; }
+
+  const S = window.state;
+  const save = ()=> (window.save ? window.save() : localStorage.setItem("lifeRPG_p1", JSON.stringify(window.state)));
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+
+  // ---------- Bootstrap Kategorien ----------
+  S.categories = S.categories || {};
+  S.categories.list    = Array.isArray(S.categories.list) ? S.categories.list : [];
+  S.categories.byQuest = S.categories.byQuest || {};
+  S.categories.linkByQuest = S.categories.linkByQuest || {}; // { [questName]: {targetCatId, bonus} }
+
+  // Minimal-Defaults, falls noch keine Kategorien vorhanden sind
+  if(S.categories.list.length===0){
+    S.categories.list = [
+      {id:"sport",   name:"Sport",   type:"normal"},
+      {id:"handwerk",name:"Handwerk",type:"normal"},
+      {id:"haushalt",name:"Haushalt",type:"normal"},
+      {id:"neg",     name:"Schlechter Lebensstil", type:"negative"}
+    ];
+    save();
+  }
+
+  function catById(id){ return S.categories.list.find(c=>c.id===id); }
+  function ensureCatId(name){
+    let base = (name||"").toLowerCase().trim().replace(/\s+/g,"-").replace(/[^a-z0-9\-]/g,"");
+    if(!base) base = "cat";
+    let id = base, i=2;
+    while(S.categories.list.some(c=>c.id===id)) { id = base+"-"+i++; }
+    return id;
+  }
+
+  // ---------- Helpers: System- vs User-Entries, Category Sums ----------
+  function isSystemEntry(e){
+    const q = (e.quest||"").toLowerCase();
+    return (
+      q.startsWith("malus") ||
+      q.startsWith("reward") ||
+      q.startsWith("event-") ||
+      q.startsWith("tagesziel") ||
+      q.startsWith("milestone erreicht") ||
+      q.startsWith("timed quest verpasst") ||
+      (e.meta && (e.meta.negPenalty || e.meta.negComp || e.meta.milestone))
+    );
+  }
+
+  // Summe der Kategorie-Punkte:
+  //  - Primär: positive Punkte von Log-Einträgen, deren Quest dieser Kategorie zugeordnet ist
+  //  - Extra:   e.meta.catExtra[{catId, points}] (per-Quest-Verknüpfungen; beeinflusst NICHT die Gesamtpunkte)
+  function categoryTotals(){
+    const totals = {};
+    S.categories.list.forEach(c=>totals[c.id]=0);
+
+    const log = Array.isArray(S.log)? S.log : [];
+    log.forEach(e=>{
+      if(!e || isSystemEntry(e)) return;
+
+      const p = Number(e.points||0);
+      const primaryCatId = S.categories.byQuest[e.quest];
+
+      if(primaryCatId && p>0){
+        totals[primaryCatId] = (totals[primaryCatId]||0) + p;
+      }
+      if(e.meta && Array.isArray(e.meta.catExtra)){
+        e.meta.catExtra.forEach(x=>{
+          if(x && x.catId){
+            totals[x.catId] = (totals[x.catId]||0) + Number(x.points||0);
+          }
+        });
+      }
+    });
+
+    return totals;
+  }
+
+  // ---------- Hook: addLog -> per-Quest-Verknüpfung anwenden (Kategorie-Extra) ----------
+  const oldAddLogJ = window.addLog;
+  window.addLog = function(){
+    const before = Array.isArray(S.log) ? S.log.length : 0;
+    if(typeof oldAddLogJ === "function") oldAddLogJ.apply(this, arguments);
+
+    const after = Array.isArray(S.log) ? S.log.length : 0;
+    if(after>before){
+      const last = S.log[after-1];
+      if(last && last.quest){
+        const link = S.categories.linkByQuest[last.quest];
+        if(link && link.targetCatId){
+          last.meta = last.meta || {};
+          last.meta.catExtra = last.meta.catExtra || [];
+          last.meta.catExtra.push({catId:link.targetCatId, points:Number(link.bonus)||0});
+          save();
+        }
+      }
+    }
+  };
+
+  // ---------- Catalog: Quest↔Kategorie + per-Quest-Link UI ----------
+  function renderCatalogQuestCategoryEditor(){
+    const host = document.getElementById("catalogList");
+    if(!host) return;
+
+    // Editor-Container neu aufbauen (Idempotent)
+    let ed = document.getElementById("questCatEditor");
+    if(ed) ed.remove();
+    ed = document.createElement("div");
+    ed.id = "questCatEditor";
+    ed.className = "mt-4 p-3 border rounded bg-white";
+
+    const totals = categoryTotals();
+
+    // Badges oben (Summen je Kategorie)
+    ed.innerHTML = `
+      <h3 class="font-bold mb-2">Kategorien – Übersicht</h3>
+      <div class="flex flex-wrap gap-2 mb-3">
+        ${S.categories.list.map(c=>{
+          const badge = `<span class="px-2 py-1 rounded border ${c.type==="negative"?"bg-red-50 border-red-200 text-red-700":"bg-slate-50 border-slate-200"}">
+            ${c.name} • Σ ${totals[c.id]||0} P
+          </span>`;
+          return badge;
+        }).join("")}
+      </div>
+
+      <h3 class="font-bold mb-2">Quests zuordnen & verknüpfen</h3>
+      <div class="text-xs text-slate-600 mb-2">
+        Verknüpfungen wirken <b>nur</b> für die ausgewählte Quest (kein globaler Bonus).
+      </div>
+
+      <div class="grid grid-cols-1 gap-2" id="qceRows"></div>
+
+      <div class="mt-4 p-2 border rounded bg-slate-50">
+        <h4 class="font-bold mb-2">Kategorie hinzufügen</h4>
+        <div class="flex gap-2">
+          <input id="catNewName" class="input flex-1" placeholder="Name der Kategorie" />
+          <select id="catNewType" class="input w-40">
+            <option value="normal">normal</option>
+            <option value="negative">negativ</option>
+          </select>
+          <button id="catAddBtn" class="btn">+ Hinzufügen</button>
+        </div>
+      </div>
+    `;
+
+    host.after(ed);
+
+    // Reihen rendern
+    const rows = document.getElementById("qceRows");
+    const cats = S.categories.list;
+    (Array.isArray(S.catalog)?S.catalog:[]).forEach(q=>{
+      const row = document.createElement("div");
+      row.className = "p-2 border rounded grid grid-cols-1 md:grid-cols-4 gap-2 items-center";
+      const currentCat = S.categories.byQuest[q.name] || "";
+      const linkCfg = S.categories.linkByQuest[q.name] || {targetCatId:"", bonus:5};
+
+      row.innerHTML = `
+        <div class="text-sm">
+          <div class="font-medium">${q.boss?'👑 ':''}${q.name}</div>
+          <div class="text-slate-500">${q.points} Punkte</div>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Kategorie</label>
+          <select class="input" data-q="${encodeURIComponent(q.name)}" data-k="cat">
+            <option value="">— keine —</option>
+            ${cats.map(c=>`<option value="${c.id}" ${c.id===currentCat?'selected':''}>${c.name}${c.type==='negative'?' (neg.)':''}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Verknüpfen mit (optional)</label>
+          <select class="input" data-q="${encodeURIComponent(q.name)}" data-k="linkCat">
+            <option value="">— keine —</option>
+            ${cats.map(c=>`<option value="${c.id}" ${linkCfg.targetCatId===c.id?'selected':''}>${c.name}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Bonus für Ziel-Kategorie</label>
+          <input class="input" type="number" min="0" step="1" value="${Number(linkCfg.bonus)||5}" data-q="${encodeURIComponent(q.name)}" data-k="linkBonus" />
+          <div class="text-[11px] text-slate-500 mt-1">Wirkt nur auf die Ziel-Kategorie, nicht auf Gesamtpunkte.</div>
+        </div>
+      `;
+      rows.appendChild(row);
+    });
+
+    // Events: Kategorie ändern
+    rows.querySelectorAll('select[data-k="cat"]').forEach(sel=>{
+      sel.addEventListener("change",()=>{
+        const qName = decodeURIComponent(sel.getAttribute("data-q"));
+        const catId = sel.value || undefined;
+        if(catId){ S.categories.byQuest[qName]=catId; } else { delete S.categories.byQuest[qName]; }
+        save();
+        // Badges neu
+        renderCatalogQuestCategoryEditor();
+        // Dashboard neu
+        if(typeof window.renderDashboard==="function") window.renderDashboard();
+      });
+    });
+
+    // Events: Link-Ziel ändern
+    rows.querySelectorAll('select[data-k="linkCat"]').forEach(sel=>{
+      sel.addEventListener("change",()=>{
+        const qName = decodeURIComponent(sel.getAttribute("data-q"));
+        const targetCatId = sel.value;
+        const current = S.categories.linkByQuest[qName] || {};
+        if(targetCatId){
+          S.categories.linkByQuest[qName] = { targetCatId, bonus: Number(current.bonus||5) };
+        }else{
+          delete S.categories.linkByQuest[qName];
+        }
+        save();
+      });
+    });
+
+    // Events: Link-Bonus ändern
+    rows.querySelectorAll('input[data-k="linkBonus"]').forEach(inp=>{
+      inp.addEventListener("change",()=>{
+        const qName = decodeURIComponent(inp.getAttribute("data-q"));
+        const cfg = S.categories.linkByQuest[qName];
+        if(cfg){
+          cfg.bonus = Number(inp.value||0);
+          save();
+        }
+      });
+    });
+
+    // Kategorie hinzufügen
+    document.getElementById("catAddBtn").addEventListener("click",()=>{
+      const name = (document.getElementById("catNewName").value||"").trim();
+      const type = document.getElementById("catNewType").value||"normal";
+      if(!name) return alert("Bitte Namen eingeben.");
+      const id = ensureCatId(name);
+      S.categories.list.push({id,name,type});
+      save();
+      renderCatalogQuestCategoryEditor();
+      if(typeof window.renderDashboard==="function") window.renderDashboard();
+    });
+  }
+
+  // ---------- Dashboard: Kategorie-Badges anzeigen ----------
+  function renderCategoryBadgesDash(){
+    const host = document.getElementById("tab-dashboard");
+    if(!host) return;
+
+    let box = document.getElementById("catBadgesDash");
+    if(box) box.remove();
+    box = document.createElement("div");
+    box.id = "catBadgesDash";
+    box.className = "mt-4 p-3 border rounded bg-white";
+
+    const totals = categoryTotals();
+    box.innerHTML = `
+      <h3 class="font-bold mb-2">Kategorien – Punkteübersicht</h3>
+      <div class="flex flex-wrap gap-2">
+        ${S.categories.list.map(c=>{
+          const val = totals[c.id]||0;
+          const cls = c.type==="negative" ? "bg-red-50 border-red-200 text-red-700" : "bg-slate-50 border-slate-200";
+          return `<span class="px-2 py-1 rounded border ${cls}">${c.name} • Σ ${val} P</span>`;
+        }).join("")}
+      </div>
+    `;
+    host.appendChild(box);
+  }
+
+  // ---------- Hooks in bestehende Renderer ----------
+  const oldRenderCatalogJ = window.renderCatalog;
+  window.renderCatalog = function(){
+    if(typeof oldRenderCatalogJ === "function") oldRenderCatalogJ.apply(this, arguments);
+    renderCatalogQuestCategoryEditor();
+  };
+
+  const oldRenderSettingsJ = window.renderSettings;
+  window.renderSettings = function(){
+    if(typeof oldRenderSettingsJ === "function") oldRenderSettingsJ.apply(this, arguments);
+    // Optional: kleiner Hinweis in Settings (keine eigene UI nötig, Editor ist im Katalog)
+    const tab = document.getElementById("tab-settings");
+    if(tab && !document.getElementById("catHint")){
+      const hint = document.createElement("div");
+      hint.id = "catHint";
+      hint.className = "p-2 border rounded bg-slate-50 text-sm";
+      hint.innerHTML = "ℹ️ Kategorien verwaltest du im <b>Katalog</b> unter <i>„Quests zuordnen & verknüpfen“</i>.";
+      tab.appendChild(hint);
+    }
+  };
+
+  const oldRenderDashboardJ = window.renderDashboard;
+  window.renderDashboard = function(){
+    if(typeof oldRenderDashboardJ === "function") oldRenderDashboardJ.apply(this, arguments);
+    renderCategoryBadgesDash();
+  };
+
+  // Initial anzeigen
+  if(typeof window.renderDashboard==="function") window.renderDashboard();
+  if(typeof window.renderCatalog==="function") window.renderCatalog();
+
+})();
+</script>
+<!-- === /PATCH J === -->
 </body>
 </html>
