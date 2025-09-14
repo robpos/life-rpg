@@ -1,673 +1,664 @@
 <!doctype html>
-<html lang="de" class="h-full">
+<html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Life RPG</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Life RPG — v2 Baseline</title>
+
+  <!-- Tailwind (CDN) für schnelle, saubere UI -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    // Tailwind: Dark-Mode per .dark Klasse
-    tailwind.config = {
-      darkMode: 'class'
-    }
-  </script>
+
   <style>
+    /* ---------- Design Tokens / Theme ---------- */
+    html { color-scheme: light dark; }
     :root {
-      --card-bg: #ffffff;
-      --text: #0b0f19;
-      --muted: #475569;
+      --safe-top: env(safe-area-inset-top);
+      --safe-bottom: env(safe-area-inset-bottom);
+    }
+    body {
+      --bg: #f8fafc;      /* hell */
+      --fg: #111111;
+      --card: #ffffff;
+      --muted: #334155;
       --border: #e2e8f0;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100svh;
     }
-    .dark :root, .dark {
-      --card-bg: #0f172a; /* slate-900 */
-      --text: #0b0f19; /* wir erzwingen schwarz nur auf weißen Cards (siehe .ach-card) */
-      --muted: #94a3b8;
-      --border: #1f2937;
+    .dark body {
+      --bg: #0b1220;      /* dunkel */
+      --fg: #ffffff;
+      --card: #0f172a;
+      --muted: #cbd5e1;
+      --border: #1f2a44;
+      background: var(--bg);
+      color: var(--fg);
     }
-    html, body { height: 100%; }
-    body { background:#f8fafc; color:#111; }
-    .dark body { background:#0b1220; color:#e5e7eb; }
-    .btn { border-radius:.75rem; padding:.5rem 1rem; border:1px solid var(--border); background:#fff; }
-    .dark .btn { background:#111827; border-color:#374151; color:#e5e7eb; }
-    .input { width:100%; border-radius:.75rem; border:1px solid var(--border); padding:.5rem .75rem; background:#fff; color:#0b0f19; }
-    .dark .input { background:#0b1220; color:#e5e7eb; border-color:#374151; }
-    .tab { display:none; }
-    .tab.active { display:block; }
-    /* Header Safe Area */
-    header.safe { padding-top: calc(1rem + env(safe-area-inset-top)); }
-    /* Karten */
-    .card { background: var(--card-bg); border:1px solid var(--border); border-radius: .75rem; }
-    /* Achievements: immer schwarze Schrift auf weißem Kärtchen, auch im Dark-Mode */
-    .ach-card { background:#ffffff !important; color:#000000 !important; border:1px solid #e2e8f0; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+    }
+
+    /* ---------- Layout: Header & Views ---------- */
+    header.app {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding-top: calc(0.5rem + var(--safe-top)); /* Safe-area friendly */
+    }
+    .app-title {
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
+
+    main.app {
+      padding-bottom: calc(1rem + var(--safe-bottom));
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* Buttons & Inputs (hell/dunkel gut lesbar) */
+    .btn {
+      border-radius: .75rem;
+      border: 1px solid var(--border);
+      padding: .6rem .9rem;
+      background: var(--card);
+      color: var(--fg);
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+    .btn-danger {
+      background: #dc2626;
+      color: #fff;
+      border-color: #dc2626;
+    }
+    .input, select {
+      width: 100%;
+      border-radius: .75rem;
+      border: 1px solid var(--border);
+      padding: .55rem .8rem;
+      background: var(--card);
+      color: var(--fg);
+    }
+
+    /* Listenzeilen */
+    .row { background: var(--card); border:1px solid var(--border); border-radius:.75rem; padding:.6rem .8rem; }
+
+    /* Utility */
+    .mono { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
   </style>
 </head>
-<body class="h-full">
-  <div class="max-w-xl mx-auto min-h-full flex flex-col">
-    <!-- Header -->
-    <header class="safe px-4 pt-6 pb-3 sticky top-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-800">
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">🎮 Life RPG</h1>
-        <div class="flex items-center gap-2">
-          <button id="btnDark" class="btn">🌙</button>
-        </div>
-      </div>
-    </header>
+<body class="antialiased">
 
-    <!-- Main -->
-    <main class="flex-1 px-4 pb-28 space-y-4">
-      <!-- Dashboard -->
-      <section id="tab-dashboard" class="tab active space-y-4">
-        <div class="card p-3">
-          <div class="grid grid-cols-3 gap-2 text-sm">
-            <div><div class="font-semibold text-black">Punkte</div><div id="totalPoints" class="text-black">0</div></div>
-            <div><div class="font-semibold text-black">Level</div><div id="currentLevel" class="text-black">1</div></div>
-            <div><div class="font-semibold text-black">Sparstand</div><div class="text-black">€<span id="savingsTotal">0.00</span></div></div>
-          </div>
-          <div class="mt-2">
-            <div class="w-full bg-gray-200 dark:bg-slate-700 rounded h-3">
-              <div id="levelBar" class="bg-blue-500 h-3 rounded" style="width:0%"></div>
+  <!-- ===== Header ===== -->
+  <header class="app">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <button id="btnBack" class="btn px-3 py-2 hidden">
+        ← Zurück
+      </button>
+
+      <h1 id="headerTitle" class="app-title text-xl text-center flex-1">
+        Life RPG
+      </h1>
+
+      <button id="btnTheme" class="btn px-3 py-2" title="Hell/Dunkel umschalten">
+        🌗
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Inhalt ===== -->
+  <main class="app">
+    <div class="max-w-2xl mx-auto px-4 space-y-6">
+
+      <!-- ===== Hauptmenü ===== -->
+      <section id="view-menu" class="view active">
+        <!-- === MAINMENU === -->
+        <div class="space-y-4">
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm text-slate-500 dark:text-slate-300">Willkommen</div>
+                <div class="text-lg font-semibold">Was möchtest du tun?</div>
+              </div>
+              <div class="text-right">
+                <div class="text-sm text-slate-500 dark:text-slate-300">Level</div>
+                <div id="mmLevel" class="mono text-lg font-bold">—</div>
+              </div>
             </div>
-            <div id="levelNext" class="text-xs mt-1 text-slate-600 dark:text-slate-300"></div>
-          </div>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold mb-2">Achievements</h3>
-          <div id="achievements" class="space-y-2">
-            <!-- Achievements kommen als weiße Kärtchen mit schwarzer Schrift -->
-          </div>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold mb-2">Statistik (letzte 14 Tage)</h3>
-          <canvas id="statsChart" class="w-full h-40"></canvas>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold mb-2">Heute offen</h3>
-          <div id="todaySuggestions" class="space-y-2"></div>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold mb-2">Tagesziel</h3>
-          <div id="dailyGoalBox" class="p-2 border rounded bg-gray-50 dark:bg-slate-800 text-sm"></div>
-        </div>
-      </section>
-
-      <!-- Log -->
-      <section id="tab-log" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
-          <div class="grid grid-cols-2 gap-2">
-            <input type="date" id="logDate" class="input" />
-            <input type="number" id="logPoints" class="input" placeholder="Punkte (optional)" />
-          </div>
-          <div>
-            <label class="text-sm block mb-1">Quest</label>
-            <select id="logQuestSelect" class="input"></select>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <input type="number" id="logMalus" class="input" placeholder="Malus (z. B. -10)" />
-            <button id="btnAddEntry" class="btn bg-blue-600 text-white">Eintragen</button>
-          </div>
-        </div>
-
-        <div class="card p-0 overflow-hidden">
-          <div class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <span class="font-semibold">Log</span>
-            <button id="btnUndo" class="btn text-sm">↩️ Rückgängig</button>
-          </div>
-          <div id="logList" class="divide-y divide-slate-200 dark:divide-slate-800">
-            <!-- Einträge -->
-          </div>
-        </div>
-      </section>
-
-      <!-- Catalog -->
-      <section id="tab-catalog" class="tab space-y-4">
-        <div class="card p-3 space-y-3">
-          <h3 class="font-bold">Neue Quest</h3>
-          <input id="qName" class="input" placeholder="Questname (z. B. 'Keller aufräumen')" />
-          <div class="grid grid-cols-2 gap-2">
-            <input id="qPoints" type="number" class="input" placeholder="Punkte" />
-            <select id="qBoss" class="input">
-              <option value="false">Normale Quest</option>
-              <option value="true">Bossquest</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="font-semibold">Kategorien (Mehrfachauswahl)</label>
-            <div id="catMulti" class="mt-1 space-y-2">
-              <!-- Checkboxes + Multiplier-Felder -->
+            <div class="mt-2 grid grid-cols-3 gap-3 text-center">
+              <div class="row">
+                <div class="text-xs text-slate-500 dark:text-slate-300">Punkte</div>
+                <div id="mmPoints" class="mono text-lg font-bold">—</div>
+              </div>
+              <div class="row">
+                <div class="text-xs text-slate-500 dark:text-slate-300">Sparstand</div>
+                <div class="mono text-lg font-bold">€<span id="mmSavings">—</span></div>
+              </div>
+              <div class="row">
+                <div class="text-xs text-slate-500 dark:text-slate-300">Einträge</div>
+                <div id="mmEntries" class="mono text-lg font-bold">—</div>
+              </div>
             </div>
-            <button id="btnAddCategoryQuick" class="btn text-sm mt-1">+ Kategorie anlegen</button>
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
-            <input id="qCooldown" type="number" class="input" placeholder="Sperr-Tage (Sonderaufgabe)" />
-            <input id="qPenaltyDays" type="number" class="input" placeholder="Inaktivität bestrafen nach (Tagen)" />
-          </div>
-
-          <button id="btnAddQuest" class="btn bg-blue-600 text-white w-full">Zur Liste hinzufügen</button>
-        </div>
-
-        <div class="card p-0 overflow-hidden">
-          <div class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-semibold">Katalog</div>
-          <div id="catalogList" class="divide-y divide-slate-200 dark:divide-slate-800"></div>
-        </div>
-      </section>
-
-      <!-- Milestones -->
-      <section id="tab-milestones" class="tab space-y-4">
-        <div class="card p-3">
-          <h3 class="font-bold mb-2">Meilensteine – Kategorien</h3>
-          <div id="milestoneCats" class="space-y-2"></div>
-        </div>
-      </section>
-
-      <!-- Category Detail -->
-      <section id="tab-catdetail" class="tab space-y-4">
-        <div class="card p-3">
-          <div class="flex items-center justify-between">
-            <h3 id="catDetailTitle" class="font-bold">Kategorie</h3>
-            <button id="btnBackFromCat" class="btn text-sm">← Zurück</button>
-          </div>
-          <div id="catDetailSummary" class="text-sm text-slate-600 dark:text-slate-300 mt-1"></div>
-        </div>
-        <div class="card p-3">
-          <h4 class="font-semibold mb-2">Aufgaben in dieser Kategorie</h4>
-          <div id="catDetailQuests" class="space-y-2"></div>
-        </div>
-      </section>
-
-      <!-- Settings -->
-      <section id="tab-settings" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
-          <h3 class="font-bold">Einstellungen</h3>
-          <label class="text-sm">€ pro Punkt
-            <input id="sEuro" type="number" step="0.01" class="input">
-          </label>
-          <label class="text-sm">Basis-Inkrement
-            <input id="sBase" type="number" class="input">
-          </label>
-          <label class="text-sm">Wachstum (z. B. 0.1 = +10%)
-            <input id="sGrowth" type="number" step="0.01" class="input">
-          </label>
-          <label class="text-sm">Tagesziel (Einträge)
-            <input id="sDailyGoal" type="number" class="input">
-          </label>
-        </div>
-
-        <div class="card p-3 space-y-2">
-          <h3 class="font-bold">Daten</h3>
-          <div class="flex gap-2">
-            <button id="btnExport" class="btn">Export</button>
-            <input type="file" id="fileImport" class="hidden" accept="application/json" />
-            <button id="btnImport" class="btn">Import</button>
-            <button id="btnReset" class="btn bg-red-600 text-white">Alles löschen</button>
+          <!-- Navigationsliste -->
+          <div class="space-y-3">
+            <button class="btn w-full flex items-center justify-between" data-go="dashboard">
+              <span>📊 Dashboard</span>
+              <span class="text-slate-500 dark:text-slate-300">Übersicht</span>
+            </button>
+            <button class="btn w-full flex items-center justify-between" data-go="log">
+              <span>📝 Log</span>
+              <span class="text-slate-500 dark:text-slate-300">Eintragen & Verlauf</span>
+            </button>
+            <button class="btn w-full flex items-center justify-between" data-go="catalog">
+              <span>📚 Katalog</span>
+              <span class="text-slate-500 dark:text-slate-300">Vorlagen</span>
+            </button>
+            <button class="btn w-full flex items-center justify-between" data-go="categories">
+              <span>🗂️ Kategorien</span>
+              <span class="text-slate-500 dark:text-slate-300">(inkl. negativ)</span>
+            </button>
+            <button class="btn w-full flex items-center justify-between" data-go="missions">
+              <span>🧭 Missionen</span>
+              <span class="text-slate-500 dark:text-slate-300">Schrittfolgen</span>
+            </button>
+            <button class="btn w-full flex items-center justify-between" data-go="milestones">
+              <span>🏅 Meilensteine</span>
+              <span class="text-slate-500 dark:text-slate-300">automatisch</span>
+            </button>
+            <button class="btn w-full flex items-center justify-between" data-go="settings">
+              <span>⚙️ Einstellungen</span>
+              <span class="text-slate-500 dark:text-slate-300">Export/Import</span>
+            </button>
           </div>
         </div>
       </section>
-    </main>
 
-    <!-- Bottom Nav -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-      <div class="max-w-xl mx-auto grid grid-cols-5 text-center">
-        <button data-tab="dashboard" class="py-3 text-blue-600">Dashboard</button>
-        <button data-tab="log" class="py-3">Log</button>
-        <button data-tab="catalog" class="py-3">Katalog</button>
-        <button data-tab="milestones" class="py-3">Meilensteine</button>
-        <button data-tab="settings" class="py-3">Einstellungen</button>
-      </div>
-    </nav>
-  </div>
+      <!-- ===== Dashboard (leicht) ===== -->
+      <section id="view-dashboard" class="view">
+        <div class="space-y-4">
+          <div class="grid md:grid-cols-3 gap-3">
+            <div class="row">
+              <div class="text-xs text-slate-500 dark:text-slate-300">Punkte</div>
+              <div id="dbPoints" class="mono text-2xl font-extrabold">0</div>
+            </div>
+            <div class="row">
+              <div class="text-xs text-slate-500 dark:text-slate-300">Level</div>
+              <div id="dbLevel" class="mono text-2xl font-extrabold">1</div>
+            </div>
+            <div class="row">
+              <div class="text-xs text-slate-500 dark:text-slate-300">Sparstand</div>
+              <div class="mono text-2xl font-extrabold">€<span id="dbSavings">0.00</span></div>
+            </div>
+          </div>
 
+          <div class="card p-4">
+            <div class="font-semibold mb-2">Heute</div>
+            <div id="dbToday" class="text-sm text-slate-600 dark:text-slate-300">Noch keine Einträge.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Log (minimal funktionsfähig) ===== -->
+      <section id="view-log" class="view">
+        <div class="space-y-4">
+          <div class="card p-4 space-y-2">
+            <div class="grid md:grid-cols-4 gap-2">
+              <input id="logDate" type="date" class="input" />
+              <input id="logQuest" class="input md:col-span-2" placeholder="Questname" />
+              <input id="logPoints" type="number" class="input" placeholder="Punkte" />
+            </div>
+            <div class="flex gap-2">
+              <button id="btnAddLog" class="btn btn-primary">Eintragen</button>
+              <button id="btnUndo" class="btn">Rückgängig</button>
+            </div>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold mb-2">Verlauf</div>
+            <div id="logList" class="space-y-2 text-sm"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Katalog (Stub) ===== -->
+      <section id="view-catalog" class="view">
+        <div class="space-y-4">
+          <div class="card p-4 space-y-2">
+            <div class="grid md:grid-cols-3 gap-2">
+              <input id="catName" class="input md:col-span-2" placeholder="Neue Questvorlage (z. B. Sport)" />
+              <input id="catPts" type="number" class="input" placeholder="Punkte" />
+            </div>
+            <button id="btnAddTemplate" class="btn btn-primary">Zur Liste hinzufügen</button>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold mb-2">Vorlagen</div>
+            <div id="catalogList" class="space-y-2"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Kategorien (Stub) ===== -->
+      <section id="view-categories" class="view">
+        <div class="space-y-4">
+          <div class="card p-4">
+            <div class="font-semibold mb-2">Kategorien (inkl. negativ)</div>
+            <div id="catOverview" class="text-sm text-slate-600 dark:text-slate-300">
+              Wird in Phase 3 ausgebaut. (Baseline zeigt nur Platzhalter)
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Missionen (Stub) ===== -->
+      <section id="view-missions" class="view">
+        <div class="space-y-4">
+          <div class="card p-4">
+            <div class="font-semibold mb-2">Missionen</div>
+            <div class="text-sm text-slate-600 dark:text-slate-300">
+              Editor & Abhängigkeiten folgen in Phase 5.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Meilensteine (Stub) ===== -->
+      <section id="view-milestones" class="view">
+        <div class="space-y-4">
+          <div class="card p-4">
+            <div class="font-semibold mb-2">Meilensteine</div>
+            <div class="text-sm text-slate-600 dark:text-slate-300">
+              Automatische Generierung folgt in Phase 6.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Einstellungen ===== -->
+      <section id="view-settings" class="view">
+        <div class="space-y-4">
+          <div class="card p-4 space-y-2">
+            <div class="grid md:grid-cols-3 gap-2">
+              <label class="text-sm">
+                € pro Punkt
+                <input id="setEuro" type="number" step="0.01" class="input" />
+              </label>
+              <label class="text-sm">
+                Level-Basis
+                <input id="setBase" type="number" class="input" />
+              </label>
+              <label class="text-sm">
+                Wachstum
+                <input id="setGrowth" type="number" step="0.01" class="input" />
+              </label>
+            </div>
+          </div>
+
+          <div class="card p-4 space-y-2">
+            <div class="font-semibold">Daten</div>
+            <div class="flex flex-wrap gap-2">
+              <button id="btnExport" class="btn">Export</button>
+              <input id="fileImport" type="file" accept="application/json" class="hidden" />
+              <button id="btnImport" class="btn">Import</button>
+              <button id="btnWipe" class="btn btn-danger">Alles löschen</button>
+            </div>
+            <div id="migInfo" class="text-xs text-slate-500 dark:text-slate-300 mt-1">
+              Migration aus v1 erfolgt automatisch, falls vorhanden.
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===== App Script ===== -->
   <script>
-  // ============= State & Storage =============
-  const SKEY="lifeRPG_cleanV2";
-  const defaultState={
-    log:[],
-    catalog:[], // {id,name,points,boss:boolean,categories:[{id,mult}], cooldownDays?:number, penaltyDays?:number}
-    categories:[ // Start mit zwei Beispielen + "Sonstige" immer implizit 0
-      {id:"sport", name:"Sport", negative:false, linkTo:null},
-      {id:"handwerk", name:"Handwerk", negative:false, linkTo:null}
-    ],
-    settings:{
-      euro:0.10, base:100, growth:0.10, dailyGoal:3,
-      dark:false,
+  ;(() => {
+    // ---------- Storage Keys & Version ----------
+    const KEY_V2 = "lifeRPG_v2";
+    const KEY_V1 = "lifeRPG_p1";
+    const SCHEMA_VERSION = 2;
+
+    // ---------- Default State ----------
+    const defaultState = {
+      version: SCHEMA_VERSION,
+      createdAt: new Date().toISOString(),
+      settings: { euro: 0.10, base: 100, growth: 0.10, dark: false },
+      log: [],                  // [{date, quest, points, base?}]
+      catalog: [],              // [{name, points}]
+      categories: [],           // Phase 3
+      missions: [],             // Phase 5
+      milestones: []            // Phase 6
+    };
+
+    // ---------- Load / Save ----------
+    function loadV2() {
+      try {
+        const raw = localStorage.getItem(KEY_V2);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch { return null; }
     }
-  };
-  let state=load();
-
-  function load(){ try{return JSON.parse(localStorage.getItem(SKEY))||defaultState;}catch{ return defaultState; } }
-  function save(){ localStorage.setItem(SKEY,JSON.stringify(state)); }
-
-  // Migration (alte keys übernehmen)
-  (function migrate(){
-    if(!state.settings) state.settings = {euro:0.10, base:100, growth:0.10, dailyGoal:3, dark:false};
-    state.categories = state.categories||[];
-    state.catalog = state.catalog||[];
-    state.log = state.log||[];
-    save();
-  })();
-
-  // ============= Helpers =============
-  const todayISO = ()=> new Date().toISOString().slice(0,10);
-  function totalPoints(){ return state.log.reduce((s,e)=>s+e.points,0); }
-  function levelForPoints(p){
-    let lvl=1; let need=state.settings.base; let rem=p;
-    while(rem>=need){ lvl++; rem -= need; need = Math.round(need*(1+state.settings.growth)); }
-    return lvl;
-  }
-  function levelProgress(p){
-    let need=state.settings.base; let rem=p; let lvl=1; let passed=0;
-    while(rem>=need){ lvl++; rem -= need; passed += need; need = Math.round(need*(1+state.settings.growth)); }
-    const pct = Math.min(100, Math.round((rem/need)*100));
-    return {lvl, pct, toNext: need-rem};
-  }
-  function questSumPoints(questName){
-    return state.log.filter(e=>e.quest===questName).reduce((s,e)=>s+e.points,0);
-  }
-  function questLevel(questName){
-    // 100, 110, 120, ... (arithm. Steigerung +10)
-    const sum = questSumPoints(questName);
-    let lvl=0, need=100, rem=sum;
-    while(rem>=need){ lvl++; rem-=need; need+=10; }
-    return {lvl, next:need, rem};
-  }
-  function sumCategoryPoints(catId){
-    // Summe aller Logpunkte für Quests, die diese Kategorie enthalten (zum Logzeitpunkt ggf. ohne Cat -> zählt nicht)
-    // Vereinfachung: wir werten nach aktuellem Katalog-Mapping
-    const namesInCat = new Set(state.catalog.filter(q=>(q.categories||[]).some(c=>c.id===catId)).map(q=>q.name));
-    return state.log.filter(e=>namesInCat.has(e.quest)).reduce((s,e)=>s+e.points,0);
-  }
-
-  // ============= Dark Mode =============
-  function applyDark(){ document.documentElement.classList.toggle('dark', !!state.settings.dark); }
-  document.getElementById("btnDark").addEventListener("click",()=>{
-    state.settings.dark = !state.settings.dark; save(); applyDark();
-  });
-  applyDark();
-
-  // ============= Dashboard Render =============
-  function renderDashboard(){
-    const pts = totalPoints();
-    const {lvl,pct,toNext} = levelProgress(pts);
-    document.getElementById("totalPoints").textContent = pts;
-    document.getElementById("currentLevel").textContent = lvl;
-    document.getElementById("savingsTotal").textContent = (pts*state.settings.euro).toFixed(2);
-    document.getElementById("levelBar").style.width = pct+"%";
-    document.getElementById("levelNext").textContent = `Noch ${toNext} Punkte bis Level ${lvl+1}`;
-    renderAchievements();
-    renderStats();
-    renderTodaySuggestions();
-    renderDailyGoal();
-  }
-
-  // Achievements (einfaches Beispiel; weiße Karten mit schwarzem Text)
-  function renderAchievements(){
-    const box = document.getElementById("achievements");
-    const total = totalPoints();
-    const lvl = levelForPoints(total);
-    const ach = [
-      {ok: total>=100, text:"100 Punkte erreicht"},
-      {ok: lvl>=5, text:"Level 5 erreicht"},
-      {ok: state.log.length>=20, text:"20 Einträge im Log"}
-    ];
-    box.innerHTML = ach.map(a=>`
-      <div class="ach-card p-2 rounded">
-        ${a.ok?'✅':'⬜️'} ${a.text}
-      </div>
-    `).join("");
-  }
-
-  // Stats (14 Tage Balken)
-  function renderStats(){
-    const cvs=document.getElementById("statsChart");
-    const ctx=cvs.getContext("2d");
-    const W=cvs.width=cvs.clientWidth||320;
-    const H=cvs.height=cvs.clientHeight||160;
-    const days=[];
-    const today=new Date();
-    for(let i=13;i>=0;i--){
-      const d=new Date(today); d.setDate(d.getDate()-i);
-      const iso=d.toISOString().slice(0,10);
-      const sum=state.log.filter(e=>e.date===iso).reduce((s,e)=>s+e.points,0);
-      days.push({label:iso.slice(5),value:sum});
+    function saveV2() {
+      localStorage.setItem(KEY_V2, JSON.stringify(state));
     }
-    ctx.clearRect(0,0,W,H);
-    const max=Math.max(10,...days.map(d=>d.value));
-    const barW=W/days.length*0.6;
-    days.forEach((d,i)=>{
-      const x=i*(W/days.length)+barW*0.2;
-      const h=(d.value/max)*(H-20);
-      const y=H-h-20;
-      ctx.fillStyle="#3b82f6";
-      ctx.fillRect(x,y,barW,h);
-      ctx.fillStyle="#94a3b8";
-      ctx.font="10px sans-serif";
-      if(i%2===0)ctx.fillText(d.label,x,H-5);
-    });
-  }
-  window.addEventListener("resize",renderStats);
 
-  // Heute offen
-  function renderTodaySuggestions(){
-    const box=document.getElementById("todaySuggestions");
-    const t=todayISO();
-    const doneToday=new Set(state.log.filter(e=>e.date===t).map(e=>e.quest));
-    const available=state.catalog.filter(q=>!doneToday.has(q.name));
-    box.innerHTML = available.slice(0,5).map(q=>
-      `<button data-sug="${q.name}" class="btn w-full text-left">➕ ${q.name} (+${q.points})</button>`
-    ).join("") || `<div class="text-slate-500 text-sm">Alles erledigt 🎉</div>`;
-    box.querySelectorAll("[data-sug]").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        quickAdd(btn.getAttribute("data-sug"));
-      });
-    });
-  }
+    // ---------- Migration v1 -> v2 (sanft, einmalig) ----------
+    function migrateFromV1() {
+      try {
+        const raw = localStorage.getItem(KEY_V1);
+        if (!raw) return null;
+        const v1 = JSON.parse(raw);
+        const s = structuredClone(defaultState);
 
-  // Tagesziel
-  function renderDailyGoal(){
-    const el=document.getElementById("dailyGoalBox");
-    const t=todayISO();
-    const count=state.log.filter(e=>e.date===t).length;
-    const goal=state.settings.dailyGoal||3;
-    if(count>=goal){
-      el.innerHTML = `✅ Tagesziel erreicht (${count}/${goal}) 🎉`;
-      el.className="p-2 border rounded bg-green-100 text-sm";
-    }else{
-      el.innerHTML = `🔄 ${count}/${goal} erledigt – noch ${goal-count} offen`;
-      el.className="p-2 border rounded bg-yellow-100 text-sm";
+        // Übernehmen, wo vorhanden
+        if (Array.isArray(v1.log)) s.log = v1.log;
+        if (Array.isArray(v1.catalog)) s.catalog = v1.catalog;
+        if (v1.settings) {
+          s.settings.euro   = Number(v1.settings.euro ?? s.settings.euro);
+          s.settings.base   = Number(v1.settings.base ?? s.settings.base);
+          s.settings.growth = Number(v1.settings.growth ?? s.settings.growth);
+        }
+        s.version = SCHEMA_VERSION;
+        return s;
+      } catch {
+        return null;
+      }
     }
-  }
 
-  // ============= Log =============
-  function renderLog(){
-    document.getElementById("logDate").value=todayISO();
-    // Quest Schnellwahl
-    const sel=document.getElementById("logQuestSelect");
-    sel.innerHTML = state.catalog.map(q=>`<option value="${q.name}">${q.boss?'👑 ':''}${q.name} (+${q.points})</option>`).join("");
-    // Liste
-    const list=document.getElementById("logList");
-    if(state.log.length===0){ list.innerHTML = `<div class="px-3 py-4 text-slate-500">Noch keine Einträge.</div>`; return; }
-    list.innerHTML = state.log.slice().reverse().map(e=>{
-      const neg = e.points<0;
-      return `<div class="px-3 py-2 ${neg?'bg-red-50 dark:bg-red-900/20':''}">
-        <div class="text-sm">${e.date} • ${e.quest} <span class="${neg?'text-red-600':'text-green-600'}">(${e.points>0?'+':''}${e.points})</span></div>
-      </div>`;
-    }).join("");
-  }
-
-  function addLog(){
-    const date=document.getElementById("logDate").value||todayISO();
-    const questName=document.getElementById("logQuestSelect").value;
-    const manual=Number(document.getElementById("logPoints").value||0);
-    const malus=Number(document.getElementById("logMalus").value||0);
-    const q=state.catalog.find(x=>x.name===questName);
-    let base = manual>0?manual:(q?q.points:0);
-    let pts = base + malus;
-    if(!questName) return alert("Bitte eine Quest auswählen.");
-    state.log.push({date, quest: questName, points: Math.round(pts)});
-    save(); renderAll();
-    document.getElementById("logPoints").value="";
-    document.getElementById("logMalus").value="";
-  }
-  document.getElementById("btnAddEntry").addEventListener("click",addLog);
-  document.getElementById("btnUndo").addEventListener("click",()=>{
-    if(!state.log.length) return;
-    state.log.pop(); save(); renderAll();
-  });
-
-  function quickAdd(name){
-    const q=state.catalog.find(x=>x.name===name);
-    if(!q) return;
-    const pts=q.points;
-    state.log.push({date:todayISO(), quest:q.name, points:pts});
-    save(); renderAll();
-  }
-
-  // ============= Catalog & Categories =============
-  function ensureCategoryList(){
-    // Fügt „Sonstige“ als virtuellen Sammelpunkt im Milestone-View hinzu (nicht in state.categories speichern).
-    return [{id:"__none", name:"Sonstige (ohne Kategorie)", negative:false, linkTo:null}].concat(state.categories);
-  }
-
-  function renderCatMulti(){
-    const el=document.getElementById("catMulti");
-    const cats=state.categories;
-    if(cats.length===0){
-      el.innerHTML = `<div class="text-sm text-slate-500">Noch keine Kategorien. Lege über „+ Kategorie anlegen“ eine neue an.</div>`;
-      return;
+    // ---------- Ensure Schema / Defaults ----------
+    function ensureSchema(obj) {
+      const s = Object.assign({}, defaultState, obj || {});
+      s.version = SCHEMA_VERSION;
+      s.settings = Object.assign({}, defaultState.settings, s.settings || {});
+      s.log = Array.isArray(s.log) ? s.log : [];
+      s.catalog = Array.isArray(s.catalog) ? s.catalog : [];
+      s.categories = Array.isArray(s.categories) ? s.categories : [];
+      s.missions = Array.isArray(s.missions) ? s.missions : [];
+      s.milestones = Array.isArray(s.milestones) ? s.milestones : [];
+      return s;
     }
-    el.innerHTML = cats.map(c=>`
-      <label class="flex items-center gap-2">
-        <input type="checkbox" class="cat-check" data-id="${c.id}">
-        <span>${c.name}${c.negative?' (negativ)':''}</span>
-        <input type="number" step="0.1" class="input cat-mult flex-1" data-id="${c.id}" placeholder="Multiplikator (z.B. 1.0)" />
-      </label>
-    `).join("");
-  }
 
-  function addQuest(){
-    const name=document.getElementById("qName").value.trim();
-    const points=Number(document.getElementById("qPoints").value||0);
-    const boss=document.getElementById("qBoss").value==="true";
-    const cooldownDays=Number(document.getElementById("qCooldown").value||0);
-    const penaltyDays=Number(document.getElementById("qPenaltyDays").value||0);
-    if(!name) return alert("Bitte Questname eingeben");
-    const cats=[];
-    document.querySelectorAll("#catMulti .cat-check").forEach(ch=>{
-      if(ch.checked){
-        const id=ch.getAttribute("data-id");
-        const multInput=document.querySelector(`#catMulti .cat-mult[data-id="${id}"]`);
-        const mult=parseFloat(multInput.value||"1.0");
-        cats.push({id, mult:isFinite(mult)?mult:1.0});
+    // ---------- Init State ----------
+    let state = loadV2();
+    if (!state) {
+      const migrated = migrateFromV1();
+      state = ensureSchema(migrated || defaultState);
+      saveV2();
+    } else {
+      state = ensureSchema(state);
+      saveV2();
+    }
+
+    // ---------- Theme ----------
+    function applyTheme() {
+      const html = document.documentElement;
+      if (state.settings.dark) html.classList.add("dark");
+      else html.classList.remove("dark");
+    }
+    applyTheme();
+
+    // ---------- Helpers ----------
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    const todayISO = () => new Date().toISOString().slice(0,10);
+
+    function totalPoints() { return state.log.reduce((s,e) => s + (Number(e.points)||0), 0); }
+    function totalSavings() { return totalPoints() * Number(state.settings.euro || 0); }
+
+    function levelForPoints(p) {
+      let lvl=1, need=Number(state.settings.base||100), growth=Number(state.settings.growth||0.1);
+      let pts=p;
+      while (pts >= need) { lvl++; pts -= need; need = Math.round(need * (1 + growth)); }
+      return Math.max(1,lvl);
+    }
+
+    // ---------- Router ----------
+    let viewStack = ["menu"];
+    const headerTitle = $("#headerTitle");
+    const btnBack = $("#btnBack");
+
+    function showView(id, push=true) {
+      $$(".view").forEach(v => v.classList.remove("active"));
+      $("#view-" + id).classList.add("active");
+
+      // Header
+      const titleMap = {
+        menu: "Life RPG",
+        dashboard: "Dashboard",
+        log: "Log",
+        catalog: "Katalog",
+        categories: "Kategorien",
+        missions: "Missionen",
+        milestones: "Meilensteine",
+        settings: "Einstellungen"
+      };
+      headerTitle.textContent = titleMap[id] || "Life RPG";
+
+      // Back sichtbar außer im Menü
+      if (id === "menu") {
+        btnBack.classList.add("hidden");
+      } else {
+        btnBack.classList.remove("hidden");
+      }
+
+      if (push) {
+        // gleiche Seite nicht doppelt stapeln
+        if (viewStack[viewStack.length-1] !== id) viewStack.push(id);
+      }
+      renderAll();
+    }
+
+    btnBack.addEventListener("click", () => {
+      // mindestens zum Menü
+      if (viewStack.length <= 1) {
+        viewStack = ["menu"];
+        showView("menu", false);
+      } else {
+        viewStack.pop(); // aktuelle weg
+        const prev = viewStack[viewStack.length-1] || "menu";
+        showView(prev, false);
       }
     });
-    state.catalog.push({id:name.toLowerCase().replace(/\s+/g,'_')+"_"+Date.now(), name, points, boss, categories:cats, cooldownDays, penaltyDays});
-    save(); renderAll();
-    document.getElementById("qName").value="";
-    document.getElementById("qPoints").value="";
-    document.getElementById("qCooldown").value="";
-    document.getElementById("qPenaltyDays").value="";
-    // uncheck
-    document.querySelectorAll("#catMulti .cat-check").forEach(ch=>ch.checked=false);
-    document.querySelectorAll("#catMulti .cat-mult").forEach(mi=>mi.value="");
-  }
-  document.getElementById("btnAddQuest").addEventListener("click",addQuest);
 
-  function renderCatalog(){
-    const list=document.getElementById("catalogList");
-    if(state.catalog.length===0){ list.innerHTML = `<div class="px-3 py-4 text-slate-500">Noch keine Quests.</div>`; return; }
-    list.innerHTML = state.catalog.map((q,i)=>`
-      <div class="px-3 py-2 flex items-start justify-between">
-        <div>
-          <div class="font-medium">${q.boss?'👑 ':''}${q.name} <span class="text-slate-500 dark:text-slate-400">(+${q.points})</span></div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">
-            Kategorien: ${(q.categories&&q.categories.length)?q.categories.map(cId=>{
-              const c=state.categories.find(x=>x.id===cId.id);
-              return c?`${c.name}${c.negative?' (negativ)':''}×${cId.mult}`:`?×${cId.mult}`;
-            }).join(", "):'—'}
-            ${q.cooldownDays?` • Sperre: ${q.cooldownDays}T`:''}
-            ${q.penaltyDays?` • Strafe nach: ${q.penaltyDays}T`:''}
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <button data-del="${i}" class="text-red-600 text-sm">Löschen</button>
-        </div>
-      </div>
-    `).join("");
-    list.querySelectorAll("[data-del]").forEach(b=>{
-      b.addEventListener("click",()=>{
-        state.catalog.splice(Number(b.getAttribute("data-del")),1);
-        save(); renderAll();
-      });
+    // Menü-Buttons
+    $$("#view-menu [data-go]").forEach(btn => {
+      btn.addEventListener("click", () => showView(btn.dataset.go));
     });
-  }
 
-  // Schnell „Kategorie anlegen“
-  document.getElementById("btnAddCategoryQuick").addEventListener("click",()=>{
-    const name = prompt("Kategoriename?");
-    if(!name) return;
-    const id = name.toLowerCase().replace(/\s+/g,'_');
-    const negative = confirm("Ist dies eine NEGATIVE Kategorie? (OK = ja)");
-    state.categories.push({id, name, negative, linkTo:null});
-    save(); renderAll();
-  });
-
-  // ============= Meilensteine =============
-  function renderMilestones(){
-    const box=document.getElementById("milestoneCats");
-    const cats = ensureCategoryList();
-    box.innerHTML = cats.map(c=>{
-      const sum = c.id==="__none"
-        ? state.log.filter(e=>{
-            // Quests ohne Kategorie:
-            const q=state.catalog.find(x=>x.name===e.quest);
-            return !q || !(q.categories&&q.categories.length);
-          }).reduce((s,e)=>s+e.points,0)
-        : sumCategoryPoints(c.id);
-
-      // auto milestones (Beispiel: 100/400/2500/… analog deiner Staffelung)
-      const tiers=[100,400,2500,10000].filter(t=>sum>=t);
-      const next = [100,400,2500,10000,50000].find(t=>t>sum) || "∞";
-
-      return `
-        <button class="w-full text-left p-3 border-b last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800"
-          data-catopen="${c.id}">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="font-semibold">${c.name}</div>
-              <div class="text-xs text-slate-600 dark:text-slate-300">Punkte in Kategorie: ${sum}</div>
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">
-              Erreicht: ${tiers.length} • Nächstes: ${next}
-            </div>
-          </div>
-        </button>
-      `;
-    }).join("");
-
-    box.querySelectorAll("[data-catopen]").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        openCategoryDetail(btn.getAttribute("data-catopen"));
-      });
+    // Theme toggle
+    $("#btnTheme").addEventListener("click", () => {
+      state.settings.dark = !state.settings.dark;
+      saveV2();
+      applyTheme();
+      renderAll();
     });
-  }
 
-  // Kategorie-Detailseite
-  function openCategoryDetail(catId){
-    const cats = ensureCategoryList();
-    const cat = cats.find(c=>c.id===catId);
-    document.getElementById("catDetailTitle").textContent = cat ? cat.name : "Kategorie";
-    // Quests der Kategorie:
-    const quests = catId==="__none"
-      ? state.catalog.filter(q=>!(q.categories&&q.categories.length))
-      : state.catalog.filter(q=>(q.categories||[]).some(c=>c.id===catId));
-
-    // Summe in Kategorie
-    const sum = catId==="__none"
-      ? state.log.filter(e=>{
-          const q=state.catalog.find(x=>x.name===e.quest);
-          return !q || !(q.categories&&q.categories.length);
-        }).reduce((s,e)=>s+e.points,0)
-      : sumCategoryPoints(catId);
-
-    document.getElementById("catDetailSummary").textContent = `Punkte in dieser Kategorie: ${sum}`;
-
-    const wrap=document.getElementById("catDetailQuests");
-    if(quests.length===0){
-      wrap.innerHTML = `<div class="text-slate-500">Keine Aufgaben in dieser Kategorie.</div>`;
-    }else{
-      wrap.innerHTML = quests.map(q=>{
-        const qs = questLevel(q.name); // {lvl,next,rem}
-        const pct = Math.min(100, Math.round((qs.next-qs.rem)/qs.next*100));
-        return `
-          <div class="p-2 border rounded">
-            <div class="flex items-center justify-between">
-              <div class="font-medium">${q.boss?'👑 ':''}${q.name}</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400">Quest-Level: ${qs.lvl}</div>
-            </div>
-            <div class="mt-2">
-              <div class="w-full bg-gray-200 dark:bg-slate-700 rounded h-2">
-                <div class="bg-blue-500 h-2 rounded" style="width:${pct}%"></div>
-              </div>
-              <div class="text-xs mt-1 text-slate-600 dark:text-slate-300">Noch ${qs.rem} / ${qs.next} bis Level ${qs.lvl+1}</div>
-            </div>
-          </div>
-        `;
-      }).join("");
+    // ---------- Views: Render ----------
+    function renderMenu() {
+      $("#mmLevel").textContent = levelForPoints(totalPoints());
+      $("#mmPoints").textContent = totalPoints();
+      $("#mmSavings").textContent = totalSavings().toFixed(2);
+      $("#mmEntries").textContent = state.log.length;
     }
 
-    switchTab("catdetail");
-  }
-  document.getElementById("btnBackFromCat").addEventListener("click",()=>switchTab("milestones"));
+    function renderDashboard() {
+      $("#dbPoints").textContent = totalPoints();
+      $("#dbLevel").textContent = levelForPoints(totalPoints());
+      $("#dbSavings").textContent = totalSavings().toFixed(2);
 
-  // ============= Settings =============
-  function bindSettings(){
-    const s=state.settings;
-    const sEuro=document.getElementById("sEuro");
-    const sBase=document.getElementById("sBase");
-    const sGrowth=document.getElementById("sGrowth");
-    const sGoal=document.getElementById("sDailyGoal");
-    sEuro.value=s.euro; sBase.value=s.base; sGrowth.value=s.growth; sGoal.value=s.dailyGoal;
-    sEuro.onchange=()=>{ s.euro=Number(sEuro.value||0); save(); renderAll(); }
-    sBase.onchange=()=>{ s.base=Number(sBase.value||100); save(); renderAll(); }
-    sGrowth.onchange=()=>{ s.growth=Number(sGrowth.value||0.1); save(); renderAll(); }
-    sGoal.onchange=()=>{ s.dailyGoal=Number(sGoal.value||1); save(); renderAll(); }
+      const t = todayISO();
+      const todayList = state.log.filter(e => e.date === t);
+      $("#dbToday").textContent = todayList.length
+        ? todayList.map(e => `${e.quest} (+${e.points})`).join(" · ")
+        : "Noch keine Einträge.";
+    }
 
-    document.getElementById("btnExport").addEventListener("click",()=>{
-      const blob=new Blob([JSON.stringify(state)],{type:"application/json"});
-      const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download="life_rpg_backup.json";
+    function renderLog() {
+      $("#logDate").value = todayISO();
+
+      const list = $("#logList");
+      if (!list) return;
+      if (state.log.length === 0) {
+        list.innerHTML = `<div class="text-slate-500 dark:text-slate-300">Noch nichts eingetragen.</div>`;
+        return;
+      }
+      list.innerHTML = state.log.slice().reverse().map(e =>
+        `<div class="row flex items-center justify-between">
+          <div>${e.date} • ${e.quest}</div>
+          <div class="mono font-semibold">+${e.points}</div>
+        </div>`
+      ).join("");
+    }
+
+    function renderCatalog() {
+      const wrap = $("#catalogList");
+      if (!wrap) return;
+      if (state.catalog.length === 0) {
+        wrap.innerHTML = `<div class="text-slate-500 dark:text-slate-300">Noch keine Vorlagen.</div>`;
+        return;
+      }
+      wrap.innerHTML = state.catalog.map((q,i) =>
+        `<div class="row flex items-center justify-between">
+          <div>📌 ${q.name} <span class="text-slate-500 dark:text-slate-300">(+${q.points})</span></div>
+          <button class="btn text-xs" data-use="${i}">Eintragen</button>
+        </div>`
+      ).join("");
+
+      // Schnell eintragen aus Vorlage
+      wrap.querySelectorAll("[data-use]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const q = state.catalog[Number(btn.dataset.use)];
+          const d = todayISO();
+          state.log.push({date:d, quest:q.name, points:Number(q.points)||0, base:q.points});
+          saveV2();
+          renderAll();
+          showView("log"); // direkt ins Log
+        });
+      });
+    }
+
+    function renderSettings() {
+      $("#setEuro").value = state.settings.euro;
+      $("#setBase").value = state.settings.base;
+      $("#setGrowth").value = state.settings.growth;
+    }
+
+    function renderAll() {
+      if ($("#view-menu").classList.contains("active")) renderMenu();
+      if ($("#view-dashboard").classList.contains("active")) renderDashboard();
+      if ($("#view-log").classList.contains("active")) renderLog();
+      if ($("#view-catalog").classList.contains("active")) renderCatalog();
+      if ($("#view-settings").classList.contains("active")) renderSettings();
+    }
+
+    // ---------- Events: Log ----------
+    $("#btnAddLog").addEventListener("click", () => {
+      const d = $("#logDate").value || todayISO();
+      const q = ($("#logQuest").value || "").trim();
+      const p = Number($("#logPoints").value || 0);
+      if (!q) { alert("Bitte Questname eingeben."); return; }
+      state.log.push({date:d, quest:q, points:p});
+      saveV2();
+      $("#logQuest").value = "";
+      $("#logPoints").value = "";
+      renderAll();
+    });
+
+    $("#btnUndo").addEventListener("click", () => {
+      if (!state.log.length) return;
+      state.log.pop();
+      saveV2();
+      renderAll();
+    });
+
+    // ---------- Events: Catalog ----------
+    $("#btnAddTemplate").addEventListener("click", () => {
+      const name = ($("#catName").value || "").trim();
+      const pts  = Number($("#catPts").value || 0);
+      if (!name || !pts) { alert("Name & Punkte angeben."); return; }
+      state.catalog.push({name, points:pts});
+      saveV2();
+      $("#catName").value = "";
+      $("#catPts").value = "";
+      renderAll();
+    });
+
+    // ---------- Events: Settings ----------
+    $("#setEuro").addEventListener("change", e => {
+      state.settings.euro = Number(e.target.value || 0);
+      saveV2(); renderAll();
+    });
+    $("#setBase").addEventListener("change", e => {
+      state.settings.base = Number(e.target.value || 100);
+      saveV2(); renderAll();
+    });
+    $("#setGrowth").addEventListener("change", e => {
+      state.settings.growth = Number(e.target.value || 0.1);
+      saveV2(); renderAll();
+    });
+
+    $("#btnExport").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "life_rpg_backup_v2.json";
       a.click();
     });
-    document.getElementById("btnImport").addEventListener("click",()=>{
-      document.getElementById("fileImport").click();
-    });
-    document.getElementById("fileImport").addEventListener("change",e=>{
-      const f=e.target.files[0]; if(!f) return;
-      const r=new FileReader();
-      r.onload=()=>{
-        try{ state=JSON.parse(r.result); save(); renderAll(); }
-        catch{ alert("Fehler beim Import"); }
+
+    $("#btnImport").addEventListener("click", () => $("#fileImport").click());
+    $("#fileImport").addEventListener("change", e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const incoming = JSON.parse(reader.result);
+          // sanfte Zusammenführung: nur bekannte Felder
+          state = ensureSchema(incoming);
+          saveV2();
+          renderAll();
+          alert("Import erfolgreich.");
+        } catch {
+          alert("Fehler beim Import.");
+        }
       };
-      r.readAsText(f);
+      reader.readAsText(f);
     });
-    document.getElementById("btnReset").addEventListener("click",()=>{
-      if(confirm("Alles wirklich löschen?")){
-        state=JSON.parse(JSON.stringify(defaultState));
-        save(); renderAll();
-      }
+
+    $("#btnWipe").addEventListener("click", () => {
+      if (!confirm("Wirklich ALLES löschen? (v2)")) return;
+      state = ensureSchema(defaultState);
+      saveV2();
+      renderAll();
+      showView("menu", false);
     });
-  }
 
-  // ============= Tabs =============
-  function switchTab(name){
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-    document.getElementById("tab-"+name).classList.add("active");
-    document.querySelectorAll("nav [data-tab]").forEach(b=>b.classList.remove("text-blue-600"));
-    const btn = document.querySelector(`nav [data-tab="${name}"]`);
-    if(btn) btn.classList.add("text-blue-600");
-  }
-  document.querySelectorAll("nav [data-tab]").forEach(btn=>{
-    btn.addEventListener("click",()=>switchTab(btn.getAttribute("data-tab")));
-  });
+    // ---------- Initial ----------
+    // Start im Menü
+    showView("menu", false);
+    $("#logDate").value = todayISO();
 
-  // ============= Render All =============
-  function renderAll(){
-    renderDashboard();
-    renderLog();
-    renderCatMulti();
-    renderCatalog();
-    renderMilestones();
-    bindSettings();
-  }
+    // Exponiere für Debug (optional)
+    window._lifeRPG = { get state(){return state;}, save: saveV2, showView };
 
-  // Init
-  renderAll();
+    /* === PATCHES ANCHOR — DO NOT REMOVE === */
+  })();
   </script>
+
 </body>
 </html>
