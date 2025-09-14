@@ -1,204 +1,184 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" class="">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Life RPG — Clean Build</title>
+  <title>Life RPG</title>
+  <script>
+    // Tailwind CDN config – Darkmode via .dark class
+    tailwind = { config: { darkMode: 'class' } };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root { color-scheme: light only; }
-    html,body { height:100%; }
-    body { background:#f8fafc; color:#0f172a; }
+    :root {
+      --safe-top: env(safe-area-inset-top);
+      --safe-bottom: env(safe-area-inset-bottom);
+    }
+    body { background:#f8fafc; color:#111; }
+    .dark body { background:#0b1220; color:#e5e7eb; }
     .tab { display:none; }
     .tab.active { display:block; }
     .btn { border-radius:.75rem; padding:.5rem 1rem; border:1px solid #cbd5e1; background:#fff; }
+    .dark .btn { border-color:#334155; background:#111827; color:#e5e7eb; }
     .input { width:100%; border-radius:.75rem; border:1px solid #cbd5e1; padding:.5rem .75rem; background:#fff; }
-    .card { background:#fff; border:1px solid #e2e8f0; border-radius:.75rem; }
-    .badge { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#e2e8f0; }
-    .muted { color:#64748b; }
-    .mono { font-variant-numeric:tabular-nums; }
-    canvas#fx{ position:fixed; inset:0; pointer-events:none; z-index:30; }
+    .dark .input { border-color:#334155; background:#0f172a; color:#e5e7eb; }
+    header.safe { padding-top: calc(var(--safe-top) + 12px); }
+    nav.safe { padding-bottom: calc(var(--safe-bottom) + 4px); }
+    canvas { display:block; }
   </style>
 </head>
 <body>
-  <canvas id="fx"></canvas>
-
-  <div class="max-w-xl mx-auto min-h-full flex flex-col">
-    <header class="px-4 pt-6 pb-3 sticky top-0 bg-white/70 backdrop-blur z-10 border-b">
-      <h1 class="text-2xl font-bold flex items-center gap-2">🎮 Life RPG</h1>
+  <div class="max-w-xl mx-auto min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="safe px-4 pt-4 pb-3 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur z-10 border-b border-slate-200 dark:border-slate-700">
+      <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold flex items-center gap-2">🎮 Life RPG</h1>
+        <button id="themeToggle" class="btn text-sm">🌙/☀️</button>
+      </div>
     </header>
 
+    <!-- Main -->
     <main class="flex-1 px-4 pb-28 space-y-4">
       <!-- Dashboard -->
       <section id="tab-dashboard" class="tab active space-y-4">
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="card p-3"><div class="text-xs muted">Punkte</div><div class="mono text-xl" id="totalPoints">0</div></div>
-          <div class="card p-3"><div class="text-xs muted">Level</div><div class="mono text-xl" id="currentLevel">1</div></div>
-          <div class="card p-3"><div class="text-xs muted">Sparen (€)</div><div class="mono text-xl" id="savingsTotal">0.00</div></div>
+        <div class="grid grid-cols-3 gap-3 text-sm">
+          <div class="p-3 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            Punkte<br><span id="totalPoints" class="text-lg font-bold">0</span>
+          </div>
+          <div class="p-3 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            Level<br><span id="currentLevel" class="text-lg font-bold">1</span>
+          </div>
+          <div class="p-3 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            Sparstand<br>€<span id="savingsTotal" class="text-lg font-bold">0.00</span>
+          </div>
         </div>
 
-        <div class="card p-3">
+        <div>
           <h3 class="font-bold">Level-Fortschritt</h3>
-          <div class="w-full bg-gray-200 rounded h-3 mt-2"><div id="levelBar" class="bg-blue-500 h-3 rounded" style="width:0%"></div></div>
-          <div id="levelNext" class="text-xs mt-1 muted"></div>
+          <div id="levelBar"></div>
         </div>
 
-        <div class="card p-3">
-          <h3 class="font-bold">Mini-Challenge</h3>
-          <div id="dailyChallengeBox" class="text-sm mt-1"></div>
+        <div>
+          <h3 class="font-bold">Achievements</h3>
+          <div id="achievements" class="space-y-2"></div>
         </div>
 
-        <div class="card p-3">
+        <div>
+          <h3 class="font-bold">Statistik (letzte 14 Tage)</h3>
+          <canvas id="statsChart" class="w-full h-40 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"></canvas>
+        </div>
+
+        <div>
           <h3 class="font-bold">Heute offen</h3>
-          <div id="todaySuggestions" class="space-y-2 mt-2"></div>
+          <div id="todaySuggestions" class="space-y-2"></div>
         </div>
 
-        <div class="card p-3">
+        <div>
           <h3 class="font-bold">Tagesziel</h3>
-          <div id="dailyGoalBox" class="p-2 border rounded bg-gray-50 text-sm mt-2"></div>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold">Statistik (14 Tage)</h3>
-          <canvas id="statsChart" class="w-full h-40 mt-2"></canvas>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold">Meilensteine (automatisch)</h3>
-          <div id="milestonesBox" class="space-y-1 mt-2 text-sm"></div>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold">Kategorien</h3>
-          <div id="categoriesBox" class="mt-2 space-y-2"></div>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold">Timed Quests</h3>
-          <div id="timedBox" class="mt-2 space-y-1"></div>
-          <button id="btnAddTimed" class="btn mt-2 bg-purple-600 text-white">+ Timed Quest</button>
-        </div>
-
-        <div class="card p-3">
-          <h3 class="font-bold">Tages-Event</h3>
-          <div id="eventBox" class="mt-2 text-sm"></div>
+          <div id="dailyGoalBox" class="p-2 border rounded bg-gray-50 dark:bg-slate-800 text-sm"></div>
         </div>
       </section>
 
       <!-- Log -->
       <section id="tab-log" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
+        <div class="space-y-2">
+          <input type="date" id="logDate" class="input" />
+          <input type="text" id="logQuest" class="input" placeholder="Questname (oder leer lassen & aus Katalog wählen)" />
           <div class="grid grid-cols-2 gap-2">
-            <input type="date" id="logDate" class="input" />
-            <input type="number" id="logPoints" class="input" placeholder="Punkte (leer = Katalogwert)" />
-          </div>
-          <input type="text" id="logQuest" class="input" placeholder="Questname (oder aus Katalog wählen)" />
-          <div class="grid grid-cols-2 gap-2">
-            <select id="logQuestFromCatalog" class="input">
-              <option value="">— aus Katalog wählen —</option>
-            </select>
+            <input type="number" id="logPoints" class="input" placeholder="Punkte (optional)" />
             <input type="number" id="logMalus" class="input" placeholder="Malus (z. B. -10)" />
           </div>
           <button id="btnAddEntry" class="btn bg-blue-600 text-white">Eintragen</button>
         </div>
-        <div id="logList" class="space-y-1"></div>
+        <div id="logList" class="space-y-1 text-sm"></div>
       </section>
 
-      <!-- Catalog -->
+      <!-- Katalog -->
       <section id="tab-catalog" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
-          <input id="qName" class="input" placeholder="Questname" />
-          <div class="grid grid-cols-2 gap-2">
-            <input id="qPoints" type="number" class="input" placeholder="Punkte" />
-            <select id="qCategory" class="input"></select>
-          </div>
-          <label class="flex items-center gap-2 text-sm"><input id="qBoss" type="checkbox" /> Bossquest</label>
+        <div class="space-y-2">
+          <input id="qName" class="input" placeholder="Questname (z. B. 'Keller aufräumen')" />
+          <input id="qPoints" type="number" class="input" placeholder="Punkte" />
+          <label class="text-sm flex items-center gap-2">
+            <input id="qBoss" type="checkbox" />
+            Bossquest
+          </label>
           <button id="btnAddQuest" class="btn bg-blue-600 text-white">Zur Liste hinzufügen</button>
         </div>
-        <div class="card p-3">
-          <div id="catalogList" class="space-y-2"></div>
+        <div id="catalogList" class="mt-2 space-y-2"></div>
+      </section>
+
+      <!-- Sonderaufgaben (Cooldown) -->
+      <section id="tab-special" class="tab space-y-4">
+        <div class="space-y-2">
+          <h3 class="font-bold text-lg">Sonderaufgaben (Cooldown)</h3>
+          <div class="grid grid-cols-3 gap-2">
+            <input id="spName" class="input col-span-3" placeholder="Name (z. B. Blumen gießen)" />
+            <input id="spPoints" type="number" class="input" placeholder="Punkte" />
+            <input id="spDays" type="number" class="input" placeholder="Alle X Tage" />
+            <button id="btnAddSpecial" class="btn bg-blue-600 text-white">Hinzufügen</button>
+          </div>
+          <p class="text-xs text-slate-500">Nach dem Erledigen wird die Aufgabe für die angegebene Anzahl Tage gesperrt.</p>
         </div>
 
-        <div class="card p-3">
-          <h3 class="font-bold">Per-Quest-Level</h3>
-          <div id="perQuestBox" class="space-y-1 text-sm"></div>
+        <div>
+          <h4 class="font-bold mt-2">Jetzt verfügbar</h4>
+          <div id="specialAvail" class="space-y-2"></div>
+        </div>
+
+        <div>
+          <h4 class="font-bold mt-4">Gesperrt</h4>
+          <div id="specialLocked" class="space-y-2 text-slate-600"></div>
         </div>
       </section>
 
-      <!-- Missions -->
-      <section id="tab-missions" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
-          <input id="mName" class="input" placeholder="Missionsname (z. B. 'Wohnzimmer')" />
-          <button id="btnAddMission" class="btn bg-blue-600 text-white">+ Mission</button>
-        </div>
-        <div id="missionsList" class="space-y-3"></div>
-      </section>
-
-      <!-- Settings -->
+      <!-- Einstellungen -->
       <section id="tab-settings" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
-          <h3 class="font-bold">Wirtschaft & Level</h3>
-          <div class="grid grid-cols-3 gap-2">
-            <label class="text-sm">€ pro Punkt
-              <input id="sEuro" type="number" step="0.01" class="input">
-            </label>
-            <label class="text-sm">Basis-Level
-              <input id="sBase" type="number" class="input">
-            </label>
-            <label class="text-sm">Wachstum
-              <input id="sGrowth" type="number" step="0.01" class="input">
-            </label>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            <label class="text-sm">Streak/Tag
-              <input id="sStreakPer" type="number" step="0.01" class="input">
-            </label>
-            <label class="text-sm">Streak Max
-              <input id="sStreakMax" type="number" step="0.01" class="input">
-            </label>
-            <label class="text-sm">Tagesziel
-              <input id="sDailyGoal" type="number" class="input">
-            </label>
-          </div>
+        <div class="space-y-2">
+          <label class="text-sm">€ pro Punkt
+            <input id="sEuro" type="number" step="0.01" class="input">
+          </label>
+          <label class="text-sm">Basis-Inkrement
+            <input id="sBase" type="number" class="input">
+          </label>
+          <label class="text-sm">Wachstum (z. B. 0.1 = +10%)
+            <input id="sGrowth" type="number" step="0.01" class="input">
+          </label>
+          <label class="text-sm">Tagesziel (Einträge pro Tag)
+            <input id="sDailyGoal" type="number" class="input">
+          </label>
+          <label class="text-sm">Theme
+            <select id="sTheme" class="input">
+              <option value="light">Hell</option>
+              <option value="dark">Dunkel</option>
+              <option value="auto">System</option>
+            </select>
+          </label>
         </div>
-
-        <div class="card p-3 space-y-2">
-          <h3 class="font-bold">Kategorien & Links</h3>
-          <div id="catEditor" class="space-y-2"></div>
-          <button id="btnAddCategory" class="btn">+ Kategorie</button>
-          <button id="btnAddCatLink" class="btn">+ Link (z. B. Handwerk → Sport)</button>
-        </div>
-
-        <div class="card p-3 space-y-2">
-          <h3 class="font-bold">Daten</h3>
-          <div class="flex flex-wrap gap-2">
-            <button id="btnExport" class="btn">Export</button>
-            <input type="file" id="fileImport" class="hidden" accept="application/json" />
-            <button id="btnImport" class="btn">Import</button>
-            <button id="btnReset" class="btn bg-red-600 text-white">Alles löschen</button>
-            <button id="btnDedup" class="btn bg-amber-500 text-white">Duplikate bereinigen</button>
-          </div>
+        <div class="mt-4 space-y-2">
+          <button id="btnExport" class="btn">Export</button>
+          <input type="file" id="fileImport" class="hidden" accept="application/json" />
+          <button id="btnImport" class="btn">Import</button>
+          <button id="btnReset" class="btn bg-red-600 text-white">Alles löschen</button>
         </div>
       </section>
 
       <!-- Chat -->
-      <section id="tab-chat" class="tab space-y-4">
-        <div class="card p-3 space-y-2">
-          <div id="chatLog" class="h-64 overflow-y-auto border p-2 rounded bg-white text-sm"></div>
-          <div class="flex gap-2">
-            <input id="chatInput" class="input flex-1" placeholder="z. B. 'empfehlung' oder 'zeige sport'" />
-            <button id="btnChatSend" class="btn bg-blue-600 text-white">Senden</button>
-          </div>
+      <section id="tab-chat" class="tab space-y-3">
+        <div id="chatLog" class="h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 p-2 rounded bg-white dark:bg-slate-900 text-sm"></div>
+        <div class="flex gap-2">
+          <input id="chatInput" class="input flex-1" placeholder="Frag nach Vorschlägen („Was soll ich machen?“) oder nenne eine Quest" />
+          <button id="btnChatSend" class="btn bg-blue-600 text-white">Senden</button>
         </div>
       </section>
     </main>
 
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t">
+    <!-- Bottom Nav -->
+    <nav class="safe fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
       <div class="max-w-xl mx-auto grid grid-cols-6 text-center">
         <button data-tab="dashboard" class="py-3 text-blue-600">Dashboard</button>
         <button data-tab="log" class="py-3">Log</button>
         <button data-tab="catalog" class="py-3">Katalog</button>
-        <button data-tab="missions" class="py-3">Missionen</button>
+        <button data-tab="special" class="py-3">Sonder</button>
         <button data-tab="settings" class="py-3">Einstellungen</button>
         <button data-tab="chat" class="py-3">Chat</button>
       </div>
@@ -206,1260 +186,347 @@
   </div>
 
   <script>
-  (()=>{
-    // ---------- Storage / State ----------
-    const SKEY = "lifeRPG_p1"; // gleich gelassen, damit alte Daten bestehen bleiben
-    const todayISO = ()=> new Date().toISOString().slice(0,10);
+  // ====== STATE & STORAGE ======
+  const SKEY = "lifeRPG_p1";
+  const defaultState = {
+    log: [],
+    settings: { euro: 0.1, base: 100, growth: 0.1, dailyGoal: 3, theme: "light" },
+    catalog: [
+      {name:"Sport",points:20},
+      {name:"Kein Essen bestellt",points:10},
+      {name:"Aufräumen",points:5}
+    ],
+    rewards: [],
+    specialTasks: [] // {name, points, everyDays, lastDone}
+  };
 
-    const defaultState = {
-      version: 2,
-      log: [], // {date, quest, points, base?, catId?}
-      settings: { euro:0.10, base:100, growth:0.10, streakPerDay:0.02, streakMax:0.20, dailyGoal:3 },
-      catalog: [
-        {name:"Sport", points:20, boss:false, catId:"sport"},
-        {name:"Kein Essen bestellt", points:10, boss:false, catId:"essen"},
-        {name:"Aufräumen", points:5, boss:false, catId:"haushalt"}
-      ],
-      rewards: [
-        {level:5, text:"Essen bestellen", cost:25},
-        {level:10, text:"Neues Shirt", cost:50}
-      ],
-      categories: {
-        list: [
-          {id:"sport", name:"Sport", type:"pos"},
-          {id:"handwerk", name:"Handwerk", type:"pos"},
-          {id:"haushalt", name:"Haushalt", type:"pos"},
-          {id:"essen", name:"Ernährung", type:"pos"},
-          {id:"neg", name:"Schlechter Lebensstil", type:"neg"}
-        ],
-        byQuest: {},    // "Questname" -> "catId"
-        links: [],      // {from:"handwerk", to:"sport", ratio:0.25}
-        totals: {}      // catId -> Summe Kat-Punkte
-      },
-      perQuest: {}, // questName -> {xp:0, level:1, next:100, lastDone:"YYYY-MM-DD", lastDecay:"YYYY-MM-DD"}
-      missions: [], // {id,name,steps:[{id,name,points,unlockAfter:[] , done:false}], done:false, bonusPaid:false}
-      timedQuests: [], // {name,points,deadline,done:false,failed:false}
-      dailyChallengeDate: "", dailyChallenge: null,
-      dailyEvent: {date:null,type:null,text:null,progress:0,done:false},
-      milestones: { // Fortschritte
-        quests: {count:0, next:100},
-        boss: {count:0, next:10},
-        missions: {count:0, next:5},
-        categories: { // pro Kategorie-Zähler
-          // catId: {count:0, next:100}
-        }
-      }
-    };
-
-    function load(){
-      let s = null;
-      try { s = JSON.parse(localStorage.getItem(SKEY)); } catch {}
-      if(!s) s = JSON.parse(JSON.stringify(defaultState));
-      // Migration / fehlende Felder ergänzen
-      s.version = s.version || 1;
-      s.settings = Object.assign({}, defaultState.settings, s.settings||{});
-      s.catalog = s.catalog || [];
-      s.rewards = s.rewards || [];
-      s.categories = s.categories || JSON.parse(JSON.stringify(defaultState.categories));
-      s.categories.list = s.categories.list || JSON.parse(JSON.stringify(defaultState.categories.list));
-      s.categories.byQuest = s.categories.byQuest || {};
-      s.categories.links = s.categories.links || [];
-      s.categories.totals = s.categories.totals || {};
-      s.perQuest = s.perQuest || {};
-      s.missions = s.missions || [];
-      s.timedQuests = s.timedQuests || [];
-      s.dailyEvent = s.dailyEvent || {date:null,type:null,text:null,progress:0,done:false};
-      s.milestones = s.milestones || JSON.parse(JSON.stringify(defaultState.milestones));
-      // Kategorien-Milestones initialisieren
-      if(!s.milestones.categories) s.milestones.categories = {};
-      s.categories.list.forEach(c=>{
-        if(!s.milestones.categories[c.id]) s.milestones.categories[c.id]={count:0,next:100};
-      });
-      return s;
+  function load(){
+    try {
+      const s = JSON.parse(localStorage.getItem(SKEY));
+      if(!s) return structuredClone(defaultState);
+      return migrate(s);
+    } catch {
+      return structuredClone(defaultState);
     }
-    function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
+  }
+  function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
 
-    let state = load();
+  function migrate(s){
+    // Robust mergen, damit alte Daten übernommen werden
+    s.settings = Object.assign({ euro:0.1, base:100, growth:0.1, dailyGoal:3, theme:"light" }, s.settings||{});
+    s.catalog = s.catalog || structuredClone(defaultState.catalog);
+    s.rewards = s.rewards || [];
+    s.specialTasks = s.specialTasks || [];
+    return s;
+  }
 
-    // ---------- Helpers ----------
-    const sum = arr => arr.reduce((a,b)=>a+b,0);
-    const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
+  let state = load();
 
-    function totalPoints(){ return sum(state.log.map(e=>e.points)); }
-    function levelForPoints(p){
-      let lvl=1, need=state.settings.base, rem=p;
-      while(rem>=need){ lvl++; rem-=need; need = Math.round(need*(1+state.settings.growth)); }
-      return lvl;
+  // ====== HELPERS ======
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  function totalPoints(){ return state.log.reduce((s,e)=>s+e.points,0); }
+  function levelForPoints(p){
+    let lvl=1, need=state.settings.base;
+    while(p>=need){ lvl++; p-=need; need=Math.round(need*(1+state.settings.growth)); }
+    return lvl;
+  }
+  function streakCount(){
+    const days = [...new Set(state.log.map(e=>e.date))].sort();
+    if(days.length===0) return 0;
+    let streak = 1;
+    for(let i=days.length-1;i>0;i--){
+      const d1=new Date(days[i]), d0=new Date(days[i-1]);
+      const diff=(d1-d0)/(1000*60*60*24);
+      if(diff===1) streak++; else break;
     }
-    function levelProgress(p){
-      let lvl=1, need=state.settings.base, spent=0;
-      while(p>=need){ lvl++; p-=need; spent+=need; need=Math.round(need*(1+state.settings.growth)); }
-      return {lvl,current:p,need};
-    }
-    function streakCount(){
-      const dates = [...new Set(state.log.map(e=>e.date))].sort();
-      if(dates.length===0) return 0;
-      let streak=1;
-      for(let i=dates.length-1;i>0;i--){
-        const d1=new Date(dates[i]), d0=new Date(dates[i-1]);
-        if((d1-d0)/(1000*60*60*24)===1) streak++; else break;
-      }
-      return streak;
-    }
-
-    // ---------- Effects (Sound & Confetti) ----------
-    const Sound = (()=> {
-      let ctx=null;
-      function ensure(){ if(!ctx){ const AC=window.AudioContext||window.webkitAudioContext; ctx=new AC(); } }
-      function tone(f=440,t=0.08){
-        ensure();
-        const o=ctx.createOscillator(), g=ctx.createGain();
-        o.type="sine"; o.frequency.value=f; g.gain.value=0.05;
-        o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime+t);
-      }
-      return {
-        task:()=>{ tone(523); setTimeout(()=>tone(659),120); },
-        level:()=>{ [392,523,784].forEach((f,i)=>setTimeout(()=>tone(f,0.12), i*140)); }
-      };
-    })();
-
-    const FX = (()=>{
-      const cvs=document.getElementById("fx"), ctx=cvs.getContext("2d");
-      let W=0,H=0,parts=[],raf=null;
-      function resize(){ W=cvs.width=window.innerWidth; H=cvs.height=window.innerHeight; }
-      window.addEventListener("resize",resize); resize();
-      function spawn(n=120){
-        for(let i=0;i<n;i++){
-          parts.push({x:Math.random()*W, y:-20, r:5+Math.random()*5, vx:-2+Math.random()*4, vy:2+Math.random()*3, col:`hsl(${Math.random()*360},80%,60%)`});
-        }
-        if(!raf) loop();
-      }
-      function loop(){
-        raf=requestAnimationFrame(loop);
-        ctx.clearRect(0,0,W,H);
-        parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.05; ctx.fillStyle=p.col; ctx.fillRect(p.x,p.y,p.r,p.r); });
-        parts = parts.filter(p=>p.y<H+20);
-        if(parts.length===0){ cancelAnimationFrame(raf); raf=null; }
-      }
-      return { burst:()=>spawn(140) };
-    })();
-
-    // ---------- Core: Points compute (Streak + Perks + Negatives + Category Links) ----------
-    function computePoints(base, questName, dateISO){
-      // Streak-Multiplikator
-      const s=streakCount();
-      let mult = Math.min(state.settings.streakMax, s*state.settings.streakPerDay);
-      let pts = Math.round(base*(1+mult));
-
-      // Negative Kategorie? -> +cat, aber Gesamt negativ doppelt
-      const catId = getQuestCategoryId(questName);
-      if(catId==="neg"){
-        // Kategorie erhält +base (für Anzeige)
-        addCategoryPoints("neg", base);
-        // Gesamt erhält −2*base (hart, wie besprochen)
-        pts = -2*Math.abs(base);
-        return pts; // keine weiteren Boni
-      }
-
-      // Kategorie-Totals
-      if(catId) addCategoryPoints(catId, base);
-
-      // Category Links (kein globaler Bonus, nur definierte Links)
-      if(catId){
-        state.categories.links.forEach(l=>{
-          if(l.from===catId){
-            const extra = Math.round(base*(l.ratio||0));
-            addCategoryPoints(l.to, extra);
-          }
-        });
-      }
-
-      return pts;
-    }
-
-    function addCategoryPoints(catId, amount){
-      state.categories.totals[catId] = (state.categories.totals[catId]||0) + amount;
-    }
-
-    function getQuestCategoryId(name){
-      // Katalog zuerst, sonst byQuest-Mapping
-      const q = state.catalog.find(x=>x.name===name);
-      if(q && q.catId) return q.catId;
-      return state.categories.byQuest[name] || null;
-    }
-
-    // ---------- Per-Quest Leveling ----------
-    function ensurePerQuest(name){
-      if(!state.perQuest[name]){
-        state.perQuest[name]={xp:0, level:1, next:100, lastDone:null, lastDecay:todayISO()};
-      }
-      return state.perQuest[name];
-    }
-    function grantQuestXP(name, basePoints){
-      const pq = ensurePerQuest(name);
-      pq.xp += Math.max(0, basePoints);
-      while(pq.xp>=pq.next){
-        pq.level++;
-        pq.xp -= pq.next;
-        pq.next = Math.round(pq.next*1.10 + 10); // progressiv
-        // kleiner Effekt
-        Sound.level(); FX.burst();
-      }
-      pq.lastDone = todayISO();
-    }
-    function applyDailyDecay(){
-      const today = todayISO();
-      Object.entries(state.perQuest).forEach(([name,pq])=>{
-        if(pq.lastDecay===today) return;
-        // wenn Quest HEUTE nicht gemacht, −15 XP (nicht unter 0)
-        if(pq.lastDone!==today){
-          pq.xp = Math.max(0, pq.xp-15);
-        }
-        pq.lastDecay = today;
-      });
-    }
-
-    // ---------- Milestones (auto, unendlich) ----------
-    // Skalen (Beispiele aus deinen Wunschwerten)
-    function nextTier(current){
-      // generische Serie (x2 bis 100, dann *2.5): 5,10,20,50,100,250,500,1000,2500,5000,12500...
-      if(current<100) return current*2;
-      return Math.round(current*2.5);
-    }
-    function tierReward(base){
-      // Beispiele: klein → mittel → groß
-      if(base<=10) return 100;
-      if(base<=20) return 400;
-      if(base<=50) return 2500;
-      if(base<=100) return 4000;
-      return Math.round(base*60); // skaliert
-    }
-
-    function checkMilestones(){
-      let updated=false;
-      // Zähler berechnen
-      const questsDone = state.log.filter(e=>e.points>0 && !e.quest.startsWith("Reward") && !e.quest.startsWith("Event") && !e.quest.startsWith("Milestone")).length;
-      const bossDone = state.log.filter(e=>{
-        const q=state.catalog.find(x=>x.name===e.quest);
-        return e.points>0 && q && q.boss===true;
-      }).length;
-      const missionsDone = state.missions.filter(m=>m.done).length;
-
-      // Update counters
-      state.milestones.quests.count = questsDone;
-      state.milestones.boss.count = bossDone;
-      state.milestones.missions.count = missionsDone;
-
-      // Kategorien-Counts: Summe der Kategorie-Punkte (pos/neg getrennt)
-      state.categories.list.forEach(c=>{
-        const tot = Math.round(state.categories.totals[c.id]||0);
-        if(!state.milestones.categories[c.id]) state.milestones.categories[c.id]={count:0,next:100};
-        state.milestones.categories[c.id].count = tot;
-      });
-
-      // Payout Helper (mit Negativ-Abschwächung 10% nach „neg“-Einträgen am selben Tag)
-      const today = todayISO();
-      const hadNegToday = state.log.some(e=>e.date===today && getQuestCategoryId(e.quest)==="neg");
-      const reduction = hadNegToday ? 0.1 : 1.0;
-
-      function maybePay(obj,label){
-        while(obj.count >= obj.next){
-          const base=obj.next;
-          let reward = Math.round(tierReward(base)*reduction);
-          state.log.push({date:todayISO(),quest:`Milestone erreicht: ${label} (${base})`,points:reward});
-          obj.next = nextTier(obj.next);
-          updated=true;
-        }
-      }
-
-      maybePay(state.milestones.quests,"Quests gesamt");
-      maybePay(state.milestones.boss,"Bossquests gesamt");
-      maybePay(state.milestones.missions,"Missionen gesamt");
-      Object.entries(state.milestones.categories).forEach(([catId,obj])=>{
-        const cat = state.categories.list.find(c=>c.id===catId);
-        maybePay(obj, `Kategorie: ${cat?cat.name:catId}`);
-      });
-
-      if(updated) save();
-      return updated;
-    }
-
-    // ---------- Random Day Event ----------
-    function ensureDailyEvent(){
-      const t=todayISO();
-      if(state.dailyEvent.date===t && state.dailyEvent.type) return;
-      const events = [
-        {type:"doubleSport", text:"Heute doppelte Punkte für Sport 💪"},
-        {type:"bonus3", text:"Heute: Mach 3 Aufgaben für +20 Bonus 🎁"},
-        {type:"none", text:"Heute kein Event"}
-      ];
-      const e = events[Math.floor(Math.random()*events.length)];
-      state.dailyEvent = {date:t, type:e.type, text:e.text, progress:0, done:false};
-      save();
-    }
-    function applyEventOnLog(lastEntry){
-      const ev=state.dailyEvent;
-      if(!ev || ev.date!==todayISO()) return;
-      if(ev.type==="doubleSport"){
-        const cat = getQuestCategoryId(lastEntry.quest);
-        if(cat==="sport"){
-          lastEntry.points *= 2;
-        }
-      }
-      if(ev.type==="bonus3"){
-        ev.progress++;
-        if(ev.progress>=3 && !ev.done){
-          state.log.push({date:todayISO(),quest:"Event-Bonus",points:20});
-          ev.done=true;
-        }
-      }
-    }
-
-    // ---------- Log / Add ----------
-    function addLogEntry(date, questName, basePoints, malus=0){
-      // Basis: aus Katalog wenn base=0
-      let base = Number(basePoints||0);
-      if(!base){
-        const q=state.catalog.find(x=>x.name===questName);
-        if(q) base=q.points;
-      }
-      // Effektive Punkte (Streak, Negativ, Links)
-      let pts = computePoints(base, questName, date);
-      // Malus addieren (kann neg. sein)
-      pts += Number(malus||0);
-
-      const entry = {date, quest:questName, points:Math.round(pts), base:base};
-      state.log.push(entry);
-
-      // per-Quest XP nur für positive Base (neg-Kat schon im compute gehandhabt)
-      if(base>0) grantQuestXP(questName, base);
-
-      applyEventOnLog(entry);
-      save(); renderAll();
-      Sound.task(); FX.burst();
-    }
-
-    // ---------- Dedup ----------
-    function dedupLog(){
-      const key = e => `${e.date}|${e.quest}|${e.points}`;
-      const seen = new Set();
-      const newLog=[];
-      for(const e of state.log){
-        const k=key(e);
-        if(!seen.has(k)){ seen.add(k); newLog.push(e); }
-      }
-      const removed = state.log.length - newLog.length;
-      state.log = newLog; save();
-      return removed;
-    }
-
-    // ---------- Missions ----------
-    function addMission(name){
-      const id = "m"+Math.random().toString(36).slice(2,8);
-      state.missions.push({id,name,steps:[],done:false,bonusPaid:false});
-      save(); renderMissions();
-    }
-    function addMissionStep(missionId, step){
-      const m = state.missions.find(x=>x.id===missionId); if(!m) return;
-      step.id = "s"+Math.random().toString(36).slice(2,8);
-      step.done=false;
-      step.unlockAfter = (step.unlockAfter||[]).filter(Boolean);
-      m.steps.push(step);
-      save(); renderMissions();
-    }
-    function isStepUnlocked(m, step){
-      if(!step.unlockAfter || step.unlockAfter.length===0) return true;
-      return step.unlockAfter.every(id => m.steps.find(s=>s.id===id && s.done));
-    }
-    function completeMissionStep(m, s){
-      if(s.done) return;
-      s.done=true;
-      // Log für Schritt
-      addLogEntry(todayISO(), s.name, s.points, 0);
-      // Mission fertig?
-      if(m.steps.every(x=>x.done) && !m.done){
-        m.done=true;
-        // 4× Gesamtpunkte der Schritte als Bonus
-        const baseSum = sum(m.steps.map(x=>Math.max(0,x.points)));
-        const bonus = baseSum*4;
-        state.log.push({date:todayISO(),quest:`Mission abgeschlossen: ${m.name}`,points:bonus});
-        // Meilenstein zählt im checkMilestones()
-        save(); renderAll();
-        Sound.level(); FX.burst();
-      }else{
-        save(); renderMissions();
-      }
-    }
-
-    // ---------- Timed Quests ----------
-    function addTimedQuest(){
-      const name = prompt("Questname?");
-      if(!name) return;
-      const points = Number(prompt("Punkte?")||0);
-      const deadline = prompt("Deadline (YYYY-MM-DD)?");
-      if(!deadline) return;
-      state.timedQuests.push({name,points,deadline,done:false,failed:false});
-      save(); renderDashboard();
-    }
-    function completeTimedQuest(idx){
-      const q = state.timedQuests[idx]; if(!q||q.done) return;
-      q.done=true;
-      addLogEntry(todayISO(), "Timed Quest: "+q.name, q.points, 0);
-    }
-    function checkTimedMissed(){
-      const t=todayISO();
-      state.timedQuests.forEach(q=>{
-        if(!q.done && !q.failed && t>q.deadline){
-          // einmaliger Malus
-          state.log.push({date:t, quest:"Timed Quest verpasst: "+q.name, points:-10});
-          q.failed=true;
-        }
-      });
-    }
-
-    // ---------- Daily Challenge ----------
-    const miniChallenges = [
-      {text:"Trink 2 Liter Wasser",points:10},
-      {text:"Mach 10 Liegestütze",points:15},
-      {text:"Gehe 20 Minuten spazieren",points:15},
-      {text:"Schreibe 3 Dinge auf, für die du dankbar bist",points:10},
-      {text:"Räume eine Schublade oder Ecke auf",points:20},
-      {text:"Iss heute kein Fast Food",points:20},
-      {text:"Geh 30 Minuten früher ins Bett",points:15}
-    ];
-    function getTodayChallenge(){
-      const t=todayISO();
-      if(state.dailyChallengeDate!==t){
-        state.dailyChallengeDate=t;
-        state.dailyChallenge = miniChallenges[Math.floor(Math.random()*miniChallenges.length)];
-        save();
-      }
-      return state.dailyChallenge;
-    }
-    function completeChallenge(){
-      const ch=getTodayChallenge();
-      addLogEntry(todayISO(),"Daily Challenge: "+ch.text, ch.points, 0);
-    }
-
-    // ---------- UI: Renders ----------
-    function renderDashboard(){
-      // Basic KPIs
-      document.getElementById("totalPoints").textContent = totalPoints();
-      document.getElementById("currentLevel").textContent = levelForPoints(totalPoints());
-      document.getElementById("savingsTotal").textContent = (totalPoints()*state.settings.euro).toFixed(2);
-
-      // Level progress
-      const lp = levelProgress(totalPoints());
-      document.getElementById("levelBar").style.width = clamp(Math.round(lp.current/lp.need*100),0,100)+"%";
-      document.getElementById("levelNext").textContent = `Noch ${lp.need-lp.current} Punkte bis Level ${lp.lvl+1}`;
-
-      // Daily Challenge
-      const box=document.getElementById("dailyChallengeBox");
-      const ch=getTodayChallenge();
-      const done = state.log.some(e=>e.date===todayISO() && e.quest.startsWith("Daily Challenge"));
-      if(done){
-        box.innerHTML = `✅ Erledigt: ${ch.text} (+${ch.points})`;
-        box.className="p-2 border rounded bg-green-100 text-sm mt-2";
-      }else{
-        box.innerHTML = `${ch.text} (+${ch.points}) <button id="btnDoChallenge" class="btn ml-2">Erledigt!</button>`;
-        box.className="p-2 border rounded bg-yellow-100 text-sm mt-2";
-        document.getElementById("btnDoChallenge").onclick=completeChallenge;
-      }
-
-      // Today Suggestions
-      const sugBox=document.getElementById("todaySuggestions");
-      const t=todayISO();
-      const doneToday=new Set(state.log.filter(e=>e.date===t).map(e=>e.quest));
-      const available=state.catalog.filter(q=>!doneToday.has(q.name)).slice(0,5);
-      sugBox.innerHTML = available.length
-        ? available.map(q=>`<button class="btn w-full text-left" data-sug="${q.name}">➕ ${q.name} (+${q.points})</button>`).join("")
-        : `<div class="muted text-sm">Alles erledigt 🎉</div>`;
-      sugBox.querySelectorAll("[data-sug]").forEach(btn=>{
-        btn.onclick=()=> addLogEntry(todayISO(), btn.getAttribute("data-sug"), 0, 0);
-      });
-
-      // Daily Goal
-      const goalBox=document.getElementById("dailyGoalBox");
-      const count=state.log.filter(e=>e.date===t).length;
-      const goal=state.settings.dailyGoal;
-      if(count>=goal){
-        goalBox.innerHTML=`✅ Tagesziel erreicht (${count}/${goal})`;
-        goalBox.className="p-2 border rounded bg-green-100 text-sm";
-      }else{
-        goalBox.innerHTML=`🔄 ${count}/${goal} erledigt — noch ${goal-count} offen`;
-        goalBox.className="p-2 border rounded bg-yellow-100 text-sm";
-      }
-
-      // Stats (14 days)
-      renderStats();
-
-      // Milestones
-      checkMilestones();
-      const mBox=document.getElementById("milestonesBox");
-      const m = state.milestones;
-      const parts = [
-        `• Quests: ${m.quests.count} / nächstes Ziel: ${m.quests.next}`,
-        `• Bossquests: ${m.boss.count} / nächstes Ziel: ${m.boss.next}`,
-        `• Missionen: ${m.missions.count} / nächstes Ziel: ${m.missions.next}`,
-      ];
-      Object.entries(m.categories).forEach(([id,obj])=>{
-        const c=state.categories.list.find(x=>x.id===id);
-        parts.push(`• ${c?c.name:id}: ${obj.count} / nächstes Ziel: ${obj.next}`);
-      });
-      mBox.innerHTML = parts.map(t=>`<div>${t}</div>`).join("");
-
-      // Kategorien Übersichten
-      const catBox=document.getElementById("categoriesBox");
-      catBox.innerHTML = state.categories.list.map(c=>{
-        const tot = Math.round(state.categories.totals[c.id]||0);
-        const kind = c.type==="neg" ? "bg-rose-50" : "bg-slate-50";
-        return `<div class="p-2 border rounded ${kind} flex justify-between items-center">
-          <span>${c.name}</span><span class="badge mono">${tot}</span></div>`;
-      }).join("");
-
-      // Timed Quests
-      checkTimedMissed();
-      const tb=document.getElementById("timedBox");
-      const tlist=state.timedQuests.map((q,i)=>{
-        let status="";
-        if(q.done) status="✅ erledigt";
-        else if(todayISO()>q.deadline) status="❌ verpasst";
-        else status=`⏳ bis ${q.deadline} <button data-timed="${i}" class="btn text-xs ml-1">Abschließen</button>`;
-        return `<div class="p-2 border rounded">${q.name} (+${q.points}) — ${status}</div>`;
-      }).join("");
-      tb.innerHTML = tlist || `<div class="muted">Keine Timed Quests</div>`;
-      tb.querySelectorAll("[data-timed]").forEach(btn=>{
-        btn.onclick=()=> completeTimedQuest(Number(btn.getAttribute("data-timed")));
-      });
-
-      // Event
-      ensureDailyEvent();
-      document.getElementById("eventBox").textContent = state.dailyEvent.text || "—";
-    }
-
-    function renderStats(){
-      const cvs=document.getElementById("statsChart");
-      const ctx=cvs.getContext("2d");
-      const W=cvs.width=cvs.clientWidth, H=cvs.height=cvs.clientHeight;
-      ctx.clearRect(0,0,W,H);
-      const today=new Date();
-      const days=[];
-      for(let i=13;i>=0;i--){
-        const d=new Date(today); d.setDate(d.getDate()-i);
-        const iso=d.toISOString().slice(0,10);
-        const sumDay=state.log.filter(e=>e.date===iso).reduce((s,e)=>s+e.points,0);
-        days.push({label:iso.slice(5),value:sumDay});
-      }
-      const max=Math.max(10,...days.map(d=>d.value));
-      const barW=W/days.length*0.6;
-      days.forEach((d,i)=>{
-        const x=i*(W/days.length)+barW*0.2;
-        const h=(d.value/max)*(H-20);
-        const y=H-h-20;
-        ctx.fillStyle="#3b82f6";
-        ctx.fillRect(x,y,barW,h);
-        ctx.fillStyle="#666"; ctx.font="10px sans-serif";
-        if(i%2===0) ctx.fillText(d.label,x,H-5);
-      });
-    }
-
-    function renderLog(){
-      // Auswahl aus Katalog
-      const sel=document.getElementById("logQuestFromCatalog");
-      sel.innerHTML = `<option value="">— aus Katalog wählen —</option>` +
-        state.catalog.map(q=>`<option value="${q.name}">${q.name} (+${q.points})${q.boss?" 👑":""}</option>`).join("");
-
-      // Liste
-      const list=document.getElementById("logList");
-      if(state.log.length===0){ list.innerHTML="<div class='muted'>Noch keine Einträge.</div>"; return; }
-      list.innerHTML = state.log.slice().reverse().map(e=>
-        `<div class="p-2 border rounded bg-white flex justify-between">
-          <span>${e.date} • ${e.quest}</span>
-          <span class="mono ${e.points<0?'text-rose-600':'text-emerald-700'}">${e.points>0?'+':''}${e.points}</span>
-        </div>`
-      ).join("");
-      document.getElementById("logDate").value = todayISO();
-    }
-
-    function renderCatalog(){
-      // Kategorien-Dropdown
-      const catSel=document.getElementById("qCategory");
-      catSel.innerHTML = `<option value="">— Kategorie wählen —</option>` +
-        state.categories.list.map(c=>`<option value="${c.id}">${c.name}${c.type==="neg"?" (negativ)":""}</option>`).join("");
-
-      // Liste
-      const list=document.getElementById("catalogList");
-      list.innerHTML = state.catalog.map((q,i)=>{
-        const cat = state.categories.list.find(c=>c.id===q.catId);
-        const pq = state.perQuest[q.name];
-        const badge = pq ? ` <span class="badge">Lvl ${pq.level} • ${pq.xp}/${pq.next}</span>` : "";
-        return `<div class="p-2 border rounded flex justify-between items-center">
-          <div><span>${q.boss?'👑 ':''}${q.name}</span> <span class="muted">(+${q.points})</span> ${cat?`<span class="badge">${cat.name}</span>`:''}${badge}</div>
-          <div class="flex gap-2">
-            <button class="btn text-xs" data-use="${i}">Eintragen</button>
-            <button class="btn text-xs" data-edit="${i}">Bearb.</button>
-            <button class="btn text-xs text-rose-600" data-del="${i}">Löschen</button>
-          </div>
-        </div>`;
-      }).join("");
-
-      // Handler
-      list.querySelectorAll("[data-use]").forEach(btn=>{
-        btn.onclick=()=>{
-          const i=Number(btn.getAttribute("data-use")); const q=state.catalog[i];
-          addLogEntry(todayISO(), q.name, q.points, 0);
-        };
-      });
-      list.querySelectorAll("[data-edit]").forEach(btn=>{
-        btn.onclick=()=>{
-          const i=Number(btn.getAttribute("data-edit")); const q=state.catalog[i];
-          const name = prompt("Name:", q.name)||q.name;
-          const points = Number(prompt("Punkte:", q.points)||q.points);
-          const catId = prompt("Kategorie-ID (leer=keine):", q.catId||"")||"";
-          const boss = confirm("Bossquest?");
-          q.name=name; q.points=points; q.catId=catId||undefined; q.boss=boss;
-          save(); renderAll();
-        };
-      });
-      list.querySelectorAll("[data-del]").forEach(btn=>{
-        btn.onclick=()=>{
-          const i=Number(btn.getAttribute("data-del"));
-          state.catalog.splice(i,1); save(); renderAll();
-        };
-      });
-
-      // Per-Quest Box
-      const pqBox=document.getElementById("perQuestBox");
-      const entries = Object.entries(state.perQuest);
-      pqBox.innerHTML = entries.length
-        ? entries.map(([name,pq])=>`<div class="p-2 border rounded flex justify-between">
-            <span>${name}</span>
-            <span class="badge">Lvl ${pq.level} • ${pq.xp}/${pq.next}</span>
-          </div>`).join("")
-        : `<div class="muted">Noch keine Quest-Level vorhanden (logge eine Quest)</div>`;
-    }
-
-    function renderMissions(){
-      const wrap=document.getElementById("missionsList");
-      if(state.missions.length===0){
-        wrap.innerHTML=`<div class="muted">Noch keine Missionen. Lege eine an.</div>`;
-        return;
-      }
-      wrap.innerHTML = state.missions.map(m=>{
-        const steps = m.steps.map(s=>{
-          const unlocked = isStepUnlocked(m,s);
-          const cls = s.done ? "bg-green-50" : (unlocked?"bg-white":"bg-slate-50");
-          const lock = s.done ? "✅" : (unlocked?"⏳":"🔒");
-          return `<div class="p-2 border rounded ${cls} flex justify-between items-center">
-            <div>${lock} ${s.name} <span class="muted">(+${s.points})</span></div>
-            <div class="flex gap-2">
-              ${(!s.done && unlocked)?`<button class="btn text-xs" data-step-done="${m.id}|${s.id}">Erledigt</button>`:""}
-            </div>
-          </div>`;
-        }).join("");
-        const head = `<div class="flex items-center justify-between">
-            <h3 class="font-bold">${m.done?'✔️ ':''}${m.name}</h3>
-            <button class="btn text-xs" data-add-step="${m.id}">+ Schritt</button>
-          </div>`;
-        return `<div class="card p-3 space-y-2">${head}${steps?`<div class="space-y-2 mt-2">${steps}</div>`:""}</div>`;
-      }).join("");
-
-      // Step-Erledigt
-      wrap.querySelectorAll("[data-step-done]").forEach(btn=>{
-        btn.onclick=()=>{
-          const [mid,sid]=btn.getAttribute("data-step-done").split("|");
-          const m=state.missions.find(x=>x.id===mid);
-          const s=m?.steps.find(x=>x.id===sid);
-          if(m&&s) completeMissionStep(m,s);
-        };
-      });
-      // Schritt hinzufügen
-      wrap.querySelectorAll("[data-add-step]").forEach(btn=>{
-        btn.onclick=()=>{
-          const mid=btn.getAttribute("data-add-step");
-          const name=prompt("Schrittname?");
-          if(!name) return;
-          const points=Number(prompt("Punkte?")||0);
-          const m=state.missions.find(x=>x.id===mid);
-          const unlockIds = m.steps.length
-            ? prompt("Freigeschaltet nach (Step-IDs, Komma, leer = sofort):\n"+m.steps.map(s=>`${s.name}: ${s.id}`).join("\n"))||""
-            : "";
-          const unlockAfter = unlockIds.split(",").map(s=>s.trim()).filter(Boolean);
-          addMissionStep(mid,{name,points,unlockAfter});
-        };
-      });
-    }
-
-    function renderSettings(){
-      // Werte setzen
-      document.getElementById("sEuro").value = state.settings.euro;
-      document.getElementById("sBase").value = state.settings.base;
-      document.getElementById("sGrowth").value = state.settings.growth;
-      document.getElementById("sStreakPer").value = state.settings.streakPerDay;
-      document.getElementById("sStreakMax").value = state.settings.streakMax;
-      document.getElementById("sDailyGoal").value = state.settings.dailyGoal;
-
-      // Kategorien-Editor
-      const ed = document.getElementById("catEditor");
-      const rows = state.categories.list.map(c=>{
-        return `<div class="p-2 border rounded flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <input class="input w-36" data-cat-name="${c.id}" value="${c.name}">
-            <select class="input w-32" data-cat-type="${c.id}">
-              <option value="pos" ${c.type==="pos"?"selected":""}>positiv</option>
-              <option value="neg" ${c.type==="neg"?"selected":""}>negativ</option>
-            </select>
-          </div>
-          <button class="btn text-xs text-rose-600" data-cat-del="${c.id}">Löschen</button>
-        </div>`;
-      }).join("");
-
-      const links = state.categories.links.map((l,i)=>
-        `<div class="p-2 border rounded flex items-center justify-between">
-          <div>Link: ${l.from} → ${l.to} (Ratio ${l.ratio})</div>
-          <button class="btn text-xs text-rose-600" data-link-del="${i}">Löschen</button>
-        </div>`
-      ).join("");
-
-      ed.innerHTML = (rows||"<div class='muted'>Keine Kategorien</div>") +
-        (links? `<h4 class="font-bold mt-2">Links</h4>${links}`:"");
-
-      // Handlers
-      ed.querySelectorAll("[data-cat-name]").forEach(inp=>{
-        inp.onchange=()=>{ const id=inp.getAttribute("data-cat-name"); const c=state.categories.list.find(x=>x.id===id); if(c){ c.name=inp.value; save(); renderAll(); } };
-      });
-      ed.querySelectorAll("[data-cat-type]").forEach(sel=>{
-        sel.onchange=()=>{ const id=sel.getAttribute("data-cat-type"); const c=state.categories.list.find(x=>x.id===id); if(c){ c.type=sel.value; save(); renderAll(); } };
-      });
-      ed.querySelectorAll("[data-cat-del]").forEach(btn=>{
-        btn.onclick=()=>{ const id=btn.getAttribute("data-cat-del"); state.categories.list = state.categories.list.filter(c=>c.id!==id); save(); renderAll(); };
-      });
-      ed.querySelectorAll("[data-link-del]").forEach(btn=>{
-        btn.onclick=()=>{ const i=Number(btn.getAttribute("data-link-del")); state.categories.links.splice(i,1); save(); renderAll(); };
-      });
-    }
-
-    // ---------- Events ----------
-    // Tabs
-    document.querySelectorAll("nav [data-tab]").forEach(btn=>{
-      btn.onclick=()=>{
-        const tab=btn.getAttribute("data-tab");
-        document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-        document.getElementById("tab-"+tab).classList.add("active");
-        document.querySelectorAll("nav [data-tab]").forEach(b=>b.classList.remove("text-blue-600"));
-        btn.classList.add("text-blue-600");
-      };
-    });
-
-    // Log Eingabe
-    document.getElementById("btnAddEntry").onclick=()=>{
-      const d=document.getElementById("logDate").value || todayISO();
-      const qSel=document.getElementById("logQuestFromCatalog").value;
-      const qTxt=document.getElementById("logQuest").value.trim();
-      const q = qSel || qTxt;
-      if(!q){ alert("Bitte Quest angeben (Text oder aus Katalog)."); return; }
-      const base=Number(document.getElementById("logPoints").value || 0);
-      const mal=Number(document.getElementById("logMalus").value || 0);
-      addLogEntry(d,q,base,mal);
-      document.getElementById("logQuest").value="";
-      document.getElementById("logPoints").value="";
-      document.getElementById("logMalus").value="";
-      document.getElementById("logQuestFromCatalog").value="";
-    };
-
-    // Katalog hinzufügen
-    document.getElementById("btnAddQuest").onclick=()=>{
-      const name=document.getElementById("qName").value.trim();
-      const pts=Number(document.getElementById("qPoints").value||0);
-      const catId=(document.getElementById("qCategory").value)||null;
-      const boss=document.getElementById("qBoss").checked;
-      if(!name || !pts){ alert("Name & Punkte angeben"); return; }
-      state.catalog.push({name,points:pts,boss,catId});
-      // Kategorien-Zuordnung merken
-      if(catId) state.categories.byQuest[name]=catId;
-      save(); renderAll();
-      document.getElementById("qName").value="";
-      document.getElementById("qPoints").value="";
-      document.getElementById("qBoss").checked=false;
-      document.getElementById("qCategory").value="";
-    };
-
-    // Mission hinzufügen
-    document.getElementById("btnAddMission").onclick=()=>{
-      const name=document.getElementById("mName").value.trim();
-      if(!name) return;
-      addMission(name);
-      document.getElementById("mName").value="";
-    };
-
-    // Timed Quest hinzufügen
-    document.getElementById("btnAddTimed").onclick=addTimedQuest;
-
-    // Settings: Werte speichern
-    document.getElementById("sEuro").onchange=()=>{ state.settings.euro=Number(document.getElementById("sEuro").value||0); save(); renderAll(); };
-    document.getElementById("sBase").onchange=()=>{ state.settings.base=Number(document.getElementById("sBase").value||100); save(); renderAll(); };
-    document.getElementById("sGrowth").onchange=()=>{ state.settings.growth=Number(document.getElementById("sGrowth").value||0.1); save(); renderAll(); };
-    document.getElementById("sStreakPer").onchange=()=>{ state.settings.streakPerDay=Number(document.getElementById("sStreakPer").value||0.02); save(); renderAll(); };
-    document.getElementById("sStreakMax").onchange=()=>{ state.settings.streakMax=Number(document.getElementById("sStreakMax").value||0.2); save(); renderAll(); };
-    document.getElementById("sDailyGoal").onchange=()=>{ state.settings.dailyGoal=Number(document.getElementById("sDailyGoal").value||3); save(); renderAll(); };
-
-    // Kategorien hinzufügen & Links
-    document.getElementById("btnAddCategory").onclick=()=>{
-      const id = prompt("ID (ohne Leerzeichen)?"); if(!id) return;
-      const name = prompt("Name?")||id;
-      const type = confirm("Negativ-Kategorie? (OK = negativ, Abbrechen = positiv)") ? "neg" : "pos";
-      state.categories.list.push({id,name,type}); save(); renderAll();
-    };
-    document.getElementById("btnAddCatLink").onclick=()=>{
-      const from = prompt("Von Kategorie-ID (z. B. handwerk)?"); if(!from) return;
-      const to = prompt("Zu Kategorie-ID (z. B. sport)?"); if(!to) return;
-      const ratio = Number(prompt("Ratio (z. B. 0.25 = 25%)")||0.25);
-      state.categories.links.push({from,to,ratio}); save(); renderAll();
-    };
-
-    // Daten: Export / Import / Reset / Dedup
-    document.getElementById("btnExport").onclick=()=>{
-      const blob=new Blob([JSON.stringify(state)],{type:"application/json"});
-      const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download="life_rpg_backup.json";
-      a.click();
-    };
-    document.getElementById("btnImport").onclick=()=> document.getElementById("fileImport").click();
-    document.getElementById("fileImport").addEventListener("change",e=>{
-      const f=e.target.files[0]; if(!f)return;
-      const r=new FileReader();
-      r.onload=()=>{ try{ state=JSON.parse(r.result); save(); renderAll(); }catch{ alert("Fehler beim Import!"); } };
-      r.readAsText(f);
-    });
-    document.getElementById("btnReset").onclick=()=>{
-      if(confirm("Alles wirklich löschen?")){
-        state = JSON.parse(JSON.stringify(defaultState));
-        save(); renderAll();
-      }
-    };
-    document.getElementById("btnDedup").onclick=()=>{
-      const n=dedupLog();
-      alert(`Bereinigt: ${n} doppelte Log-Einträge entfernt.`);
-      renderAll();
-    };
-
-    // Chat
-    const chatLogEl = document.getElementById("chatLog");
-    function chatAddMessage(from, text){
-      const div=document.createElement("div");
-      div.className= from==="user" ? "text-right" : "text-left text-blue-700";
-      div.textContent=text;
-      chatLogEl.appendChild(div);
-      chatLogEl.scrollTop=chatLogEl.scrollHeight;
-    }
-    function chatAddButtons(items){
-      if(!items || !items.length) return;
-      const row=document.createElement("div"); row.className="flex flex-wrap gap-2 my-1";
-      items.forEach(it=>{
-        const b=document.createElement("button");
-        b.className="btn text-xs"; b.textContent=`➕ ${it.label} (+${it.points})`;
-        b.onclick=()=>{
-          addLogEntry(todayISO(), it.label, it.points, 0);
-          chatAddMessage("bot", `✅ Eingetragen: ${it.label} (+${it.points})`);
-        };
-        row.appendChild(b);
-      });
-      chatLogEl.appendChild(row);
-      chatLogEl.scrollTop=chatLogEl.scrollHeight;
-    }
-    function chatProcess(msg){
-      const m=msg.toLowerCase().trim();
-      if(m==="empfehlung" || m.includes("was soll ich tun")){
-        const t=todayISO();
-        const done=new Set(state.log.filter(e=>e.date===t).map(e=>e.quest));
-        const open=state.catalog.filter(q=>!done.has(q.name)).slice(0,5);
-        chatAddMessage("bot","✨ Empfehlungen für heute:");
-        chatAddButtons(open.map(q=>({label:q.name,points:q.points})));
-        return;
-      }
-      if(m.startsWith("zeige ")){
-        const q=m.replace("zeige ","").trim();
-        const res = state.log.filter(e=>e.quest.toLowerCase().includes(q));
-        if(!res.length){ chatAddMessage("bot","❌ Keine Treffer."); return; }
-        chatAddMessage("bot",`🔍 ${res.length} Treffer:`);
-        chatAddButtons(res.slice(0,5).map(e=>({label:e.quest,points:e.base||e.points})));
-        return;
-      }
-      if(m.includes("rückgängig")){
-        if(state.log.length===0){ chatAddMessage("bot","Nix zum Löschen."); return; }
-        const x=state.log.pop(); save(); renderAll();
-        chatAddMessage("bot",`🗑️ Entfernt: ${x.quest} (${x.points})`);
-        return;
-      }
-      // Default: neue Quest anlegen & eintragen (5 Punkte)
-      const newQuest = {name:msg, points:5, boss:false};
-      state.catalog.push(newQuest); save();
-      addLogEntry(todayISO(), newQuest.name, newQuest.points, 0);
-      chatAddMessage("bot",`➕ Neue Quest: ${newQuest.name} (+5) und eingetragen.`);
-    }
-    document.getElementById("btnChatSend").onclick=()=>{
-      const inp=document.getElementById("chatInput");
-      const txt=inp.value.trim(); if(!txt) return;
-      chatAddMessage("user",txt);
-      chatProcess(txt);
-      inp.value="";
-    };
-    document.getElementById("chatInput").addEventListener("keydown",(e)=>{
-      if(e.key==="Enter"){ e.preventDefault(); document.getElementById("btnChatSend").click(); }
-    });
-
-    // ---------- Initial ----------
-    function renderAll(){
-      applyDailyDecay();
-      renderDashboard();
-      renderLog();
-      renderCatalog();
-      renderMissions();
-      renderSettings();
-    }
-
-    // Initial Values
-    document.getElementById("logDate").value = todayISO();
-    window.addEventListener("resize", renderStats);
-
-    // Start
-    ensureDailyEvent();
-    renderAll();
-/* ==== PATCH: Hauptmenü + Darkmode (einfügen direkt über der Zeile '})();') ==== */
-
-// --- 1) Darkmode CSS dynamisch einfügen ---
-(function addDarkCSS(){
-  const css = `
-    .dark body { background:#0b1220; color:#e5e7eb; }
-    .dark .card { background:#0f172a; border-color:#334155; }
-    .dark .input, .dark .btn { background:#0f172a; border-color:#334155; color:#e2e8f0; }
-    .dark .badge { background:#334155; color:#e2e8f0; }
-    .dark .muted { color:#94a3b8; }
-    /* Utility-Overrides für vereinzelte Tailwind-Farben */
-    .dark .bg-white { background-color:#0f172a !important; }
-    .dark .bg-slate-50, .dark .bg-rose-50, .dark .bg-yellow-100,
-    .dark .bg-green-100, .dark .bg-indigo-50, .dark .bg-purple-50 {
-      background-color:#111827 !important;
-    }
-    .dark .text-emerald-700 { color:#34d399 !important; }
-    .dark .text-rose-600 { color:#fb7185 !important; }
-  `;
-  const st = document.createElement('style');
-  st.appendChild(document.createTextNode(css));
-  document.head.appendChild(st);
-})();
-
-// --- 2) Theme-Logik ---
-state.settings.theme = state.settings.theme || 'auto';
-function applyTheme(){
-  const preferDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const on = (state.settings.theme==='dark') || (state.settings.theme==='auto' && preferDark);
-  document.documentElement.classList.toggle('dark', on);
-}
-applyTheme();
-if (window.matchMedia){
-  // Bei Systemwechsel in 'auto' live übernehmen
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
-    if(state.settings.theme==='auto') applyTheme();
+    return streak;
+  }
+  // Streak-Multiplikator (max +20%, +2%/Tag)
+  const STREAK_PER_DAY = 0.02, STREAK_MAX = 0.2;
+  function computePoints(base, dateISO){
+    const mult = Math.min(STREAK_MAX, streakCount()*STREAK_PER_DAY);
+    return Math.round((base||0)*(1+mult));
+  }
+  function euro(val){ return (val||0).toFixed(2); }
+
+  // ====== THEME ======
+  function applyTheme(){
+    const t = state.settings.theme;
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = (t==='dark') || (t==='auto' && prefersDark);
+    document.documentElement.classList.toggle('dark', dark);
+  }
+  document.getElementById('themeToggle').addEventListener('click', ()=>{
+    state.settings.theme = state.settings.theme==='dark' ? 'light' : 'dark';
+    save(); applyTheme();
   });
-}
 
-// --- 3) Settings um Theme-Auswahl erweitern (ohne bestehende Funktion kaputt zu machen) ---
-const __renderSettings = renderSettings;
-renderSettings = function(){
-  __renderSettings();
-  // Ein kleines Theme-Feld in die erste Settings-Karte einfügen
-  const firstCard = document.querySelector('#tab-settings .card');
-  if(!firstCard) return;
-  if(firstCard.querySelector('#sTheme')) return; // schon vorhanden
-  const row = document.createElement('div');
-  row.className = 'grid grid-cols-3 gap-2 mt-2';
-  row.innerHTML = `
-    <label class="text-sm">Theme
-      <select id="sTheme" class="input">
-        <option value="light">Hell</option>
-        <option value="dark">Dunkel</option>
-        <option value="auto">Auto</option>
-      </select>
-    </label>
-  `;
-  firstCard.appendChild(row);
-  const sel = row.querySelector('#sTheme');
-  sel.value = state.settings.theme || 'auto';
-  sel.addEventListener('change', ()=>{
-    state.settings.theme = sel.value;
-    save();
-    applyTheme();
-  });
-};
-
-// --- 4) Bottom-Nav ausblenden, Home-Menü erzeugen, Navigation vereinheitlichen ---
-(function mountHomeMenu(){
-  // Bottom-Nav ausblenden (bleibt im DOM, aber unsichtbar)
-  const nav = document.querySelector('nav');
-  if(nav) nav.style.display = 'none';
-
-  // Home-Section erstellen und als erste Sektion einsetzen
-  const main = document.querySelector('main');
-  if(!main) return;
-
-  // Nicht doppelt einfügen
-  if(document.getElementById('tab-home')) return;
-
-  const sec = document.createElement('section');
-  sec.id = 'tab-home';
-  sec.className = 'tab space-y-4 active';
-  sec.innerHTML = `
-    <div class="card p-4">
-      <h2 class="text-xl font-bold mb-2">🏠 Hauptmenü</h2>
-      <div class="grid grid-cols-2 gap-3">
-        <button class="card p-4 text-left" data-goto="dashboard"><div class="text-2xl">📊</div><div class="font-bold">Dashboard</div><div class="muted text-sm">Punkte, Level, Ziele</div></button>
-        <button class="card p-4 text-left" data-goto="log"><div class="text-2xl">📝</div><div class="font-bold">Log</div><div class="muted text-sm">Einträge erfassen</div></button>
-        <button class="card p-4 text-left" data-goto="catalog"><div class="text-2xl">📚</div><div class="font-bold">Katalog</div><div class="muted text-sm">Quests & Kategorien</div></button>
-        <button class="card p-4 text-left" data-goto="missions"><div class="text-2xl">🧭</div><div class="font-bold">Missionen</div><div class="muted text-sm">Freischaltbare Schritte</div></button>
-        <button class="card p-4 text-left" data-goto="settings"><div class="text-2xl">⚙️</div><div class="font-bold">Einstellungen</div><div class="muted text-sm">Wirtschaft, Theme, Daten</div></button>
-        <button class="card p-4 text-left" data-goto="chat"><div class="text-2xl">💬</div><div class="font-bold">Chat</div><div class="muted text-sm">Empfehlungen & Shortcuts</div></button>
+  // ====== RENDER: DASHBOARD ======
+  function renderLevelProgress(){
+    const total = totalPoints();
+    const lvl = levelForPoints(total);
+    let need = state.settings.base, sum=0;
+    for(let i=1;i<lvl;i++){ sum+=need; need=Math.round(need*(1+state.settings.growth)); }
+    const current = total - sum;
+    const pct = Math.min(100, Math.round((current/need)*100));
+    return `
+      <div class="w-full bg-gray-200 dark:bg-slate-800 rounded h-3 overflow-hidden">
+        <div class="bg-blue-500 h-3" style="width:${pct}%"></div>
       </div>
-    </div>
-  `;
-  // Ganz nach oben setzen
-  main.insertBefore(sec, main.firstChild);
-
-  // Alle Tabs zunächst verbergen, Home aktivieren
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  sec.classList.add('active');
-
-  // Einheitliche Navigation
-  function goto(tab){
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    const el = document.getElementById('tab-'+tab);
-    if(el){ el.classList.add('active'); window.scrollTo({top:0, behavior:'smooth'}); }
+      <div class="text-xs mt-1">Noch ${Math.max(0, need-current)} Punkte bis Level ${lvl+1}</div>
+    `;
+  }
+  function renderAchievements(){
+    const total=totalPoints();
+    const s=streakCount();
+    const sportCount=state.log.filter(e=> (e.quest||'').toLowerCase().includes('sport')).length;
+    const list=[
+      {ok: total>=100, icon:"🏅", text:"100 Punkte erreicht"},
+      {ok: s>=5, icon:"🔥", text:"5 Tage Streak"},
+      {ok: sportCount>=10, icon:"💪", text:"10x Sport gemacht"}
+    ];
+    return list.map(a=>`
+      <div class="p-2 border rounded ${a.ok?'bg-yellow-100 dark:bg-yellow-900/40':'bg-gray-100 dark:bg-slate-800'}">
+        ${a.icon} ${a.text} ${a.ok?'✅':'❌'}
+      </div>
+    `).join('');
+  }
+  function renderStats(){
+    const cvs=document.getElementById("statsChart");
+    const ctx=cvs.getContext("2d");
+    const W=cvs.width=cvs.clientWidth||300;
+    const H=cvs.height=cvs.clientHeight||160;
+    const today=new Date();
+    const days=[];
+    for(let i=13;i>=0;i--){
+      const d=new Date(today);
+      d.setDate(d.getDate()-i);
+      const iso=d.toISOString().slice(0,10);
+      const sum=state.log.filter(e=>e.date===iso).reduce((s,e)=>s+e.points,0);
+      days.push({label:iso.slice(5),value:sum});
+    }
+    ctx.clearRect(0,0,W,H);
+    const max=Math.max(10,...days.map(d=>d.value));
+    const barW=W/days.length*0.6;
+    days.forEach((d,i)=>{
+      const x=i*(W/days.length)+barW*0.2;
+      const h=(d.value/max)*(H-22);
+      const y=H-h-18;
+      ctx.fillStyle=getComputedStyle(document.documentElement).classList?.contains('dark') ? "#60a5fa" : "#3b82f6";
+      ctx.fillRect(x,y,barW,h);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font="10px sans-serif";
+      if(i%2===0) ctx.fillText(d.label,x,H-5);
+    });
+  }
+  function renderTodaySuggestions(){
+    const box=document.getElementById("todaySuggestions");
+    const today=todayISO();
+    const doneToday=new Set(state.log.filter(e=>e.date===today).map(e=>e.quest));
+    const available=state.catalog.filter(q=>!doneToday.has(q.name)).slice(0,5);
+    box.innerHTML = available.length
+      ? available.map(q=>`<button data-sug="${q.name}" class="btn w-full text-left">➕ ${q.name} (+${q.points} Punkte)</button>`).join('')
+      : `<div class="text-slate-500 text-sm">Alles erledigt 🎉</div>`;
+    box.querySelectorAll("[data-sug]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const name=btn.getAttribute("data-sug");
+        quickAdd(name);
+      });
+    });
+  }
+  function renderDailyGoal(){
+    const box=document.getElementById("dailyGoalBox");
+    const today=todayISO();
+    const count=state.log.filter(e=>e.date===today).length;
+    const goal=state.settings.dailyGoal||3;
+    if(count>=goal){
+      box.innerHTML=`✅ Tagesziel erreicht (${count}/${goal}) 🎉`;
+      box.className="p-2 border rounded bg-green-100 dark:bg-green-900/40 text-sm";
+    }else{
+      box.innerHTML=`🔄 ${count}/${goal} erledigt – noch ${goal-count} offen`;
+      box.className="p-2 border rounded bg-yellow-100 dark:bg-yellow-900/40 text-sm";
+    }
+  }
+  function renderDashboard(){
+    document.getElementById("totalPoints").textContent = totalPoints();
+    document.getElementById("currentLevel").textContent = levelForPoints(totalPoints());
+    document.getElementById("savingsTotal").textContent = euro(totalPoints()*state.settings.euro);
+    document.getElementById("levelBar").innerHTML = renderLevelProgress();
+    document.getElementById("achievements").innerHTML = renderAchievements();
+    renderStats();
+    renderTodaySuggestions();
+    renderDailyGoal();
   }
 
-  // Buttons im Home-Menü
-  sec.querySelectorAll('[data-goto]').forEach(btn=>{
-    btn.addEventListener('click', ()=> goto(btn.getAttribute('data-goto')));
-  });
+  // ====== LOG ======
+  function renderLogList(){
+    const list=document.getElementById("logList");
+    list.innerHTML = state.log.map(e=>{
+      const neg = e.points<0;
+      return `<div class="p-2 rounded border ${neg?'bg-red-50 dark:bg-red-900/30':'bg-white dark:bg-slate-900'} border-slate-200 dark:border-slate-700">
+        ${e.date} • ${e.quest} ${e.points>=0?'+':''}${e.points}
+      </div>`;
+    }).join('') || "<div class='text-sm text-slate-500'>Noch keine Einträge.</div>";
+  }
+  function addLog(){
+    const d = document.getElementById("logDate").value || todayISO();
+    const q = (document.getElementById("logQuest").value||"").trim();
+    const manualPts = Number(document.getElementById("logPoints").value||0);
+    const malus = Number(document.getElementById("logMalus").value||0);
 
-  // Schwebender Menü-Button (von überall zurück ins Hauptmenü)
-  if(!document.getElementById('fabHome')){
-    const fab = document.createElement('button');
-    fab.id = 'fabHome';
-    fab.className = 'fixed bottom-24 right-4 z-20 btn bg-blue-600 text-white rounded-full shadow-lg';
-    fab.textContent = 'Menü';
-    fab.addEventListener('click', ()=> goto('home'));
-    document.body.appendChild(fab);
+    // Basis bestimmen: manuell > Katalog > 0
+    let base = manualPts;
+    if(!base && q){
+      const found = state.catalog.find(x=>x.name.toLowerCase()===q.toLowerCase());
+      if(found) base = found.points;
+    }
+    if(!q && base===0){
+      alert("Bitte Questname und/oder Punkte angeben.");
+      return;
+    }
+    const name = q || "(ohne Name)";
+    const pts = computePoints(base||0, d) + malus;
+
+    state.log.push({date:d, quest:name, points:pts, base: base||0});
+    save(); renderAll();
+
+    // Felder leeren
+    document.getElementById("logQuest").value="";
+    document.getElementById("logPoints").value="";
+    document.getElementById("logMalus").value="";
   }
 
-  // Optional: bei erstem Start gleich Home zeigen
-  // (Falls du lieber Dashboard starten willst, kommentiere die nächste Zeile aus)
-  // goto('home');
-})();
-/* ==== PATCH: Safe-Area Header + FAB-Position + Canvas-Fix ==== */
-(function(){
-  // 1) CSS für Safe-Area & FAB injizieren
-  const css = `
-    header.safe-header{
-      /* Safe-Area für iOS-Notch */
-      padding-top: calc(env(safe-area-inset-top, 0px) + 1rem) !important;
-      padding-left: calc(env(safe-area-inset-left, 0px) + 1rem) !important;
-      padding-right: calc(env(safe-area-inset-right, 0px) + 1rem) !important;
-    }
-    /* Legacy iOS fallback */
-    @supports (padding-top: constant(safe-area-inset-top)) {
-      header.safe-header{
-        padding-top: calc(constant(safe-area-inset-top) + 1rem) !important;
-        padding-left: calc(constant(safe-area-inset-left) + 1rem) !important;
-        padding-right: calc(constant(safe-area-inset-right) + 1rem) !important;
-      }
-    }
-
-    /* FAB-Button unten rechts, mit Safe-Area */
-    .fab-home{
-      position: fixed !important;
-      z-index: 30;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
-      right:  calc(env(safe-area-inset-right,  0px) + 12px) !important;
-      border-radius: 9999px;
-    }
-
-    /* Canvas aus dem Layout rausnehmen (Overlay) */
-    #fx{
-      position: fixed !important;
-      inset: 0 !important;
-      pointer-events: none !important;
-      z-index: 5 !important;
-      display: block !important;
-    }
-  `;
-  const st=document.createElement('style');
-  st.appendChild(document.createTextNode(css));
-  document.head.appendChild(st);
-
-  // 2) Header Safe-Area aktivieren
-  const hdr=document.querySelector('header');
-  if(hdr) hdr.classList.add('safe-header');
-
-  // 3) FAB in die Ecke ziehen (überschreibt frühere Tailwind-bottom/right Klassen)
-  const fab=document.getElementById('fabHome');
-  if(fab){
-    fab.classList.add('fab-home');
-    fab.style.bottom = 'calc(env(safe-area-inset-bottom, 0px) + 12px)'; // inline > utility
-    fab.style.right  = 'calc(env(safe-area-inset-right,  0px) + 12px)';
+  // Schnell hinzufügen (für Vorschläge/Buttons)
+  function quickAdd(questName){
+    const q = state.catalog.find(x=>x.name===questName);
+    const base = q ? q.points : 0;
+    const pts = computePoints(base, todayISO());
+    state.log.push({date:todayISO(), quest: questName, points: pts, base});
+    save(); renderAll();
   }
 
-  // 4) Canvas bereits im CSS gefixt – kein weiteres JS nötig.
-})();
-/* ==== PATCH: Sonderaufgaben (Cooldown-Tab) ==== */
-(function(){
-  // --- State & Helpers ---
-  state.specialTasks = state.specialTasks || []; // [{name, points, everyDays, lastDone}]
-  const today = () => todayISO();
-  const daysBetween = (a,b) => Math.floor((new Date(b)-new Date(a))/(1000*60*60*24));
-
-  function isAvailable(t){
-    if(!t.lastDone) return true; // sofort verfügbar, solange nicht erledigt
-    return daysBetween(t.lastDone, today()) >= Number(t.everyDays||1);
+  function renderLog(){
+    document.getElementById("logDate").value = todayISO();
+    renderLogList();
   }
-  function nextDate(t){
-    if(!t.lastDone){
-      // sofort verfügbar -> "heute" als nextDate anzeigen
-      return today();
-    }
-    const d = new Date(t.lastDone);
-    d.setDate(d.getDate() + Number(t.everyDays||1));
+
+  // ====== KATALOG ======
+  function renderCatalog(){
+    const list=document.getElementById("catalogList");
+    list.innerHTML = state.catalog.map((q,i)=>`
+      <div class="p-2 border rounded flex items-center justify-between ${q.boss?'bg-yellow-50 dark:bg-yellow-900/30':'bg-white dark:bg-slate-900'} border-slate-200 dark:border-slate-700">
+        <span>${q.boss?'👑 ':''}${q.name} (+${q.points} Punkte)</span>
+        <div class="flex gap-2">
+          <button class="btn text-sm" data-quick="${i}">➕</button>
+          <button class="btn text-sm text-red-600" data-del="${i}">Löschen</button>
+        </div>
+      </div>
+    `).join('') || "<div class='text-sm text-slate-500'>Noch keine Einträge im Katalog.</div>";
+
+    list.querySelectorAll("[data-del]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const idx=Number(btn.getAttribute("data-del"));
+        state.catalog.splice(idx,1);
+        save(); renderAll();
+      });
+    });
+    list.querySelectorAll("[data-quick]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const idx=Number(btn.getAttribute("data-quick"));
+        quickAdd(state.catalog[idx].name);
+      });
+    });
+  }
+  function addQuest(){
+    const name=(document.getElementById("qName").value||"").trim();
+    const points=Number(document.getElementById("qPoints").value||0);
+    const boss=document.getElementById("qBoss").checked;
+    if(!name || !points){ alert("Bitte Name und Punkte angeben."); return; }
+    state.catalog.push({name,points,boss});
+    save(); renderAll();
+    document.getElementById("qName").value="";
+    document.getElementById("qPoints").value="";
+    document.getElementById("qBoss").checked=false;
+  }
+
+  // ====== SONDERAUFGABEN (Cooldown) ======
+  const daysBetween = (a,b)=> Math.floor((new Date(b)-new Date(a))/(1000*60*60*24));
+  function spIsAvailable(t){
+    if(!t.lastDone) return true;
+    return daysBetween(t.lastDone, todayISO()) >= Number(t.everyDays||1);
+  }
+  function spNextDate(t){
+    if(!t.lastDone) return todayISO();
+    const d=new Date(t.lastDone);
+    d.setDate(d.getDate()+Number(t.everyDays||1));
     return d.toISOString().slice(0,10);
   }
-
-  // --- Tab erzeugen, falls nicht vorhanden ---
-  if(!document.getElementById('tab-special')){
-    const sec = document.createElement('section');
-    sec.id='tab-special';
-    sec.className='tab space-y-4';
-    sec.innerHTML = `
-      <div class="space-y-2">
-        <h3 class="font-bold text-lg">Sonderaufgaben (Cooldown)</h3>
-        <div class="grid grid-cols-3 gap-2">
-          <input id="spName" class="input col-span-3" placeholder="Name (z. B. Blumen gießen)" />
-          <input id="spPoints" type="number" class="input" placeholder="Punkte" />
-          <input id="spDays" type="number" class="input" placeholder="Alle X Tage" />
-          <button id="btnAddSpecial" class="btn bg-blue-600 text-white">Hinzufügen</button>
-        </div>
-        <p class="text-xs text-slate-500">Nach dem Erledigen wird die Aufgabe für die angegebene Anzahl Tage gesperrt.</p>
-      </div>
-
-      <div>
-        <h4 class="font-bold mt-2">Jetzt verfügbar</h4>
-        <div id="specialAvail" class="space-y-2"></div>
-      </div>
-
-      <div>
-        <h4 class="font-bold mt-4">Gesperrt</h4>
-        <div id="specialLocked" class="space-y-2 text-slate-600"></div>
-      </div>
-    `;
-    // ans Ende von <main>
-    const main = document.querySelector('main');
-    if(main) main.appendChild(sec);
-  }
-
-  // --- Nav-Button ergänzen & Grid anpassen ---
-  const navGrid = document.querySelector('nav .grid');
-  if(navGrid && !navGrid.querySelector('[data-tab="special"]')){
-    const btn = document.createElement('button');
-    btn.textContent = 'Sonder';
-    btn.className = 'py-3';
-    btn.setAttribute('data-tab','special');
-    navGrid.appendChild(btn);
-
-    // Grid-Spalten erhöhen (robust alle grid-cols-* entfernen, dann neu setzen)
-    navGrid.className = navGrid.className.replace(/grid-cols-\d+/g,'').trim() + ' grid-cols-6';
-
-    // Click-Handler nur für neuen Button
-    btn.addEventListener('click',()=>{
-      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-      document.getElementById('tab-special').classList.add('active');
-      navGrid.querySelectorAll('[data-tab]').forEach(b=>b.classList.remove('text-blue-600'));
-      btn.classList.add('text-blue-600');
-    });
-  }
-
-  // --- Render-Funktion für den Tab ---
   function renderSpecial(){
-    const avail = document.getElementById('specialAvail');
-    const lock  = document.getElementById('specialLocked');
-    if(!avail || !lock) return;
+    const avail=document.getElementById("specialAvail");
+    const lock=document.getElementById("specialLocked");
+    const list=state.specialTasks.map((t,i)=>({...t,i}));
+    const available=list.filter(spIsAvailable);
+    const locked=list.filter(t=>!spIsAvailable(t));
 
-    const list = state.specialTasks.map((t,i)=>({...t,i}));
-    const available = list.filter(isAvailable);
-    const locked    = list.filter(t=>!isAvailable(t));
+    avail.innerHTML = available.length ? available.map(t=>`
+      <div class="p-2 border rounded flex items-center justify-between bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+        <div>
+          <div class="font-medium">⭐ ${t.name}</div>
+          <div class="text-xs text-slate-500">+${t.points} Punkte • alle ${t.everyDays} Tage</div>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn text-sm" data-sp-done="${t.i}">Erledigt</button>
+          <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
+          <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
+        </div>
+      </div>
+    `).join('') : `<div class="text-sm text-slate-500">Zurzeit nichts verfügbar.</div>`;
 
-    avail.innerHTML = available.length
-      ? available.map(t=>`
-        <div class="p-2 border rounded flex items-center justify-between bg-white">
+    lock.innerHTML = locked.length ? locked.map(t=>{
+      const nd=spNextDate(t);
+      const rest=Math.max(0, daysBetween(todayISO(), nd));
+      return `
+        <div class="p-2 border rounded bg-gray-50 dark:bg-slate-800 flex items-center justify-between border-slate-200 dark:border-slate-700">
           <div>
-            <div class="font-medium">⭐ ${t.name}</div>
-            <div class="text-xs text-slate-500">+${t.points} Punkte • alle ${t.everyDays} Tage</div>
+            <div class="font-medium">⛔ ${t.name}</div>
+            <div class="text-xs">wieder am ${nd}${rest>0?` (in ${rest} Tagen)`:''}</div>
           </div>
           <div class="flex gap-2">
-            <button class="btn text-sm" data-sp-done="${t.i}">Erledigt</button>
             <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
             <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
           </div>
-        </div>
-      `).join('')
-      : `<div class="text-sm text-slate-500">Zurzeit nichts verfügbar.</div>`;
+        </div>`;
+    }).join('') : `<div class="text-sm text-slate-500">Keine gesperrten Aufgaben.</div>`;
 
-    lock.innerHTML = locked.length
-      ? locked.map(t=>{
-          const nd = nextDate(t);
-          const rest = Math.max(0, daysBetween(today(), nd));
-          return `
-          <div class="p-2 border rounded bg-gray-50 flex items-center justify-between">
-            <div>
-              <div class="font-medium">⛔ ${t.name}</div>
-              <div class="text-xs">wieder am ${nd}${rest>0?` (in ${rest} Tagen)`:''}</div>
-            </div>
-            <div class="flex gap-2">
-              <button class="btn text-sm" data-sp-edit="${t.i}">✎</button>
-              <button class="btn text-sm text-red-600" data-sp-del="${t.i}">Löschen</button>
-            </div>
-          </div>`;
-        }).join('')
-      : `<div class="text-sm text-slate-500">Keine gesperrten Aufgaben.</div>`;
-
-    // Button-Events binden
-    document.querySelectorAll('[data-sp-done]').forEach(b=>{
-      b.onclick = ()=>{
-        const idx = Number(b.getAttribute('data-sp-done'));
-        const t = state.specialTasks[idx];
+    document.querySelectorAll("[data-sp-done]").forEach(b=>{
+      b.onclick=()=>{
+        const i=Number(b.getAttribute("data-sp-done"));
+        const t=state.specialTasks[i];
         if(!t) return;
-        const pts = computePoints(Number(t.points||0), today());
-        state.log.push({date: today(), quest: `Sonder: ${t.name}`, points: pts, base: Number(t.points||0)});
-        t.lastDone = today();
+        const pts=computePoints(Number(t.points||0), todayISO());
+        state.log.push({date:todayISO(),quest:`Sonder: ${t.name}`,points:pts,base:Number(t.points||0)});
+        t.lastDone = todayISO();
         save(); renderAll();
       };
     });
-    document.querySelectorAll('[data-sp-del]').forEach(b=>{
-      b.onclick = ()=>{
-        const idx = Number(b.getAttribute('data-sp-del'));
-        if(confirm('Sonderaufgabe wirklich löschen?')){
-          state.specialTasks.splice(idx,1);
+    document.querySelectorAll("[data-sp-del]").forEach(b=>{
+      b.onclick=()=>{
+        const i=Number(b.getAttribute("data-sp-del"));
+        if(confirm("Sonderaufgabe wirklich löschen?")){
+          state.specialTasks.splice(i,1);
           save(); renderAll();
         }
       };
     });
-    document.querySelectorAll('[data-sp-edit]').forEach(b=>{
-      b.onclick = ()=>{
-        const idx = Number(b.getAttribute('data-sp-edit'));
-        const t = state.specialTasks[idx];
-        if(!t) return;
-        const name = prompt('Name:', t.name); if(name===null) return;
-        const points = prompt('Punkte:', t.points); if(points===null) return;
-        const days = prompt('Alle wie viele Tage?', t.everyDays); if(days===null) return;
+    document.querySelectorAll("[data-sp-edit]").forEach(b=>{
+      b.onclick=()=>{
+        const i=Number(b.getAttribute("data-sp-edit"));
+        const t=state.specialTasks[i]; if(!t) return;
+        const name=prompt("Name:", t.name); if(name===null) return;
+        const points=prompt("Punkte:", t.points); if(points===null) return;
+        const days=prompt("Alle wie viele Tage?", t.everyDays); if(days===null) return;
         Object.assign(t,{
-          name: name.trim() || t.name,
+          name: (name||"").trim()||t.name,
           points: Number(points)||t.points,
           everyDays: Math.max(1, Number(days)||t.everyDays)
         });
@@ -1467,46 +534,166 @@ renderSettings = function(){
       };
     });
   }
-
-  // --- Add-Form binden ---
   function bindSpecialForm(){
-    const btn = document.getElementById('btnAddSpecial');
+    const btn=document.getElementById("btnAddSpecial");
     if(btn && !btn._bound){
-      btn._bound = true;
-      btn.addEventListener('click',()=>{
-        const name = (document.getElementById('spName').value||'').trim();
-        const points = Number(document.getElementById('spPoints').value||0);
-        const days = Math.max(1, Number(document.getElementById('spDays').value||0));
-        if(!name || !points || !days){
-          alert('Bitte Name, Punkte und Tage ausfüllen.');
-          return;
-        }
-        state.specialTasks.push({
-          name, points, everyDays: days, lastDone: null
-          // Wenn du neue Aufgaben direkt sperren willst:
-          // lastDone: today()  // <-- aktivieren, dann sind neue Aufgaben erstmal gesperrt
-        });
-        save();
-        document.getElementById('spName').value='';
-        document.getElementById('spPoints').value='';
-        document.getElementById('spDays').value='';
-        renderAll();
+      btn._bound=true;
+      btn.addEventListener("click", ()=>{
+        const name=(document.getElementById("spName").value||"").trim();
+        const points=Number(document.getElementById("spPoints").value||0);
+        const days=Math.max(1, Number(document.getElementById("spDays").value||0));
+        if(!name || !points || !days){ alert("Bitte Name, Punkte und Tage ausfüllen."); return; }
+        state.specialTasks.push({name, points, everyDays: days, lastDone: null});
+        save(); renderAll();
+        document.getElementById("spName").value="";
+        document.getElementById("spPoints").value="";
+        document.getElementById("spDays").value="";
       });
     }
   }
 
-  // --- In globalen Render-Zyklus einhängen ---
-  const _oldRenderAll = renderAll;
-  renderAll = function(){
-    _oldRenderAll();
+  // ====== SETTINGS ======
+  function renderSettings(){
+    const s=state.settings;
+    document.getElementById("sEuro").value = s.euro;
+    document.getElementById("sBase").value = s.base;
+    document.getElementById("sGrowth").value = s.growth;
+    document.getElementById("sDailyGoal").value = s.dailyGoal;
+    document.getElementById("sTheme").value = s.theme;
+
+    document.getElementById("sEuro").onchange = e=>{ s.euro=Number(e.target.value||0); save(); renderAll(); };
+    document.getElementById("sBase").onchange = e=>{ s.base=Number(e.target.value||100); save(); renderAll(); };
+    document.getElementById("sGrowth").onchange = e=>{ s.growth=Number(e.target.value||0.1); save(); renderAll(); };
+    document.getElementById("sDailyGoal").onchange = e=>{ s.dailyGoal=Number(e.target.value||1); save(); renderAll(); };
+    document.getElementById("sTheme").onchange = e=>{ s.theme=e.target.value; save(); applyTheme(); };
+
+    document.getElementById("btnExport").onclick=()=>{
+      const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download="life_rpg_backup.json";
+      a.click();
+    };
+    document.getElementById("btnImport").onclick=()=> document.getElementById("fileImport").click();
+    document.getElementById("fileImport").onchange=(e)=>{
+      const f=e.target.files[0]; if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        try{
+          const obj=JSON.parse(reader.result);
+          state=migrate(obj); save(); renderAll();
+          alert("Import erfolgreich.");
+        }catch{ alert("Fehler beim Import!"); }
+      };
+      reader.readAsText(f);
+    };
+    document.getElementById("btnReset").onclick=()=>{
+      if(confirm("Alles wirklich löschen?")){
+        state = structuredClone(defaultState);
+        save(); renderAll();
+      }
+    };
+  }
+
+  // ====== CHAT ======
+  function chatAdd(msg, from="bot"){
+    const log=document.getElementById("chatLog");
+    const row=document.createElement("div");
+    row.className = from==="user" ? "text-right" : "text-left text-blue-700";
+    row.textContent = msg;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+  function processMessage(msg){
+    const text = (msg||"").trim().toLowerCase();
+    // Vorschläge
+    if((text.includes("was") && text.includes("machen")) || text.includes("vorschlag")){
+      const today=todayISO();
+      const done=new Set(state.log.filter(e=>e.date===today).map(e=>e.quest));
+      const open=state.catalog.filter(q=>!done.has(q.name)).slice(0,5);
+      if(open.length===0) return ["🎉 Alles erledigt!"];
+      // Buttons als einfache Liste – Klicks über quickAdd
+      open.forEach(q=> chatAdd(`➕ ${q.name} (+${q.points} Punkte)`,"bot"));
+      return ["👉 Vorschläge oben als Liste."];
+    }
+    // Rückgängig
+    if(text.includes("rückgängig") || text.includes("letzte quest")){
+      if(state.log.length===0) return ["Kein Eintrag vorhanden."];
+      const last=state.log.pop(); save(); renderAll();
+      return [`🗑️ Letzte Quest gelöscht: ${last.quest} (${last.points} Punkte)`];
+    }
+    // Zeige <wort>
+    if(text.startsWith("zeige ")){
+      const q=text.replace("zeige ","").trim();
+      const res=state.log.filter(e=> e.quest.toLowerCase().includes(q));
+      if(res.length===0) return ["❌ Nichts gefunden."];
+      return ["🔍 Ergebnisse:", ...res.slice(-10).map(e=>`${e.date} • ${e.quest} (${e.points} Punkte)`)];
+    }
+    // Falls ein Katalognamen genannt wird → eintragen
+    const found = state.catalog.find(q=> text.includes(q.name.toLowerCase()));
+    if(found){
+      const pts=computePoints(found.points, todayISO());
+      state.log.push({date:todayISO(), quest:found.name, points:pts, base:found.points});
+      save(); renderAll();
+      return [`✅ Eingetragen: ${found.name} (+${pts} Punkte)`];
+    }
+    // Sonst neue Quest mit +5
+    const nq = msg.trim();
+    if(nq){
+      state.catalog.push({name:nq,points:5});
+      const pts=computePoints(5, todayISO());
+      state.log.push({date:todayISO(), quest:nq, points:pts, base:5});
+      save(); renderAll();
+      return [`➕ Neue Quest angelegt & eingetragen: ${nq} (+${pts} Punkte)`];
+    }
+    return ["Ich habe dich nicht verstanden 😅"];
+  }
+  function bindChat(){
+    const input=document.getElementById("chatInput");
+    document.getElementById("btnChatSend").addEventListener("click", ()=>{
+      const txt=(input.value||"").trim();
+      if(!txt) return;
+      chatAdd(txt,"user");
+      const res=processMessage(txt);
+      (res||[]).forEach(r=>chatAdd(r,"bot"));
+      input.value="";
+    });
+  }
+
+  // ====== NAVIGATION ======
+  function bindNav(){
+    document.querySelectorAll("nav [data-tab]").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const tab=btn.getAttribute("data-tab");
+        document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+        document.getElementById("tab-"+tab).classList.add("active");
+        document.querySelectorAll("nav [data-tab]").forEach(b=>b.classList.remove("text-blue-600"));
+        btn.classList.add("text-blue-600");
+      });
+    });
+  }
+
+  // ====== RENDER ALL ======
+  function renderAll(){
+    applyTheme();
+    renderDashboard();
+    renderLog();
+    renderCatalog();
     renderSpecial();
     bindSpecialForm();
-  };
+    renderSettings();
+  }
 
-  // Initialer Render
-  renderSpecial();
-  bindSpecialForm();
-})();
+  // ====== INIT ======
+  (function init(){
+    applyTheme();
+    bindNav();
+    document.getElementById("btnAddEntry").addEventListener("click", addLog);
+    document.getElementById("btnAddQuest").addEventListener("click", addQuest);
+    bindChat();
+    renderAll();
+    // Redraw stats on resize
+    window.addEventListener("resize", ()=>{ if(document.getElementById("tab-dashboard").classList.contains("active")) renderStats(); });
   })();
   </script>
 </body>
