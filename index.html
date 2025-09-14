@@ -1126,7 +1126,136 @@
     // Start
     ensureDailyEvent();
     renderAll();
+/* ==== PATCH: Hauptmenü + Darkmode (einfügen direkt über der Zeile '})();') ==== */
 
+// --- 1) Darkmode CSS dynamisch einfügen ---
+(function addDarkCSS(){
+  const css = `
+    .dark body { background:#0b1220; color:#e5e7eb; }
+    .dark .card { background:#0f172a; border-color:#334155; }
+    .dark .input, .dark .btn { background:#0f172a; border-color:#334155; color:#e2e8f0; }
+    .dark .badge { background:#334155; color:#e2e8f0; }
+    .dark .muted { color:#94a3b8; }
+    /* Utility-Overrides für vereinzelte Tailwind-Farben */
+    .dark .bg-white { background-color:#0f172a !important; }
+    .dark .bg-slate-50, .dark .bg-rose-50, .dark .bg-yellow-100,
+    .dark .bg-green-100, .dark .bg-indigo-50, .dark .bg-purple-50 {
+      background-color:#111827 !important;
+    }
+    .dark .text-emerald-700 { color:#34d399 !important; }
+    .dark .text-rose-600 { color:#fb7185 !important; }
+  `;
+  const st = document.createElement('style');
+  st.appendChild(document.createTextNode(css));
+  document.head.appendChild(st);
+})();
+
+// --- 2) Theme-Logik ---
+state.settings.theme = state.settings.theme || 'auto';
+function applyTheme(){
+  const preferDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const on = (state.settings.theme==='dark') || (state.settings.theme==='auto' && preferDark);
+  document.documentElement.classList.toggle('dark', on);
+}
+applyTheme();
+if (window.matchMedia){
+  // Bei Systemwechsel in 'auto' live übernehmen
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
+    if(state.settings.theme==='auto') applyTheme();
+  });
+}
+
+// --- 3) Settings um Theme-Auswahl erweitern (ohne bestehende Funktion kaputt zu machen) ---
+const __renderSettings = renderSettings;
+renderSettings = function(){
+  __renderSettings();
+  // Ein kleines Theme-Feld in die erste Settings-Karte einfügen
+  const firstCard = document.querySelector('#tab-settings .card');
+  if(!firstCard) return;
+  if(firstCard.querySelector('#sTheme')) return; // schon vorhanden
+  const row = document.createElement('div');
+  row.className = 'grid grid-cols-3 gap-2 mt-2';
+  row.innerHTML = `
+    <label class="text-sm">Theme
+      <select id="sTheme" class="input">
+        <option value="light">Hell</option>
+        <option value="dark">Dunkel</option>
+        <option value="auto">Auto</option>
+      </select>
+    </label>
+  `;
+  firstCard.appendChild(row);
+  const sel = row.querySelector('#sTheme');
+  sel.value = state.settings.theme || 'auto';
+  sel.addEventListener('change', ()=>{
+    state.settings.theme = sel.value;
+    save();
+    applyTheme();
+  });
+};
+
+// --- 4) Bottom-Nav ausblenden, Home-Menü erzeugen, Navigation vereinheitlichen ---
+(function mountHomeMenu(){
+  // Bottom-Nav ausblenden (bleibt im DOM, aber unsichtbar)
+  const nav = document.querySelector('nav');
+  if(nav) nav.style.display = 'none';
+
+  // Home-Section erstellen und als erste Sektion einsetzen
+  const main = document.querySelector('main');
+  if(!main) return;
+
+  // Nicht doppelt einfügen
+  if(document.getElementById('tab-home')) return;
+
+  const sec = document.createElement('section');
+  sec.id = 'tab-home';
+  sec.className = 'tab space-y-4 active';
+  sec.innerHTML = `
+    <div class="card p-4">
+      <h2 class="text-xl font-bold mb-2">🏠 Hauptmenü</h2>
+      <div class="grid grid-cols-2 gap-3">
+        <button class="card p-4 text-left" data-goto="dashboard"><div class="text-2xl">📊</div><div class="font-bold">Dashboard</div><div class="muted text-sm">Punkte, Level, Ziele</div></button>
+        <button class="card p-4 text-left" data-goto="log"><div class="text-2xl">📝</div><div class="font-bold">Log</div><div class="muted text-sm">Einträge erfassen</div></button>
+        <button class="card p-4 text-left" data-goto="catalog"><div class="text-2xl">📚</div><div class="font-bold">Katalog</div><div class="muted text-sm">Quests & Kategorien</div></button>
+        <button class="card p-4 text-left" data-goto="missions"><div class="text-2xl">🧭</div><div class="font-bold">Missionen</div><div class="muted text-sm">Freischaltbare Schritte</div></button>
+        <button class="card p-4 text-left" data-goto="settings"><div class="text-2xl">⚙️</div><div class="font-bold">Einstellungen</div><div class="muted text-sm">Wirtschaft, Theme, Daten</div></button>
+        <button class="card p-4 text-left" data-goto="chat"><div class="text-2xl">💬</div><div class="font-bold">Chat</div><div class="muted text-sm">Empfehlungen & Shortcuts</div></button>
+      </div>
+    </div>
+  `;
+  // Ganz nach oben setzen
+  main.insertBefore(sec, main.firstChild);
+
+  // Alle Tabs zunächst verbergen, Home aktivieren
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  sec.classList.add('active');
+
+  // Einheitliche Navigation
+  function goto(tab){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    const el = document.getElementById('tab-'+tab);
+    if(el){ el.classList.add('active'); window.scrollTo({top:0, behavior:'smooth'}); }
+  }
+
+  // Buttons im Home-Menü
+  sec.querySelectorAll('[data-goto]').forEach(btn=>{
+    btn.addEventListener('click', ()=> goto(btn.getAttribute('data-goto')));
+  });
+
+  // Schwebender Menü-Button (von überall zurück ins Hauptmenü)
+  if(!document.getElementById('fabHome')){
+    const fab = document.createElement('button');
+    fab.id = 'fabHome';
+    fab.className = 'fixed bottom-24 right-4 z-20 btn bg-blue-600 text-white rounded-full shadow-lg';
+    fab.textContent = 'Menü';
+    fab.addEventListener('click', ()=> goto('home'));
+    document.body.appendChild(fab);
+  }
+
+  // Optional: bei erstem Start gleich Home zeigen
+  // (Falls du lieber Dashboard starten willst, kommentiere die nächste Zeile aus)
+  // goto('home');
+})();
   })();
   </script>
 </body>
