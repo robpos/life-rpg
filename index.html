@@ -868,6 +868,430 @@
       }
     })();
     /* ===== END PHASE 2 PATCH ===== */
+    /* =========================
+       PHASE 3 PATCH — CATEGORIES
+       ========================== */
+    ;(() => {
+      const $  = sel => document.querySelector(sel);
+      const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+      // ---- State initialisieren / migrieren ----
+      state.categories = state.categories || [
+        { id:"cat_sonstige", name:"Sonstige", type:"positive", color:"#64748b" },
+        { id:"cat_sport",    name:"Sport",    type:"positive", color:"#0ea5e9" },
+        { id:"cat_haus",     name:"Handwerk", type:"positive", color:"#f59e0b" },
+        { id:"cat_bad",      name:"Schlechter Lebensstil", type:"negative", color:"#ef4444" }
+      ];
+      // Katalog-Einträge erhalten optional: quest.categories = [{id, mult:number}]
+      state.catalog.forEach(q => { q.categories = q.categories || []; });
+
+      // Stelle sicher, dass "Sonstige" existiert
+      function ensureMiscCategory(){
+        if(!state.categories.find(c=>c.id==="cat_sonstige")){
+          state.categories.unshift({ id:"cat_sonstige", name:"Sonstige", type:"positive", color:"#64748b" });
+          saveV2();
+        }
+      }
+      ensureMiscCategory();
+
+      // ---- Helpers ----
+      function findCat(id){ return state.categories.find(c=>c.id===id); }
+      function catName(id){ return findCat(id)?.name || "Unbekannt"; }
+
+      // Summe pro Kategorie (aus Log abgeleitet)
+      function categoryTotals(){
+        const sums = {};
+        state.categories.forEach(c => sums[c.id] = 0);
+        // Sammle pro Logeintrag die Quest und deren kategorisierte Punkte
+        state.log.forEach(entry => {
+          const q = state.catalog.find(x=>x.name===entry.quest);
+          if(q && q.categories && q.categories.length){
+            q.categories.forEach(ac => {
+              const cat = findCat(ac.id);
+              if(!cat) return;
+              const base = (typeof entry.base === "number" ? entry.base : (q.points||0));
+              const add  = Math.max(0, base * (Number(ac.mult)||1));
+              sums[ac.id] += add;
+            });
+          }else{
+            // keine Kategorie → "Sonstige"
+            const base = (typeof entry.base === "number" ? entry.base : (q?.points||entry.points||0));
+            const add = Math.max(0, base);
+            sums["cat_sonstige"] = (sums["cat_sonstige"]||0) + add;
+          }
+        });
+        return sums;
+      }
+
+      // ---- UI: Kategorie-Auswahl im Katalog-Formular (Mehrfachauswahl + Multiplikator) ----
+      function ensureCatalogCategoryPicker(){
+        const view = $("#view-catalog");
+        if(!view) return;
+
+        const formCard = view.querySelector(".card");
+        if(!formCard) return;
+
+        if(!$("#catAssignWrap")){
+          const wrap = document.createElement("div");
+          wrap.id = "catAssignWrap";
+          wrap.className = "mt-3 p-3 card";
+          wrap.innerHTML = `
+            <div class="font-semibold mb-2">Kategorien & Multiplikatoren</div>
+            <div id="catAssignRows" class="space-y-2"></div>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <button id="btnAddCatRow" class="btn text-xs">+ Kategorie zuweisen</button>
+              <button id="btnManageCats" class="btn text-xs">Kategorien verwalten</button>
+            </div>
+          `;
+          formCard.after(wrap);
+
+          // Event: neue Zuordnungzeile
+          $("#btnAddCatRow").onclick = () => addCatAssignRow();
+          // Event: Kategorien-Manager öffnen (unten implementiert)
+          $("#btnManageCats").onclick = () => openCategoryManager();
+        }
+        // beim ersten Laden mindestens eine Zeile
+        const rows = $("#catAssignRows");
+        if (rows && rows.children.length === 0) addCatAssignRow();
+      }
+
+      function addCatAssignRow(pre = null){
+        const rows = $("#catAssignRows");
+        if(!rows) return;
+        const div = document.createElement("div");
+        div.className = "grid md:grid-cols-3 gap-2 items-center";
+        div.innerHTML = `
+          <select class="input catSel"></select>
+          <input type="number" step="0.01" class="input catMult" placeholder="Multiplikator (z.B. 1, 1.5, 2)" />
+          <button class="btn text-xs btn-danger catDel">Entfernen</button>
+        `;
+        rows.appendChild(div);
+
+        const sel = div.querySelector(".catSel");
+        const mult = div.querySelector(".catMult");
+        sel.innerHTML = state.categories.map(c=>`<option value="${c.id}">${c.name} ${c.type==="negative"?"(negativ)":""}</option>`).join("");
+        mult.value = pre?.mult ?? 1;
+        if(pre?.id) sel.value = pre.id;
+
+        div.querySelector(".catDel").onclick = () => div.remove();
+      }
+
+      // Beim Anlegen einer Quest die gewählten Kategorien mitspeichern
+      const _bindCatalogForm = bindCatalogForm;
+      bindCatalogForm = function(){
+        _bindCatalogForm?.(); // falls vorhanden
+        ensureCatalogCategoryPicker();
+
+        // Abfangen des "Hinzufügen"-Buttons aus Phase 1/2
+        const btn = $("#btnAddCatalog");
+        if(btn && !btn._catPatched){
+          btn._catPatched = true;
+          btn.addEventListener("click", () => {
+            const qName  = $("#qName")?.value.trim();
+            const qPts   = Number($("#qPoints")?.value || 0);
+            if(!qName || !qPts){ return; }
+
+            // Kategorien einsammeln
+            const rows = $$("#catAssignRows .grid");
+            const assigns = rows.map(r => {
+              const sel = r.querySelector(".catSel");
+              const mult = r.querySelector(".catMult");
+              return { id: sel.value, mult: Number(mult.value||1) || 1 };
+            }).filter(a => a.id);
+
+            // Neuen Katalogeintrag erzeugen oder existierenden updaten
+            const existing = state.catalog.find(q=>q.name.toLowerCase()===qName.toLowerCase());
+            if(existing){
+              existing.points = qPts;
+              existing.categories = assigns;
+            }else{
+              state.catalog.push({ name:qName, points:qPts, categories:assigns });
+            }
+            saveV2();
+            renderAll();
+
+            // Formular leeren
+            if($("#qName"))  $("#qName").value = "";
+            if($("#qPoints")) $("#qPoints").value = "";
+            const cont = $("#catAssignRows"); if(cont) cont.innerHTML = "";
+            addCatAssignRow();
+          });
+        }
+      };
+
+      // ---- Katalog-Liste: Zeige Kategorien-Badges & Editor pro Quest ----
+      const _renderCatalog = renderCatalog;
+      renderCatalog = function(){
+        _renderCatalog?.();
+
+        const wrap = $("#catalogList");
+        if(!wrap) return;
+        // Liste ersetzen, um Badges & "Kategorien bearbeiten" hinzuzufügen
+        wrap.innerHTML = state.catalog.length ? state.catalog.map((q,i) => {
+          const badges = (q.categories||[]).map(ac=>{
+            const c = findCat(ac.id);
+            const label = c ? c.name : "Unbekannt";
+            return `<span class="px-2 py-1 rounded text-xs" style="background:${c?.color||'#e5e7eb'};color:#fff">${label}×${ac.mult||1}</span>`;
+          }).join(" ");
+
+          return `
+            <div class="row flex items-center justify-between gap-2">
+              <div class="flex flex-col">
+                <div>📌 ${q.name} <span class="text-slate-500 dark:text-slate-300">(+${q.points})</span></div>
+                <div class="flex flex-wrap gap-1 mt-1">${badges || `<span class="text-slate-500 dark:text-slate-300 text-xs">Sonstige</span>`}</div>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn text-xs" data-editcats="${i}">Kategorien</button>
+                <button class="btn text-xs" data-use="${i}">Eintragen</button>
+                <button class="btn text-xs btn-danger" data-del="${i}">Löschen</button>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="text-slate-500 dark:text-slate-300">Noch keine Vorlagen.</div>`;
+
+        // Re-bind „Eintragen“ + „Löschen“ (Phase 2 Logik)
+        wrap.querySelectorAll("[data-use]").forEach(btn => {
+          btn.onclick = () => {
+            const q = state.catalog[Number(btn.dataset.use)];
+            if(!q) return;
+            const d = new Date().toISOString().slice(0,10);
+            state.log.push({date:d, quest:q.name, points:Number(q.points)||0, base:q.points});
+            saveV2();
+            renderAll();
+          };
+        });
+        wrap.querySelectorAll("[data-del]").forEach(btn => {
+          btn.onclick = () => {
+            const i = Number(btn.dataset.del);
+            if(i>=0){ state.catalog.splice(i,1); saveV2(); renderAll(); }
+          };
+        });
+        // Kategorien bearbeiten
+        wrap.querySelectorAll("[data-editcats]").forEach(btn => {
+          btn.onclick = () => openQuestCategoryEditor(Number(btn.dataset.editcats));
+        });
+
+        // Unterhalb: Kategorien-Karte (Übersicht + Totals + Manager öffnen)
+        renderCategoryOverviewCard();
+      };
+
+      // ---- Kategorien-Übersicht Karte im Katalog-View ----
+      function renderCategoryOverviewCard(){
+        const view = $("#view-catalog");
+        if(!view) return;
+        let card = $("#catOverviewCard");
+        if(!card){
+          card = document.createElement("div");
+          card.id = "catOverviewCard";
+          card.className = "mt-4 p-3 card";
+          view.appendChild(card);
+        }
+        const sums = categoryTotals();
+        const rows = state.categories.map(c => `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="inline-block w-3 h-3 rounded" style="background:${c.color}"></span>
+              <button class="underline text-left" data-cdetail="${c.id}">${c.name}${c.type==="negative"?" (negativ)":""}</button>
+            </div>
+            <div class="mono font-semibold">${(sums[c.id]||0).toFixed(0)} Pkt</div>
+          </div>
+        `).join("");
+
+        card.innerHTML = `
+          <div class="font-semibold mb-2">Kategorien (Punktesummen)</div>
+          <div class="space-y-2">${rows}</div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button class="btn text-xs" id="btnAddCategory">+ Kategorie anlegen</button>
+            <button class="btn text-xs" id="btnManageCats2">Verwalten</button>
+          </div>
+        `;
+
+        $("#btnAddCategory").onclick = () => quickAddCategory();
+        $("#btnManageCats2").onclick = () => openCategoryManager();
+        card.querySelectorAll("[data-cdetail]").forEach(btn => {
+          btn.onclick = () => openCategoryDetail(btn.getAttribute("data-cdetail"));
+        });
+      }
+
+      // ---- Quick Add einer Kategorie (Prompt) ----
+      function quickAddCategory(){
+        const name = prompt("Kategoriename?");
+        if(!name) return;
+        const type = (prompt("Typ (positive|negative)?","positive")||"positive").toLowerCase().startsWith("neg") ? "negative" : "positive";
+        const color = prompt("Farbe (CSS/Hex, z.B. #0ea5e9)?", type==="negative" ? "#ef4444" : "#0ea5e9") || (type==="negative" ? "#ef4444" : "#0ea5e9");
+        const id = "cat_"+Math.random().toString(36).slice(2,8);
+        state.categories.push({id,name, type, color});
+        saveV2(); renderAll();
+      }
+
+      // ---- Modal/Overlay: Kategorien-Manager ----
+      function openCategoryManager(){
+        closeModal();
+        const m = ensureModal();
+        const list = state.categories.map(c => `
+          <div class="row flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="inline-block w-3 h-3 rounded" style="background:${c.color}"></span>
+              <div>${c.name} ${c.type==="negative"?"(negativ)":""}</div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn text-xs" data-editc="${c.id}">Bearb.</button>
+              ${c.id==="cat_sonstige"?"":`<button class="btn text-xs btn-danger" data-delc="${c.id}">Löschen</button>`}
+            </div>
+          </div>
+        `).join("");
+
+        m.content.innerHTML = `
+          <div class="font-semibold mb-2">Kategorien verwalten</div>
+          <div class="space-y-2">${list || "<div class='text-slate-500 dark:text-slate-300'>Keine Kategorien</div>"}</div>
+          <div class="mt-3 flex gap-2">
+            <button class="btn" id="cmNew">+ Neu</button>
+            <button class="btn btn-ghost" id="cmClose">Schließen</button>
+          </div>
+        `;
+        $("#cmClose").onclick = closeModal;
+        $("#cmNew").onclick = quickAddCategoryAndRefresh;
+
+        m.content.querySelectorAll("[data-editc]").forEach(btn=>{
+          btn.onclick = () => editCategory(btn.getAttribute("data-editc"));
+        });
+        m.content.querySelectorAll("[data-delc]").forEach(btn=>{
+          btn.onclick = () => deleteCategory(btn.getAttribute("data-delc"));
+        });
+      }
+      function quickAddCategoryAndRefresh(){ quickAddCategory(); openCategoryManager(); }
+      function editCategory(id){
+        const c = findCat(id); if(!c) return;
+        const name = prompt("Neuer Name:", c.name); if(!name) return;
+        const type = (prompt("Typ (positive|negative)?", c.type)||c.type).toLowerCase().startsWith("neg") ? "negative" : "positive";
+        const color = prompt("Farbe (CSS/Hex):", c.color) || c.color;
+        c.name = name; c.type = type; c.color = color;
+        saveV2(); openCategoryManager(); renderAll();
+      }
+      function deleteCategory(id){
+        if(id==="cat_sonstige") return;
+        if(!confirm("Kategorie löschen? Zuweisungen gehen verloren.")) return;
+        // entferne aus Kategorie-Liste
+        state.categories = state.categories.filter(c=>c.id!==id);
+        // aus allen Quests entfernen
+        state.catalog.forEach(q => {
+          q.categories = (q.categories||[]).filter(ac=>ac.id!==id);
+        });
+        saveV2(); openCategoryManager(); renderAll();
+      }
+
+      // ---- Modal: Kategorie-Detail (Quests in dieser Kategorie + Mini-Meilensteine-Platzhalter) ----
+      function openCategoryDetail(catId){
+        const m = ensureModal();
+        const cat = findCat(catId);
+        const sums = categoryTotals();
+        const quests = state.catalog.filter(q => (q.categories||[]).some(ac=>ac.id===catId));
+
+        const qRows = quests.length ? quests.map(q=>{
+          const mult = (q.categories||[]).find(ac=>ac.id===catId)?.mult || 1;
+          return `<div class="row flex items-center justify-between">
+            <div>${q.name}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-300">×${mult}</div>
+          </div>`;
+        }).join("") : `<div class="text-slate-500 dark:text-slate-300">Keine zugeordneten Quests.</div>`;
+
+        m.content.innerHTML = `
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-semibold">${cat?.name||"Kategorie"}</div>
+            <div class="mono font-semibold">${(sums[catId]||0).toFixed(0)} Pkt</div>
+          </div>
+          <div class="space-y-2">${qRows}</div>
+          <div class="mt-3 flex justify-end">
+            <button class="btn btn-ghost" id="cdClose">Schließen</button>
+          </div>
+        `;
+        $("#cdClose").onclick = closeModal;
+      }
+
+      // ---- Modal: Quest-Kategorie-Editor ----
+      function openQuestCategoryEditor(qIndex){
+        const q = state.catalog[qIndex]; if(!q) return;
+        const m = ensureModal();
+
+        const options = state.categories.map(c => {
+          const pre = (q.categories||[]).find(ac=>ac.id===c.id);
+          return `
+            <div class="grid md:grid-cols-3 gap-2 items-center">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" class="chkCat" value="${c.id}" ${pre?"checked":""} />
+                <span class="inline-flex items-center gap-2">
+                  <span class="inline-block w-3 h-3 rounded" style="background:${c.color}"></span>
+                  ${c.name} ${c.type==="negative"?"(negativ)":""}
+                </span>
+              </label>
+              <input type="number" step="0.01" class="input multCat" value="${pre?.mult ?? 1}" />
+              <div class="text-xs text-slate-500 dark:text-slate-300">Multiplikator</div>
+            </div>`;
+        }).join("");
+
+        m.content.innerHTML = `
+          <div class="font-semibold mb-2">Kategorien für: ${q.name}</div>
+          <div id="qceRows" class="space-y-2">${options}</div>
+          <div class="mt-3 flex justify-between">
+            <button class="btn" id="qceAddCat">+ Kategorie anlegen</button>
+            <div class="flex gap-2">
+              <button class="btn btn-ghost" id="qceCancel">Abbrechen</button>
+              <button class="btn btn-primary" id="qceSave">Speichern</button>
+            </div>
+          </div>
+        `;
+
+        $("#qceCancel").onclick = closeModal;
+        $("#qceAddCat").onclick = () => { quickAddCategoryAndRefresh(); openQuestCategoryEditor(qIndex); };
+        $("#qceSave").onclick = () => {
+          const rows = $$("#qceRows .grid");
+          const assigns = rows.map(r=>{
+            const chk = r.querySelector(".chkCat");
+            const mult = r.querySelector(".multCat");
+            if(!chk.checked) return null;
+            return { id: chk.value, mult: Number(mult.value||1)||1 };
+          }).filter(Boolean);
+          q.categories = assigns;
+          saveV2(); renderAll(); closeModal();
+        };
+      }
+
+      // ---- Modal Grundgerüst (einfach) ----
+      function ensureModal(){
+        let modal = $("#modal");
+        if(!modal){
+          modal = document.createElement("div");
+          modal.id = "modal";
+          modal.className = "fixed inset-0 z-50 flex items-center justify-center";
+          modal.innerHTML = `
+            <div id="modalBg" class="absolute inset-0 bg-black/40"></div>
+            <div class="relative w-[90%] max-w-xl card p-4">
+              <button id="modalX" class="absolute top-2 right-2 btn text-xs">✕</button>
+              <div id="modalContent"></div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+          $("#modalBg").onclick = closeModal;
+          $("#modalX").onclick = closeModal;
+        }
+        return { root: modal, content: $("#modalContent") };
+      }
+      function closeModal(){
+        const m = $("#modal");
+        if(m) m.remove();
+      }
+
+      // ---- Log-Render erweitern: (nur Liste neu aus Phase 2, Farben bleiben dunkel/hell-konform) ----
+      // (Keine Änderung nötig — Kategorie-Summen werden im Katalog angezeigt.)
+
+      // ---- Initiale Hooks ----
+      // Falls „Katalog“ gerade offen ist, sofort UI ergänzen
+      if ($("#view-catalog")?.classList.contains("active")) {
+        ensureCatalogCategoryPicker();
+        renderCategoryOverviewCard();
+      }
+    })();
+    /* ===== END PHASE 3 PATCH ===== */
     /* === PATCHES ANCHOR — DO NOT REMOVE === */
   })();
   </script>
