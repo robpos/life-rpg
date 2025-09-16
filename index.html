@@ -1,959 +1,601 @@
 <!doctype html>
-<html lang="de" class="h-full">
+<html lang="de" class="light">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Life RPG</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root{
-      color-scheme: light dark;
-      --safe-top: env(safe-area-inset-top, 0px);
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --bg:#f8fafc;
+      --fg:#111827; /* fast schwarz */
+      --card:#ffffff;
+      --muted:#6b7280;
+      --primary:#0ea5e9;
+      --border:#e5e7eb;
     }
-    html,body{ height:100%; }
-    body{ background:#f8fafc; color:#0b0f19; }
-    .dark body{ background:#0b0f19; color:#fff; }
-    .appbar{
-      position:sticky; top:0; z-index:20;
-      padding-top: calc(12px + var(--safe-top));
-      background: rgba(255,255,255,.85);
-      backdrop-filter: blur(8px);
-      border-bottom:1px solid #e2e8f0;
+    html.dark{
+      color-scheme: dark;
+      --bg:#0b0f16;
+      --fg:#ffffff;
+      --card:#0f1623;
+      --muted:#cbd5e1;
+      --primary:#38bdf8;
+      --border:#1f2937;
     }
-    .dark .appbar{
-      background: rgba(2,6,23,.75);
-      border-bottom-color:#1f2937;
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .btn{border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:.75rem;padding:.6rem .9rem;display:inline-flex;gap:.5rem;align-items:center;justify-content:center}
+    .btn-primary{background:var(--primary);color:#fff;border-color:transparent}
+    .btn-danger{background:#ef4444;color:#fff;border-color:transparent}
+    .input, select{width:100%;border-radius:.75rem;border:1px solid var(--border);padding:.6rem .8rem;background:var(--card);color:var(--fg)}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1rem}
+    .muted{color:var(--muted)}
+    .hidden{display:none}
+    .view{display:none}
+    .view.active{display:block}
+    .safe-header{
+      position:sticky;top:0;z-index:20;
+      background:linear-gradient(to bottom, color-mix(in srgb, var(--card) 92%, transparent), var(--card));
+      border-bottom:1px solid var(--border);
+      padding-top:calc(env(safe-area-inset-top,0px) + .6rem);
+      padding-bottom:.6rem;
     }
-    .container{ max-width: 680px; margin:0 auto; }
-    .view{ display:none; }
-    .view.active{ display:block; }
-    .btn{ border:1px solid #cbd5e1; border-radius:12px; padding:.5rem .9rem; background:#fff; color:#0b0f19; }
-    .btn:hover{ background:#f1f5f9; }
-    .btn-ghost{ border-color:transparent; background:transparent; }
-    .btn-danger{ border-color:#fecaca; color:#b91c1c; }
-    .dark .btn{ background:#0f172a; color:#fff; border-color:#334155; }
-    .dark .btn:hover{ background:#111827; }
-    .card{ background:#fff; border:1px solid #e2e8f0; border-radius:14px; }
-    .dark .card{ background:#0b1220; border-color:#1f2937; }
-    input, select, textarea{
-      background:#fff; color:#0b0f19; border:1px solid #cbd5e1; border-radius:12px; padding:.5rem .7rem; width:100%;
+    .titlebar{
+      display:flex;align-items:center;gap:.75rem;justify-content:space-between;
     }
-    .dark input, .dark select, .dark textarea{
-      background:#0f172a; color:#fff; border-color:#334155;
-    }
-    /* Log Liste in Dark: nicht hell */
-    .log-row{ background:#fff; }
-    .dark .log-row{ background:#0f172a; color:#fff; }
-    .mono{ font-variant-numeric: tabular-nums; }
-    .chip{ border-radius:999px; padding:.15rem .5rem; font-size:.75rem; line-height:1; }
-    .link{ text-decoration:underline; cursor:pointer; }
+    .titlebar h1{margin:0;font-size:1.125rem;font-weight:700}
+    .titlebar .left, .titlebar .right{min-width:3rem;display:flex;align-items:center;gap:.5rem}
+    .titlebar .center{flex:1;display:flex;justify-content:center}
+    .menu-grid{display:grid;grid-template-columns:1fr;gap:.75rem}
+    @media(min-width:480px){ .menu-grid{grid-template-columns:1fr 1fr} }
+    /* Dashboard Zahlen immer klar lesbar */
+    .stat{display:flex;flex-direction:column;gap:.25rem}
+    .stat .label{font-size:.8rem;color:var(--muted)}
+    .stat .value{font-size:1.4rem;font-weight:800;color:var(--fg)}
+    .link{color:var(--primary);text-decoration:none}
+    .back-btn{cursor:pointer}
+    /* Scroll-Container */
+    main{min-height:100dvh;display:flex;flex-direction:column}
+    .container{max-width:720px;margin:0 auto;padding:0 1rem 2.5rem}
+    /* Achievements/Milestones: Schriftfarbe folgt Vars → in DarkMode automatisch weiß */
+    .chip{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;border:1px solid var(--border);background:var(--card);padding:.25rem .5rem;border-radius:.6rem}
   </style>
 </head>
-<body class="h-full">
-  <div id="app" class="min-h-full flex flex-col">
-    <!-- Top Bar -->
-    <header class="appbar">
-      <div class="container px-4 py-3 flex items-center gap-2">
-        <button id="btnBack" class="btn btn-ghost px-2" title="Zurück" style="display:none">←</button>
-        <h1 id="title" class="text-xl font-bold">Life RPG</h1>
-        <div class="grow"></div>
-        <label class="flex items-center gap-2 text-sm">
-          🌙
-          <input id="toggleDark" type="checkbox">
-        </label>
+<body>
+  <main>
+    <!-- Header -->
+    <header class="safe-header">
+      <div class="container">
+        <div class="titlebar">
+          <div class="left">
+            <button id="btnBack" class="btn back-btn hidden" aria-label="Zurück">⬅︎</button>
+          </div>
+          <div class="center">
+            <h1 id="title">Life RPG</h1>
+          </div>
+          <div class="right">
+            <button id="btnTheme" class="btn" title="Dark/Light">🌓</button>
+            <button id="btnMenu" class="btn" title="Hauptmenü">☰</button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- Content -->
-    <main class="container flex-1 px-4 pb-6 pt-4">
-      <!-- Hauptmenü -->
-      <section id="view-menu" class="view active space-y-2">
-        <h2 class="text-lg font-semibold mb-2">Hauptmenü</h2>
-        <div class="grid gap-2">
-          <button data-nav="dashboard"  class="btn w-full text-left">📊 Dashboard</button>
-          <button data-nav="log"        class="btn w-full text-left">📝 Log</button>
-          <button data-nav="catalog"    class="btn w-full text-left">📚 Katalog</button>
-          <button data-nav="categories" class="btn w-full text-left">🏷️ Kategorien</button>
-          <button data-nav="missions"   class="btn w-full text-left">🗺️ Missionen</button>
-          <button data-nav="specials"   class="btn w-full text-left">⏳ Sonderaufgaben</button>
-          <button data-nav="milestones" class="btn w-full text-left">🎯 Meilensteine</button>
-          <button data-nav="continuity" class="btn w-full text-left">🔁 Kontinuität</button>
-          <button data-nav="settings"   class="btn w-full text-left">⚙️ Einstellungen & Backup</button>
+    <!-- VIEWS -->
+    <section id="view-menu" class="view active">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .5rem 0;">Hauptmenü</h2>
+          <div class="menu-grid">
+            <button data-go="dashboard" class="btn">📊 Dashboard</button>
+            <button data-go="log" class="btn">📝 Log</button>
+            <button data-go="catalog" class="btn">📚 Katalog</button>
+            <button data-go="categories" class="btn">🏷️ Kategorien</button>
+            <button data-go="missions" class="btn">🗺️ Missionen</button>
+            <button data-go="specials" class="btn">⏱️ Sonderaufgaben</button>
+            <button data-go="milestones" class="btn">🎯 Meilensteine</button>
+            <button data-go="continuity" class="btn">♻️ Kontinuität</button>
+            <button data-go="settings" class="btn">⚙️ Einstellungen</button>
+          </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <!-- Dashboard -->
-      <section id="view-dashboard" class="view space-y-4">
-        <div class="grid gap-2">
-          <div class="card p-3">
-            <div class="grid grid-cols-3 gap-2 text-center">
-              <div>
-                <div class="text-sm text-slate-500 dark:text-slate-300">Punkte</div>
-                <div id="dTotal" class="text-2xl font-bold mono text-black dark:text-white">0</div>
-              </div>
-              <div>
-                <div class="text-sm text-slate-500 dark:text-slate-300">Level</div>
-                <div id="dLevel" class="text-2xl font-bold mono text-black dark:text-white">1</div>
-              </div>
-              <div>
-                <div class="text-sm text-slate-500 dark:text-slate-300">Sparstand (€)</div>
-                <div id="dSavings" class="text-2xl font-bold mono text-black dark:text-white">0.00</div>
-              </div>
+    <section id="view-dashboard" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Übersicht</h2>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+            <div class="stat">
+              <div class="label">Punkte</div>
+              <div id="statPoints" class="value">0</div>
+            </div>
+            <div class="stat">
+              <div class="label">Level</div>
+              <div id="statLevel" class="value">1</div>
+            </div>
+            <div class="stat">
+              <div class="label">Sparstand</div>
+              <div>€ <span id="statSavings" class="value">0.00</span></div>
             </div>
           </div>
-
-          <div class="card p-3">
-            <div class="font-semibold mb-2">Level-Fortschritt</div>
-            <div class="w-full bg-slate-200 dark:bg-slate-700 rounded h-3">
-              <div id="dProgressBar" class="h-3 rounded bg-blue-600" style="width:0%"></div>
-            </div>
-            <div id="dProgressText" class="text-xs mt-1"></div>
-          </div>
-
-          <div class="card p-3">
-            <div class="font-semibold mb-2">Heute offen</div>
-            <div id="dToday" class="flex flex-wrap gap-2"></div>
-          </div>
-
-          <div class="card p-3">
-            <div class="font-semibold mb-2">Meilenstein (nächster)</div>
-            <div id="dMilestone">–</div>
+          <div style="margin-top:1rem" class="muted">
+            Dies ist die Baseline. Funktionen kommen in Phasen 2–8 über die Patchpoints.
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <!-- Log -->
-      <section id="view-log" class="view space-y-3">
-        <div class="card p-3 space-y-2">
-          <div class="grid md:grid-cols-4 gap-2">
-            <input type="date" id="logDate">
-            <select id="logQuest"></select>
-            <input type="number" id="logPoints" placeholder="Punkte (optional)">
-            <button id="btnLogAdd" class="btn">Eintragen</button>
-          </div>
-          <div id="quickRow" class="flex flex-wrap gap-2"></div>
+    <section id="view-log" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Log</h2>
+          <div class="muted">In Phase 3 gibt es hier Schnellauswahl, Eintragen & Löschen/Undo.</div>
+          <div id="logList" style="margin-top:.75rem;display:flex;flex-direction:column;gap:.5rem"></div>
         </div>
-        <div id="logList" class="space-y-2"></div>
-      </section>
+      </div>
+    </section>
 
-      <!-- Katalog -->
-      <section id="view-catalog" class="view space-y-3">
-        <div class="card p-3 space-y-2">
-          <div class="grid md:grid-cols-4 gap-2">
-            <input id="qName" placeholder="Questname">
-            <input id="qPoints" type="number" placeholder="Punkte">
-            <select id="qBoss">
-              <option value="false">Normale Quest</option>
-              <option value="true">Bossquest</option>
-            </select>
-            <button id="btnAddQuest" class="btn">Zur Liste hinzufügen</button>
-          </div>
-          <div class="space-y-2">
-            <div class="font-semibold">Kategorien & Multiplikatoren</div>
-            <div id="catAssignRows" class="space-y-2"></div>
-            <button id="btnAddCatRow" class="btn text-xs">+ Kategorie</button>
-          </div>
-          <div class="grid md:grid-cols-3 gap-2">
-            <input id="qPenaltyDays" type="number" placeholder="Inaktivitäts-Tage (optional)">
-            <input id="qPenaltyPts" type="number" placeholder="Strafpunkte (optional)">
-          </div>
+    <section id="view-catalog" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Katalog</h2>
+          <div class="muted">In Phase 2 kannst du hier Quests mit Kategorien & Multiplikatoren anlegen.</div>
+          <div id="catalogList" style="margin-top:.75rem"></div>
         </div>
-        <div id="catalogList" class="space-y-2"></div>
-      </section>
+      </div>
+    </section>
 
-      <!-- Kategorien -->
-      <section id="view-categories" class="view space-y-3">
-        <div class="card p-3 space-y-2">
-          <div class="grid md:grid-cols-4 gap-2">
-            <input id="catName" placeholder="Name">
-            <select id="catType">
-              <option value="positive">Positiv</option>
-              <option value="negative">Negativ</option>
-            </select>
-            <input id="catColor" type="color" value="#0ea5e9">
-            <button id="btnAddCategory" class="btn">Kategorie anlegen</button>
+    <section id="view-categories" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Kategorien</h2>
+          <div class="muted">In Phase 2: Kategorien anlegen/verbinden („Sonstige“ inklusive).</div>
+          <div id="catList" style="margin-top:.75rem"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-missions" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Missionen</h2>
+          <div class="muted">In Phase 4: lineare/alternative Aufgaben, Freischaltung, Abschlussbonus = 4×.</div>
+          <div id="missionList" style="margin-top:.75rem"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-specials" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Sonderaufgaben</h2>
+          <div class="muted">In Phase 5: Cooldown-Aufgaben (z. B. Blumen gießen alle 7 Tage).</div>
+          <div id="specialList" style="margin-top:.75rem"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-milestones" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Meilensteine</h2>
+          <div class="muted">In Phase 6: zeigt nur den nächsten erreichbaren Meilenstein je Bereich.</div>
+          <div id="msList" style="margin-top:.75rem"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-continuity" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;">
+          <h2 class="text-lg font-bold" style="margin:0 0 .75rem 0;">Kontinuität</h2>
+          <div class="muted">In Phase 7: Multiplikator & Inaktivitäts-Strafen, „heute erledigen“ Buttons.</div>
+          <div id="contList" style="margin-top:.75rem"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view">
+      <div class="container">
+        <div class="card" style="margin-top:.75rem;display:flex;flex-direction:column;gap:.75rem">
+          <h2 class="text-lg font-bold" style="margin:0">Einstellungen</h2>
+          <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+            <label class="text-sm">€ pro Punkt
+              <input id="sEuro" type="number" step="0.01" class="input" />
+            </label>
+            <label class="text-sm">Basis-Levelpunkte
+              <input id="sBase" type="number" class="input" />
+            </label>
+            <label class="text-sm">Wachstum pro Level (z. B. 0.1)
+              <input id="sGrowth" type="number" step="0.01" class="input" />
+            </label>
           </div>
-        </div>
-        <div id="catList" class="space-y-2"></div>
-      </section>
-
-      <!-- Missionen -->
-      <section id="view-missions" class="view space-y-3">
-        <div class="card p-3 space-y-2">
-          <div class="grid md:grid-cols-4 gap-2">
-            <input id="mName" placeholder="Missionsname">
-            <input id="mTaskName" placeholder="Aufgabe 1 Name">
-            <input id="mTaskPts" type="number" placeholder="Punkte">
-            <button id="btnAddMission" class="btn">Mission anlegen</button>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button id="btnExport" class="btn">Export</button>
+            <input id="fileImport" type="file" accept="application/json" class="hidden" />
+            <button id="btnImport" class="btn">Import</button>
+            <button id="btnResetAll" class="btn btn-danger">Alles löschen</button>
           </div>
+          <div class="muted">Dark/Light schaltest du oben rechts mit 🌓 um (wird gespeichert).</div>
         </div>
-        <div id="missionList" class="space-y-2"></div>
-      </section>
-
-      <!-- Sonderaufgaben -->
-      <section id="view-specials" class="view space-y-3">
-        <div class="card p-3 space-y-2">
-          <div class="grid md:grid-cols-4 gap-2">
-            <input id="sName" placeholder="Sonderaufgabe (z. B. Blumen gießen)">
-            <input id="sPoints" type="number" placeholder="Punkte">
-            <input id="sCooldown" type="number" placeholder="Cooldown (Tage)">
-            <button id="btnAddSpecial" class="btn">Hinzufügen</button>
-          </div>
-        </div>
-        <div id="specialList" class="space-y-2"></div>
-      </section>
-
-      <!-- Meilensteine -->
-      <section id="view-milestones" class="view space-y-3">
-        <div id="msNext" class="card p-3"></div>
-        <div id="msCategories" class="card p-3"></div>
-      </section>
-
-      <!-- Kontinuität -->
-      <section id="view-continuity" class="view space-y-3">
-        <div id="contList" class="space-y-2"></div>
-      </section>
-
-      <!-- Einstellungen -->
-      <section id="view-settings" class="view space-y-3">
-        <div class="card p-3 grid md:grid-cols-3 gap-2">
-          <label class="text-sm">€ pro Punkt
-            <input id="sEuro" type="number" step="0.01">
-          </label>
-          <label class="text-sm">Basis-Inkrement
-            <input id="sBase" type="number">
-          </label>
-          <label class="text-sm">Wachstum (z. B. 0.1)
-            <input id="sGrowth" type="number" step="0.01">
-          </label>
-        </div>
-        <div class="card p-3 grid md:grid-cols-4 gap-2">
-          <button id="btnExport" class="btn">Export</button>
-          <input type="file" id="fileImport" accept="application/json" class="hidden">
-          <button id="btnImport" class="btn">Import</button>
-          <button id="btnResetAll" class="btn btn-danger">Alles löschen</button>
-        </div>
-      </section>
-    </main>
-
-    <!-- Bottom Safe-Area -->
-    <div style="height: var(--safe-bottom)"></div>
-  </div>
+      </div>
+    </section>
+  </main>
 
   <script>
-  // ------------- State & Migration -------------
-  const SKEY = "lifeRPG_p1";         // alter Key (deine Daten)
-  const SKEY_V2 = "lifeRPG_v2";      // neuer Key (strukturierter)
-  let state = load();
+  (()=>{
 
-  function load(){
-    let v2 = null; try{ v2 = JSON.parse(localStorage.getItem(SKEY_V2)||"null"); }catch{}
-    if(v2) return v2;
+    // ==============================
+    //  STORAGE (v3) + MIGRATION
+    // ==============================
+    const KEY = "lifeRPG_v3";
+    const OLD_KEYS = ["lifeRPG_p1","lifeRPG_v1","lifeRPG_v2"];
+    const todayISO = ()=> new Date().toISOString().slice(0,10);
 
-    // Alte Daten übernehmen, falls vorhanden
-    let old = null; try{ old = JSON.parse(localStorage.getItem(SKEY)||"null"); }catch{}
-    const base = {
-      settings: { euro:0.1, base:100, growth:0.1, dark:false },
-      log: [],
-      catalog: [],
-      categories: [],
-      missions: [],
-      specials: [],
-      milestones: { series:{} },
-      continuity: { lastPenaltyCheck: null }
+    const defaultState = {
+      version:3,
+      settings:{ euro:0.10, base:100, growth:0.10, theme:"light" },
+      log:[],            // [{date, questId?, questName, points}]
+      quests:[],         // [{id,name,points,isBoss:false,categories:[],multiplierByCat:{catId:mult}, penaltyDays:0, penaltyPoints:0}]
+      categories:[],     // [{id,name, linkToCatId:null}]  "Sonstige" hat feste id 'cat_misc'
+      missions:[],       // später
+      specials:[],       // später
+      milestones:{}      // später
     };
-    if(old){
-      base.log = Array.isArray(old.log)? old.log : [];
-      base.catalog = Array.isArray(old.catalog)? old.catalog : [];
-      base.settings = { ...base.settings, ...(old.settings||{}) };
-    }
-    // Mindest-Kategorien
-    if(!base.categories || base.categories.length===0){
-      base.categories = [
-        {id:"cat_sonstige", name:"Sonstige", type:"positive", color:"#64748b"},
-        {id:"cat_sport", name:"Sport", type:"positive", color:"#0ea5e9"},
-        {id:"cat_haus", name:"Handwerk", type:"positive", color:"#f59e0b"},
-        {id:"cat_bad", name:"Schlechter Lebensstil", type:"negative", color:"#ef4444"}
-      ];
-    }
-    // Katalog-Einträge mit categories-Feld versehen
-    base.catalog.forEach(q=>{ q.categories = q.categories || []; });
-    save(base);
-    return base;
-  }
 
-  function save(s=state){
-    localStorage.setItem(SKEY_V2, JSON.stringify(s));
-  }
-
-  // ------------- Helpers -------------
-  const $ = sel => document.querySelector(sel);
-  const $$ = sel => Array.from(document.querySelectorAll(sel));
-  const todayISO = () => new Date().toISOString().slice(0,10);
-  const sum = a => a.reduce((s,x)=>s+x,0);
-  function totalPoints(){ return state.log.reduce((s,e)=>s+e.points,0); }
-  function levelForPoints(p){
-    let lvl=1, need=state.settings.base||100, growth=state.settings.growth||0.1;
-    let remaining = p;
-    while(remaining>=need){ lvl++; remaining-=need; need=Math.round(need*(1+growth)); }
-    return {lvl, remaining, need};
-  }
-  function ensureDarkMode(){
-    const dark = !!state.settings.dark;
-    document.documentElement.classList.toggle("dark", dark);
-    $("#toggleDark").checked = dark;
-  }
-
-  // ------------- Navigation -------------
-  let navStack = ["menu"];
-  function show(view){
-    $$(".view").forEach(v=>v.classList.remove("active"));
-    $("#view-"+view).classList.add("active");
-    $("#title").textContent = view==="menu" ? "Life RPG" : ({
-      dashboard:"Dashboard", log:"Log", catalog:"Katalog", categories:"Kategorien",
-      missions:"Missionen", specials:"Sonderaufgaben", milestones:"Meilensteine",
-      continuity:"Kontinuität", settings:"Einstellungen & Backup"
-    }[view]||"Life RPG");
-    $("#btnBack").style.display = view==="menu" ? "none":"inline-flex";
-  }
-  function navTo(view){
-    if(navStack[navStack.length-1]!==view) navStack.push(view);
-    show(view); renderAll();
-  }
-  $("#btnBack").onclick = ()=>{
-    if(navStack.length>1) navStack.pop();
-    show(navStack[navStack.length-1]);
-  };
-  $$("#view-menu [data-nav]").forEach(b=> b.onclick = ()=> navTo(b.getAttribute("data-nav")));
-
-  // ------------- Dashboard Render -------------
-  function renderDashboard(){
-    const p = totalPoints();
-    const L = levelForPoints(p);
-    $("#dTotal").textContent = p;
-    $("#dLevel").textContent = L.lvl;
-    $("#dSavings").textContent = (p*(state.settings.euro||0.1)).toFixed(2);
-    const pct = Math.min(100, Math.round((L.remaining / L.need) * 100));
-    $("#dProgressBar").style.width = pct+"%";
-    $("#dProgressText").textContent = `Noch ${L.need - L.remaining} Punkte bis Level ${L.lvl+1}`;
-
-    // Heute offen (erste 5 nicht erledigte aus Katalog)
-    const today = todayISO();
-    const doneToday = new Set(state.log.filter(e=>e.date===today).map(e=>e.quest));
-    const open = state.catalog.filter(q=>!doneToday.has(q.name)).slice(0,5);
-    const box = $("#dToday"); box.innerHTML="";
-    open.forEach(q=>{
-      const btn = document.createElement("button");
-      btn.className="btn text-xs";
-      btn.textContent = `+ ${q.name} (+${q.points})`;
-      btn.onclick = ()=> addLogEntry(today, q.name, q.points);
-      box.appendChild(btn);
-    });
-
-    // Nächster Meilenstein (global: Quests erledigt)
-    const m = computeNextMilestoneSummary();
-    $("#dMilestone").textContent = m || "–";
-  }
-
-  // ------------- Log -------------
-  function rebuildQuestSelect(){
-    const sel = $("#logQuest"); sel.innerHTML="";
-    state.catalog.forEach(q=>{
-      const o=document.createElement("option");
-      o.value=q.name; o.textContent = q.boss?`👑 ${q.name}`:q.name;
-      sel.appendChild(o);
-    });
-  }
-  function renderQuickRow(){
-    const row=$("#quickRow"); row.innerHTML="";
-    state.catalog.slice(0,10).forEach(q=>{
-      const b=document.createElement("button");
-      b.className="btn text-xs";
-      b.textContent = `➕ ${q.name}`;
-      b.onclick = ()=> addLogEntry(todayISO(), q.name, q.points);
-      row.appendChild(b);
-    });
-  }
-  function renderLog(){
-    $("#logDate").value = todayISO();
-    rebuildQuestSelect();
-    renderQuickRow();
-    const list=$("#logList"); list.innerHTML="";
-    if(state.log.length===0){
-      list.innerHTML = `<div class="text-slate-500 dark:text-slate-300">Noch keine Einträge.</div>`;
-      return;
-    }
-    state.log.slice().reverse().forEach((e,idx)=>{
-      const i = state.log.length-1-idx;
-      const row=document.createElement("div");
-      row.className="log-row p-2 border rounded card flex items-center justify-between";
-      row.innerHTML = `
-        <div>${e.date} • ${e.quest} <span class="mono ${e.points>=0?'text-green-600':'text-red-600'}">(${e.points>=0?'+':''}${e.points})</span></div>
-        <div class="flex gap-2">
-          <button class="btn text-xs" data-del="${i}">Löschen</button>
-        </div>
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll("[data-del]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-del"));
-        if(confirm("Diesen Log-Eintrag löschen?")){
-          state.log.splice(i,1); save(); renderAll();
-        }
-      };
-    });
-  }
-  function addLogEntry(date, name, basePoints){
-    // Negative Kategorie macht Punkte negativ? -> hier vereinfachen: negative Kategorien zählen positiv zur Kategorie-Summe,
-    // aber global ziehen sie Punkte ab (Faktor 2 auf Wunsch einstellbar).
-    const q = state.catalog.find(x=>x.name===name);
-    let pts = Number($("#logPoints").value||basePoints||q?.points||0);
-    if(!pts) return;
-    const hasNegative = (q?.categories||[]).some(ac=>{
-      const cat = state.categories.find(c=>c.id===ac.id);
-      return cat && cat.type==="negative";
-    });
-    const negFactor = 2; // kannst du später konfigurierbar machen
-    if(hasNegative) pts = -Math.abs(pts*negFactor);
-
-    state.log.push({date, quest:name, points: Math.round(pts), base: basePoints||q?.points||pts});
-    save(); renderAll();
-    $("#logPoints").value="";
-  }
-  $("#btnLogAdd").onclick = ()=>{
-    const d=$("#logDate").value||todayISO();
-    const name=$("#logQuest").value;
-    const pts=$("#logPoints").value ? Number($("#logPoints").value) : undefined;
-    addLogEntry(d,name,pts);
-  };
-
-  // ------------- Katalog -------------
-  function addCatAssignRow(pre=null){
-    const row=document.createElement("div");
-    row.className="grid md:grid-cols-3 gap-2 items-center";
-    const opts = state.categories.map(c=>`<option value="${c.id}">${c.name}${c.type==="negative"?" (negativ)":""}</option>`).join("");
-    row.innerHTML = `
-      <select class="input catSel">${opts}</select>
-      <input type="number" step="0.01" class="input catMult" placeholder="Multiplikator (z. B. 1.2)" value="${pre?.mult??1}">
-      <button class="btn btn-danger text-xs catDel">Entfernen</button>
-    `;
-    $("#catAssignRows").appendChild(row);
-    if(pre?.id) row.querySelector(".catSel").value = pre.id;
-    row.querySelector(".catDel").onclick = ()=> row.remove();
-  }
-  $("#btnAddCatRow").onclick = ()=> addCatAssignRow();
-
-  function renderCatalog(){
-    const list=$("#catalogList"); list.innerHTML="";
-    if(state.catalog.length===0){
-      list.innerHTML=`<div class="text-slate-500 dark:text-slate-300">Noch keine Quests im Katalog.</div>`;
-      return;
-    }
-    state.catalog.forEach((q,idx)=>{
-      const row=document.createElement("div");
-      row.className="card p-2";
-      const chips = (q.categories||[]).map(ac=>{
-        const c = state.categories.find(x=>x.id===ac.id);
-        const bg = c?.color||"#64748b";
-        return `<span class="chip" style="background:${bg};color:#fff">${c?c.name:"?"}×${ac.mult||1}</span>`;
-      }).join(" ") || `<span class="chip" style="background:#64748b;color:#fff">Sonstige</span>`;
-      row.innerHTML = `
-        <div class="flex items-center justify-between">
-          <div class="font-medium">${q.boss?"👑 ":""}${q.name} <span class="text-slate-500 dark:text-slate-300">(+${q.points})</span></div>
-          <div class="flex gap-2">
-            <button class="btn text-xs" data-edit="${idx}">Bearb.</button>
-            <button class="btn btn-danger text-xs" data-del="${idx}">Löschen</button>
-          </div>
-        </div>
-        <div class="mt-1 flex flex-wrap gap-1">${chips}</div>
-        ${(q.penaltyDays&&q.penaltyPoints)?`<div class="text-xs mt-1">Inaktivität: ${q.penaltyDays} Tage → −${q.penaltyPoints} Punkte</div>`:""}
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll("[data-del]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-del"));
-        if(confirm("Quest aus Katalog löschen?")){
-          state.catalog.splice(i,1); save(); renderAll();
+    function load(){
+      // v3 vorhanden?
+      const raw = localStorage.getItem(KEY);
+      if(raw){
+        try{
+          const s = JSON.parse(raw);
+          // Minimal-Fallbacks
+          s.version = 3;
+          s.settings = Object.assign({}, defaultState.settings, s.settings||{});
+          s.categories = s.categories || [];
+          // Stelle sicher, dass "Sonstige" existiert:
+          if(!s.categories.find(c=>c.id==="cat_misc")){
+            s.categories.unshift({id:"cat_misc",name:"Sonstige",linkToCatId:null});
+          }
+          return s;
+        }catch(e){
+          console.warn("v3 state defekt, fallback auf Migration", e);
         }
       }
-    });
-    list.querySelectorAll("[data-edit]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-edit"));
-        const q=state.catalog[i]; if(!q) return;
-        // einfache Inline-Bearbeitung (Prompt), Fokus auf Kernfelder
-        const name = prompt("Name:", q.name)||q.name;
-        const pts  = Number(prompt("Punkte:", q.points)||q.points);
-        const boss = (prompt("Bossquest? (ja/nein)", q.boss?"ja":"nein")||"nein").toLowerCase().startsWith("j");
-        q.name=name; q.points=pts; q.boss=boss;
-        save(); renderAll();
-      };
-    });
-  }
-
-  $("#btnAddQuest").onclick = ()=>{
-    const name=$("#qName").value.trim();
-    const points=Number($("#qPoints").value||0);
-    const boss=$("#qBoss").value==="true";
-    if(!name||!points) return alert("Name & Punkte angeben");
-
-    const assigns = $$("#catAssignRows .grid").map(r=>{
-      const id = r.querySelector(".catSel").value;
-      const mult= Number(r.querySelector(".catMult").value||1);
-      return {id, mult: mult||1};
-    });
-    const penaltyDays = Number($("#qPenaltyDays").value||0)||null;
-    const penaltyPoints = Number($("#qPenaltyPts").value||0)||null;
-
-    state.catalog.push({name, points, boss, categories:assigns, penaltyDays, penaltyPoints});
-    save();
-    $("#qName").value=""; $("#qPoints").value=""; $("#qPenaltyDays").value=""; $("#qPenaltyPts").value="";
-    $("#catAssignRows").innerHTML=""; addCatAssignRow(); renderAll();
-  };
-
-  // ------------- Kategorien -------------
-  function renderCategories(){
-    const list=$("#catList"); list.innerHTML="";
-    state.categories.forEach((c,idx)=>{
-      const row=document.createElement("div");
-      row.className="card p-2 flex items-center justify-between";
-      row.innerHTML=`
-        <div class="flex items-center gap-2">
-          <span class="inline-block w-3 h-3 rounded" style="background:${c.color}"></span>
-          <div>${c.name} ${c.type==="negative"?"<span class='text-xs text-red-600'>(negativ)</span>":""}</div>
-        </div>
-        <div class="flex gap-2">
-          <button class="btn text-xs" data-edit="${idx}">Bearb.</button>
-          ${c.id==="cat_sonstige"?"":`<button class="btn btn-danger text-xs" data-del="${idx}">Löschen</button>`}
-        </div>
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll("[data-del]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-del"));
-        if(state.categories[i].id==="cat_sonstige") return;
-        if(confirm("Kategorie löschen? Zuweisungen in Quests werden entfernt.")){
-          const id=state.categories[i].id;
-          state.categories.splice(i,1);
-          state.catalog.forEach(q=> q.categories=(q.categories||[]).filter(ac=>ac.id!==id));
-          save(); renderAll();
+      // Migration aus alten Keys
+      for(const k of OLD_KEYS){
+        const r = localStorage.getItem(k);
+        if(!r) continue;
+        try{
+          const o = JSON.parse(r);
+          return migrateFromOld(o);
+        }catch(e){
+          console.warn("Migration fehlgeschlagen von", k, e);
         }
       }
-    });
-    list.querySelectorAll("[data-edit]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-edit"));
-        const c=state.categories[i];
-        const name=prompt("Name:", c.name)||c.name;
-        const type=(prompt("Typ (positive/negative):", c.type)||c.type).toLowerCase().startsWith("neg")?"negative":"positive";
-        const color=prompt("Farbe (#rrggbb):", c.color)||c.color;
-        c.name=name; c.type=type; c.color=color; save(); renderAll();
+      // Neu
+      const fresh = structuredClone(defaultState);
+      // Standard-Kategorie „Sonstige“
+      fresh.categories.push({id:"cat_misc",name:"Sonstige",linkToCatId:null});
+      save(fresh);
+      return fresh;
+    }
+
+    function migrateFromOld(old){
+      const s = structuredClone(defaultState);
+
+      // SETTINGS
+      if(old && old.settings){
+        s.settings.euro   = typeof old.settings.euro   === "number" ? old.settings.euro   : s.settings.euro;
+        s.settings.base   = typeof old.settings.base   === "number" ? old.settings.base   : s.settings.base;
+        s.settings.growth = typeof old.settings.growth === "number" ? old.settings.growth : s.settings.growth;
       }
-    });
-  }
-  $("#btnAddCategory").onclick=()=>{
-    const name=$("#catName").value.trim(); if(!name) return;
-    const type=$("#catType").value;
-    const color=$("#catColor").value||"#0ea5e9";
-    const id="cat_"+Math.random().toString(36).slice(2,8);
-    state.categories.push({id,name,type,color});
-    save(); $("#catName").value=""; renderAll();
-  };
 
-  // ------------- Missionen -------------
-  function renderMissions(){
-    const list=$("#missionList"); list.innerHTML="";
-    if(state.missions.length===0){
-      list.innerHTML=`<div class="text-slate-500 dark:text-slate-300">Noch keine Missionen.</div>`;
-      return;
-    }
-    state.missions.forEach((m,mi)=>{
-      const all = m.tasks;
-      const done = all.filter(t=>t.done).length;
-      const total = all.length;
-      const unlocked = all.filter(t=> (t.requires||[]).every(r=> all[r]?.done));
-      const row=document.createElement("div");
-      row.className="card p-2";
-      row.innerHTML=`
-        <div class="flex items-center justify-between">
-          <div class="font-medium">${m.name} <span class="text-xs">(${done}/${total})</span></div>
-          <div class="flex gap-2">
-            <button class="btn text-xs" data-addtask="${mi}">+ Aufgabe</button>
-            <button class="btn btn-danger text-xs" data-delm="${mi}">Löschen</button>
-          </div>
-        </div>
-        <div class="mt-2 space-y-1" id="mt_${mi}"></div>
-      `;
-      const box=row.querySelector("#mt_"+mi);
-      all.forEach((t,ti)=>{
-        const lock = (t.requires||[]).some(r=> !all[r]?.done);
-        const line=document.createElement("div");
-        line.className="flex items-center justify-between p-2 border rounded";
-        line.innerHTML=`
-          <div>${lock?"🔒":"✅"} ${t.name} <span class="text-slate-500 dark:text-slate-300">(+${t.points})</span></div>
-          <div class="flex gap-2">
-            ${!t.done && !lock ? `<button class="btn text-xs" data-donet="${mi}:${ti}">Erledigt</button>`:""}
-            <button class="btn btn-danger text-xs" data-delt="${mi}:${ti}">Löschen</button>
-          </div>
-        `;
-        box.appendChild(line);
-      });
-      list.appendChild(row);
-    });
-    // Events
-    list.querySelectorAll("[data-addtask]").forEach(b=>{
-      b.onclick=()=>{
-        const mi=Number(b.getAttribute("data-addtask"));
-        const name=prompt("Aufgabenname?"); if(!name) return;
-        const pts=Number(prompt("Punkte?", "10")||10);
-        // optional: als Voraussetzung letzte Aufgabe?
-        const requires = state.missions[mi].tasks.length>0 ? [state.missions[mi].tasks.length-1] : [];
-        state.missions[mi].tasks.push({name,points:pts,requires,done:false});
-        save(); renderAll();
-      };
-    });
-    list.querySelectorAll("[data-delt]").forEach(b=>{
-      b.onclick=()=>{
-        const [mi,ti]=b.getAttribute("data-delt").split(":").map(Number);
-        state.missions[mi].tasks.splice(ti,1);
-        save(); renderAll();
-      };
-    });
-    list.querySelectorAll("[data-delm]").forEach(b=>{
-      b.onclick=()=>{
-        const mi=Number(b.getAttribute("data-delm"));
-        if(confirm("Mission löschen?")){ state.missions.splice(mi,1); save(); renderAll(); }
-      };
-    });
-    list.querySelectorAll("[data-donet]").forEach(b=>{
-      b.onclick=()=>{
-        const [mi,ti]=b.getAttribute("data-donet").split(":").map(Number);
-        const m=state.missions[mi], t=m.tasks[ti];
-        t.done=true; save();
-        // Wenn Mission komplett -> Bonus (4× Summe)
-        if(m.tasks.every(x=>x.done) && !m.bonusGranted){
-          const sumPts = m.tasks.reduce((s,x)=>s+x.points,0);
-          const bonus = sumPts*4;
-          state.log.push({date:todayISO(),quest:`Mission abgeschlossen: ${m.name}`,points:bonus,base:bonus});
-          m.bonusGranted=true; save();
-          alert(`Mission abgeschlossen! Bonus +${bonus} Punkte`);
-        }
-        renderAll();
-      };
-    });
-  }
-  $("#btnAddMission").onclick=()=>{
-    const mName=$("#mName").value.trim(); if(!mName) return;
-    const tName=$("#mTaskName").value.trim(); if(!tName) return;
-    const pts=Number($("#mTaskPts").value||0); if(!pts) return;
-    state.missions.push({name:mName, bonusGranted:false, tasks:[{name:tName,points:pts,requires:[],done:false}]});
-    save(); $("#mName").value=""; $("#mTaskName").value=""; $("#mTaskPts").value="";
-    renderAll();
-  };
+      // LOG
+      if(Array.isArray(old.log)){
+        s.log = old.log.map(e=>({
+          date: e.date || todayISO(),
+          questId: null,
+          questName: e.quest || e.name || "Unbenannt",
+          points: Number(e.points||0)
+        }));
+      }
 
-  // ------------- Sonderaufgaben -------------
-  function renderSpecials(){
-    const list=$("#specialList"); list.innerHTML="";
-    if(state.specials.length===0){
-      list.innerHTML=`<div class="text-slate-500 dark:text-slate-300">Noch keine Sonderaufgaben.</div>`;
-      return;
-    }
-    state.specials.forEach((s,idx)=>{
-      const next = s.lastDone ? addDaysISO(s.lastDone, s.cooldown) : null;
-      const available = !next || todayISO()>=next;
-      const row=document.createElement("div");
-      row.className="card p-2 flex items-center justify-between";
-      row.innerHTML=`
-        <div>${available?"🟢":"⛔️"} ${s.name} <span class="text-slate-500 dark:text-slate-300">(+${s.points})</span>
-          ${available?"":`<span class="text-xs ml-2">verfügbar ab ${next}</span>`}
-        </div>
-        <div class="flex gap-2">
-          ${available?`<button class="btn text-xs" data-dos="${idx}">Erledigt</button>`:""}
-          <button class="btn btn-danger text-xs" data-dels="${idx}">Löschen</button>
-        </div>
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll("[data-dos]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-dos"));
-        const s=state.specials[i];
-        s.lastDone = todayISO();
-        state.log.push({date:s.lastDone, quest:`Sonderaufgabe: ${s.name}`, points:s.points, base:s.points});
-        save(); renderAll();
-      };
-    });
-    list.querySelectorAll("[data-dels]").forEach(b=>{
-      b.onclick=()=>{
-        const i=Number(b.getAttribute("data-dels"));
-        if(confirm("Sonderaufgabe löschen?")){ state.specials.splice(i,1); save(); renderAll(); }
-      };
-    });
-  }
-  $("#btnAddSpecial").onclick=()=>{
-    const name=$("#sName").value.trim();
-    const points=Number($("#sPoints").value||0);
-    const cooldown=Number($("#sCooldown").value||0);
-    if(!name||!points||!cooldown) return alert("Name, Punkte, Cooldown angeben");
-    state.specials.push({name, points, cooldown, lastDone:null});
-    save(); $("#sName").value=""; $("#sPoints").value=""; $("#sCooldown").value="";
-    renderAll();
-  };
-  function addDaysISO(iso, d){
-    const dt=new Date(iso); dt.setDate(dt.getDate()+d); return dt.toISOString().slice(0,10);
-    }
-
-  // ------------- Meilensteine -------------
-  function nextThresholdSeries(seriesName, current){
-    // Sequenzen und Belohnungen nach Vorgaben
-    // Quests: 100, 200, 500, 1000, 2500...
-    // Bossquests: 10, 20, 50, 100, 250...
-    // Missionen: 5, 10, 20, 50, 100...
-    const map = {
-      quests:   [100, 200, 500, 1000, 2500, 5000, 10000],
-      boss:     [10, 20, 50, 100, 250, 500, 1000],
-      missions: [5, 10, 20, 50, 100, 250, 500]
-    };
-    const rw  = [100, 400, 2500, 5000, 15000, 40000, 100000]; // Beispiel-Rewards steigend
-    const seq = map[seriesName]||[100,200,500];
-    for(let i=0;i<seq.length;i++){
-      if(current < seq[i]) return {target:seq[i], reward:rw[i]||100};
-    }
-    // über die Liste hinaus → skaliere weiter (×2)
-    const last = seq[seq.length-1];
-    let t = last;
-    let i = seq.length-1;
-    while(current >= t){ t = Math.round(t*2); i++; }
-    return {target:t, reward: rw[rw.length-1]||1000 };
-  }
-
-  function computeCounts(){
-    const today = todayISO();
-    const countQuests = state.log.filter(e=> e.points>0 && !String(e.quest).toLowerCase().includes("reward-kauf")).length;
-    const countBoss   = state.log.filter(e=>{
-      const q=state.catalog.find(x=>x.name===e.quest); return q?.boss && e.points>0;
-    }).length;
-    const countMissions = state.missions.filter(m=> m.tasks.length>0 && m.tasks.every(t=>t.done)).length;
-    return {countQuests, countBoss, countMissions};
-  }
-
-  function computeNextMilestoneSummary(){
-    const c = computeCounts();
-    const nq = nextThresholdSeries("quests", c.countQuests);
-    const nb = nextThresholdSeries("boss",   c.countBoss);
-    const nm = nextThresholdSeries("missions", c.countMissions);
-    return `Quests: ${c.countQuests}/${nq.target} (Reward ${nq.reward}) • Boss: ${c.countBoss}/${nb.target} • Missionen: ${c.countMissions}/${nm.target}`;
-  }
-
-  function renderMilestones(){
-    // Global-Block
-    const c = computeCounts();
-    const nq = nextThresholdSeries("quests", c.countQuests);
-    const nb = nextThresholdSeries("boss",   c.countBoss);
-    const nm = nextThresholdSeries("missions", c.countMissions);
-    $("#msNext").innerHTML = `
-      <div class="font-semibold mb-2">Nächste Meilensteine</div>
-      <div>🧩 Quests: ${c.countQuests}/${nq.target} — Bonus: +${nq.reward}</div>
-      <div>👑 Bossquests: ${c.countBoss}/${nb.target} — Bonus: +${nb.reward}</div>
-      <div>🗺️ Missionen: ${c.countMissions}/${nm.target} — Bonus: +${nm.reward}</div>
-    `;
-    // Kategorie-Meilensteine (nur der nächste pro Kategorie)
-    const sums = categoryTotals();
-    const rows = state.categories.map(cat=>{
-      const base = sums[cat.id]||0;
-      // einfache Skalierung: 500, 1000, 2500, 5000...
-      const ladder = [500,1000,2500,5000,10000];
-      let target = ladder.find(t=> base < t) || Math.ceil(base*2);
-      let reward = Math.round(target*0.1); // 10% als Beispiel
-      return `<div class="flex items-center justify-between">
-        <button class="link" data-cdetail="${cat.id}">${cat.name}</button>
-        <div class="text-sm">Punkte: ${(base).toFixed(0)} / ${target} — Bonus: +${reward}</div>
-      </div>`;
-    }).join("");
-    $("#msCategories").innerHTML = `
-      <div class="font-semibold mb-2">Kategorien</div>
-      ${rows}
-    `;
-    $("#msCategories").querySelectorAll("[data-cdetail]").forEach(b=>{
-      b.onclick = ()=> openCategoryDetail(b.getAttribute("data-cdetail"));
-    });
-  }
-
-  function categoryTotals(){
-    const sums={};
-    state.categories.forEach(c=> sums[c.id]=0);
-    state.log.forEach(e=>{
-      const q=state.catalog.find(x=>x.name===e.quest);
-      const base = (typeof e.base==="number") ? e.base : (q?.points||e.points||0);
-      if(q && (q.categories||[]).length){
-        q.categories.forEach(ac=> sums[ac.id]+= Math.max(0, base*(ac.mult||1)));
+      // KATALOG → QUESTS
+      if(Array.isArray(old.catalog)){
+        s.quests = old.catalog.map((q,i)=>({
+          id: "q_"+(i+1),
+          name: q.name || ("Quest "+(i+1)),
+          points: Number(q.points||0),
+          isBoss: !!q.boss,
+          categories: [], // Phase 2
+          multiplierByCat:{}, // Phase 2
+          penaltyDays: 0, penaltyPoints: 0
+        }));
       }else{
-        sums["cat_sonstige"] += Math.max(0, base);
+        // Falls nichts da ist: eine Starter-Quest
+        s.quests = [
+          {id:"q_1",name:"Erste Quest",points:10,isBoss:false,categories:[],multiplierByCat:{}, penaltyDays:0, penaltyPoints:0}
+        ];
       }
-    });
-    return sums;
-  }
 
-  function openCategoryDetail(catId){
-    const cat = state.categories.find(c=>c.id===catId);
-    const sums= categoryTotals();
-    const box=document.createElement("div");
-    box.className="fixed inset-0 z-50 flex items-center justify-center";
-    box.innerHTML=`
-      <div class="absolute inset-0 bg-black/40"></div>
-      <div class="relative card p-4 w-[90%] max-w-xl">
-        <div class="flex items-center justify-between mb-2">
-          <div class="font-semibold">${cat?.name||"Kategorie"}</div>
-          <button class="btn text-xs" id="cClose">Schließen</button>
-        </div>
-        <div class="text-sm mb-2">Punkte gesamt: ${(sums[catId]||0).toFixed(0)}</div>
-        <div class="space-y-1" id="cRows"></div>
-      </div>
-    `;
-    document.body.appendChild(box);
-    $("#cClose").onclick=()=>box.remove();
-    const rows = $("#cRows");
-    const quests = state.catalog.filter(q=> (q.categories||[]).some(ac=>ac.id===catId));
-    if(quests.length===0){
-      rows.innerHTML=`<div class="text-slate-500 dark:text-slate-300">Keine Quests in dieser Kategorie.</div>`;
-      return;
+      // Kategorien: noch leer, aber „Sonstige“ anlegen
+      s.categories.push({id:"cat_misc",name:"Sonstige",linkToCatId:null});
+
+      save(s);
+      // alten Key NICHT löschen – nur falls Nutzer zurückspringen will
+      return s;
     }
-    quests.forEach(q=>{
-      const mult = (q.categories||[]).find(ac=>ac.id===catId)?.mult || 1;
-      const line=document.createElement("div");
-      line.className="p-2 border rounded";
-      line.textContent = `${q.name} ×${mult}`;
-      rows.appendChild(line);
-    });
-  }
 
-  // ------------- Kontinuität & Inaktivität -------------
-  function applyOverduePenalties(){
-    const lastCheck = state.continuity.lastPenaltyCheck || "1970-01-01";
-    const today = todayISO();
-    if(today===lastCheck) return;
+    function save(state){ localStorage.setItem(KEY, JSON.stringify(state)); }
 
-    // für jede Quest mit penaltyDays/penaltyPoints prüfen
-    const byQuest = groupLastDoneDates();
-    state.catalog.forEach(q=>{
-      if(!q.penaltyDays || !q.penaltyPoints) return;
-      const last = byQuest[q.name] || "1970-01-01";
-      const days = daysBetween(last, today);
-      if(days>=q.penaltyDays){
-        state.log.push({date:today, quest:`Inaktivität: ${q.name}`, points: -Math.abs(q.penaltyPoints), base:0});
-      }
-    });
-    state.continuity.lastPenaltyCheck = today;
-    save();
-  }
-  function groupLastDoneDates(){
-    const map={};
-    state.log.forEach(e=>{
-      if(!map[e.quest] || map[e.quest] < e.date) map[e.quest]=e.date;
-    });
-    return map;
-  }
-  function daysBetween(isoA, isoB){
-    const a = new Date(isoA+"T00:00:00Z").getTime();
-    const b = new Date(isoB+"T00:00:00Z").getTime();
-    return Math.round((b-a)/(1000*60*60*24));
-  }
-  function renderContinuity(){
-    const list=$("#contList"); list.innerHTML="";
-    const last = groupLastDoneDates();
-    const items = state.catalog.filter(q=> q.penaltyDays && q.penaltyPoints);
-    if(items.length===0){
-      list.innerHTML=`<div class="text-slate-500 dark:text-slate-300">Keine Aufgaben mit Inaktivitäts-Watch.</div>`;
-      return;
+    let state = load();
+
+    // ==============================
+    //  THEME (persist)
+    // ==============================
+    function applyTheme(){
+      const root = document.documentElement;
+      root.classList.toggle("dark", state.settings.theme==="dark");
+      root.classList.toggle("light", state.settings.theme!=="dark");
     }
-    items.forEach(q=>{
-      const l = last[q.name] || "—";
-      const left = q.penaltyDays ? Math.max(0, q.penaltyDays - daysBetween(l||todayISO(), todayISO())) : "–";
-      const row=document.createElement("div");
-      row.className="card p-2 flex items-center justify-between";
-      row.innerHTML=`
-        <div><b>${q.name}</b> • letzte Aktivität: ${l} • noch ${left} Tage</div>
-        <button class="btn text-xs" data-do="${q.name}">Jetzt erledigt</button>
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll("[data-do]").forEach(b=>{
-      b.onclick=()=>{
-        const n=b.getAttribute("data-do");
-        const q=state.catalog.find(x=>x.name===n);
-        if(!q) return;
-        addLogEntry(todayISO(), n, q.points);
-      };
-    });
-  }
+    function toggleTheme(){
+      state.settings.theme = (state.settings.theme==="dark"?"light":"dark");
+      save(state); applyTheme();
+    }
+    applyTheme();
 
-  // ------------- Settings / Backup -------------
-  function renderSettings(){
-    $("#sEuro").value = state.settings.euro||0.1;
-    $("#sBase").value = state.settings.base||100;
-    $("#sGrowth").value = state.settings.growth||0.1;
-  }
-  $("#sEuro").onchange = ()=>{ state.settings.euro=Number($("#sEuro").value||0); save(); renderAll(); };
-  $("#sBase").onchange = ()=>{ state.settings.base=Number($("#sBase").value||100); save(); renderAll(); };
-  $("#sGrowth").onchange = ()=>{ state.settings.growth=Number($("#sGrowth").value||0.1); save(); renderAll(); };
-  $("#toggleDark").onchange = ()=>{ state.settings.dark=$("#toggleDark").checked; save(); ensureDarkMode(); };
+    // ==============================
+    //  NAVIGATION
+    // ==============================
+    let viewStack = ["menu"]; // für Back
+    const titleEl = document.getElementById("title");
+    const btnBack = document.getElementById("btnBack");
+    const btnMenu = document.getElementById("btnMenu");
+    const btnTheme= document.getElementById("btnTheme");
 
-  $("#btnExport").onclick = ()=>{
-    const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download="life_rpg_backup.json";
-    a.click();
-  };
-  $("#btnImport").onclick = ()=> $("#fileImport").click();
-  $("#fileImport").onchange = (e)=>{
-    const f=e.target.files[0]; if(!f) return;
-    const rd=new FileReader();
-    rd.onload=()=>{
-      try{
-        const data=JSON.parse(rd.result);
-        if(!data || typeof data!=="object") throw 0;
-        state=data; save(); location.reload();
-      }catch{ alert("Fehler beim Import."); }
+    const titles = {
+      menu:"Life RPG",
+      dashboard:"Dashboard",
+      log:"Log",
+      catalog:"Katalog",
+      categories:"Kategorien",
+      missions:"Missionen",
+      specials:"Sonderaufgaben",
+      milestones:"Meilensteine",
+      continuity:"Kontinuität",
+      settings:"Einstellungen"
     };
-    rd.readAsText(f);
-  };
-  $("#btnResetAll").onclick=()=>{
-    if(confirm("Wirklich ALLES löschen?")){
-      localStorage.removeItem(SKEY_V2);
-      // alte Daten optional auch löschen:
-      // localStorage.removeItem(SKEY);
-      location.reload();
+
+    function show(view, push=true){
+      // Alle Views aus
+      document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+      // Gewünschte an
+      const id = "view-"+view;
+      const el = document.getElementById(id);
+      if(!el){ console.warn("View nicht gefunden:", id); return; }
+      el.classList.add("active");
+
+      // Titel + Back
+      titleEl.textContent = titles[view] || "Life RPG";
+      const atRoot = (view==="menu");
+      btnBack.classList.toggle("hidden", atRoot);
+
+      // Stack
+      if(push){
+        if(!atRoot) viewStack.push(view);
+        else viewStack = ["menu"];
+      }
+
+      // Render minimal
+      if(view==="dashboard") renderDashboard();
+      if(view==="log") renderLog();
+      if(view==="catalog") renderCatalog();
+      if(view==="categories") renderCategories();
+      if(view==="missions") renderMissions();
+      if(view==="specials") renderSpecials();
+      if(view==="milestones") renderMilestones();
+      if(view==="continuity") renderContinuity();
+      if(view==="settings") renderSettings();
     }
-  };
 
-  // ------------- Kategorie-Summen-Helfer (Dashboard & Milestones) -------------
-  // (bereits weiter oben implementiert: categoryTotals)
+    function goBack(){
+      if(viewStack.length<=1){ show("menu", false); return; }
+      viewStack.pop(); // current
+      const prev = viewStack.pop() || "menu";
+      show(prev, true);
+    }
 
-  // ------------- Initialisierung -------------
-  function renderAll(){
-    ensureDarkMode();
-    applyOverduePenalties();
-    renderDashboard();
-    renderLog();
-    renderCatalog();
-    renderCategories();
-    renderMissions();
-    renderSpecials();
-    renderMilestones();
-    renderContinuity();
-    renderSettings();
-  }
+    // Hauptmenü-Buttons
+    document.querySelectorAll('#view-menu [data-go]').forEach(btn=>{
+      btn.addEventListener('click', ()=> show(btn.getAttribute('data-go')));
+    });
+    btnMenu.addEventListener("click", ()=>show("menu"));
+    btnBack.addEventListener("click", goBack);
+    btnTheme.addEventListener("click", toggleTheme);
 
-  // Start
-  addCatAssignRow(); // initiale Zeile im Katalog
-  show("menu");
-  $("#logDate").value=todayISO();
-  renderAll();
+    // ==============================
+    //  BASIS-BERECHNUNG
+    // ==============================
+    function totalPoints(){
+      return state.log.reduce((s,e)=> s + Number(e.points||0), 0);
+    }
+    function levelForPoints(p){
+      let lvl=1, need=state.settings.base;
+      while(p>=need){ lvl++; p-=need; need = Math.round(need*(1+state.settings.growth)); }
+      return Math.max(1,lvl);
+    }
+    function totalSavings(){ return totalPoints() * Number(state.settings.euro||0); }
+
+    // ==============================
+    //  RENDER: Dashboard (minimal)
+    // ==============================
+    function renderDashboard(){
+      document.getElementById("statPoints").textContent = totalPoints();
+      document.getElementById("statLevel").textContent  = levelForPoints(totalPoints());
+      document.getElementById("statSavings").textContent= totalSavings().toFixed(2);
+    }
+
+    // ==============================
+    //  RENDER: Log (nur Anzeige)
+    // ==============================
+    function renderLog(){
+      const list = document.getElementById("logList");
+      if(!state.log.length){
+        list.innerHTML = `<div class="muted">Noch keine Einträge.</div>`;
+        return;
+      }
+      list.innerHTML = state.log.slice().reverse().map(e=>{
+        const name = e.questName || (state.quests.find(q=>q.id===e.questId)?.name ?? "Quest");
+        const pts = Number(e.points||0);
+        return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div><b>${name}</b></div>
+            <div class="muted" style="font-size:.85rem">${e.date}</div>
+          </div>
+          <div style="font-weight:700">${pts>0?"+":""}${pts}</div>
+        </div>`;
+      }).join("");
+    }
+
+    // ==============================
+    //  RENDER: Platzhalter anderer Views
+    // ==============================
+    function renderCatalog(){
+      const box = document.getElementById("catalogList");
+      if(!state.quests.length){ box.innerHTML = `<div class="muted">Noch keine Quests.</div>`; return; }
+      box.innerHTML = state.quests.map(q=>`
+        <div class="card" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;margin-bottom:.5rem">
+          <div>
+            <div><b>${q.name}</b></div>
+            <div class="muted" style="font-size:.85rem">${q.points} Punkte ${q.isBoss?"• 👑 Boss":""}</div>
+          </div>
+          <span class="chip">ID: ${q.id}</span>
+        </div>
+      `).join("");
+    }
+    function renderCategories(){
+      const box = document.getElementById("catList");
+      if(!state.categories.length){ box.innerHTML = `<div class="muted">Noch keine Kategorien.</div>`; return; }
+      box.innerHTML = state.categories.map(c=>`
+        <div class="card" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;margin-bottom:.5rem">
+          <div><b>${c.name}</b>${c.id==="cat_misc"?" <span class='chip'>Sonstige</span>":""}</div>
+          ${c.linkToCatId ? `<span class="chip">verknüpft</span>`:""}
+        </div>
+      `).join("");
+    }
+    function renderMissions(){
+      document.getElementById("missionList").innerHTML =
+        `<div class="muted">Noch keine Missionen.</div>`;
+    }
+    function renderSpecials(){
+      document.getElementById("specialList").innerHTML =
+        `<div class="muted">Noch keine Sonderaufgaben.</div>`;
+    }
+    function renderMilestones(){
+      document.getElementById("msList").innerHTML =
+        `<div class="muted">Noch keine Meilensteine. (Phase 6)</div>`;
+    }
+    function renderContinuity(){
+      document.getElementById("contList").innerHTML =
+        `<div class="muted">Noch leer. (Phase 7)</div>`;
+    }
+
+    // ==============================
+    //  Einstellungen (wirksam)
+    // ==============================
+    function renderSettings(){
+      const s = state.settings;
+      document.getElementById("sEuro").value   = s.euro;
+      document.getElementById("sBase").value   = s.base;
+      document.getElementById("sGrowth").value = s.growth;
+    }
+
+    document.getElementById("sEuro").addEventListener("change", e=>{
+      state.settings.euro = Number(e.target.value||0);
+      save(state); renderDashboard();
+    });
+    document.getElementById("sBase").addEventListener("change", e=>{
+      state.settings.base = Number(e.target.value||100);
+      save(state); renderDashboard();
+    });
+    document.getElementById("sGrowth").addEventListener("change", e=>{
+      state.settings.growth = Number(e.target.value||0.1);
+      save(state); renderDashboard();
+    });
+
+    document.getElementById("btnExport").addEventListener("click", ()=>{
+      const blob = new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "life_rpg_backup_v3.json";
+      a.click();
+    });
+    document.getElementById("btnImport").addEventListener("click", ()=>{
+      document.getElementById("fileImport").click();
+    });
+    document.getElementById("fileImport").addEventListener("change", e=>{
+      const f=e.target.files?.[0]; if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        try{
+          const incoming = JSON.parse(reader.result);
+          if(!incoming || typeof incoming!=="object") throw "invalid";
+          incoming.version = 3;
+          // Safety: „Sonstige“ sicherstellen
+          incoming.categories = incoming.categories || [];
+          if(!incoming.categories.find(c=>c.id==="cat_misc")){
+            incoming.categories.unshift({id:"cat_misc",name:"Sonstige",linkToCatId:null});
+          }
+          state = incoming; save(state);
+          // Soft-refresh view
+          const current = (viewStack[viewStack.length-1]||"menu");
+          show(current,false);
+          renderDashboard();
+        }catch(err){ alert("Import fehlgeschlagen."); }
+      };
+      reader.readAsText(f);
+    });
+
+    document.getElementById("btnResetAll").addEventListener("click", ()=>{
+      if(!confirm("Wirklich ALLE Daten löschen?")) return;
+      state = structuredClone(defaultState);
+      // „Sonstige“
+      state.categories.push({id:"cat_misc",name:"Sonstige",linkToCatId:null});
+      save(state);
+      show("menu",false);
+      renderDashboard();
+    });
+
+    // ==============================
+    //  Startsicht
+    // ==============================
+    show("menu", false);
+
+    // === PATCHPOINT: PHASE_2 ===
+    // (Hier wird Phase 2 Code eingefügt – Katalog & Kategorien Logik)
+
+    // === PATCHPOINT: PHASE_3 ===
+    // (Hier wird Phase 3 Code eingefügt – Log: Eintragen, Schnellauswahl, Undo)
+
+    // === PATCHPOINT: PHASE_4 ===
+    // (Hier wird Phase 4 Code eingefügt – Missionen Freischaltung, 4× Bonus)
+
+    // === PATCHPOINT: PHASE_5 ===
+    // (Hier wird Phase 5 Code eingefügt – Sonderaufgaben mit Cooldown)
+
+    // === PATCHPOINT: PHASE_6 ===
+    // (Hier wird Phase 6 Code eingefügt – Meilensteine (nur „nächster“ sichtbar))
+
+    // === PATCHPOINT: PHASE_7 ===
+    // (Hier wird Phase 7 Code eingefügt – Kontinuität: Multiplikator/Strafen)
+
+    // === PATCHPOINT: PHASE_8 ===
+    // (Hier wird Phase 8 Code eingefügt – Kategorie-Verknüpfungen & Negativ-Kats.)
+
+  })();
   </script>
 </body>
 </html>
