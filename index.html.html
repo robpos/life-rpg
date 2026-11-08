@@ -1,0 +1,1550 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101522">
+  <meta name="description" content="Life RPG – Fortschritt, Quests, Missionen und Belohnungen. Deine Daten bleiben auf deinem Gerät.">
+  <title>Life RPG</title>
+  <style>
+/* Life RPG design system. No CDN or third-party styles. */
+:root{
+  color-scheme:dark;
+  --bg:#0b101a;--surface:#141c2b;--surface-alt:#1a2435;--surface-high:#222e43;
+  --text:#f0f4fa;--muted:#9cacc2;--faint:#70819a;--border:#29364b;--border-strong:#3b4d65;
+  --accent:#4ed8b5;--accent-soft:rgba(78,216,181,.12);--accent-text:#041d17;
+  --blue:#8aa2ff;--orange:#f1ae76;--red:#fa8695;--positive:#66ddb4;
+  --shadow:0 15px 48px rgba(0,0,0,.23);--bar:#e6edf8;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f5f7fa;--surface:#fff;--surface-alt:#f1f4f9;--surface-high:#e8eef6;
+  --text:#162235;--muted:#536579;--faint:#758294;--border:#dfe6ee;--border-strong:#c6d2df;
+  --accent:#087e66;--accent-soft:rgba(8,126,102,.09);--accent-text:#fff;
+  --blue:#4058be;--orange:#986223;--red:#b63d53;--positive:#087e66;
+  --shadow:0 14px 36px rgba(31,57,91,.07);--bar:#526478;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-size:15px;line-height:1.5;min-height:100vh}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.47}
+a{color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button,input,select,textarea{max-width:100%}
+strong{font-weight:720}
+h1,h2,h3,h4,p{margin-top:0}
+small,.small{font-size:.82rem}
+.muted{color:var(--muted)}.faint{color:var(--faint)}.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.app-shell{min-height:100dvh;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--border);padding-top:env(safe-area-inset-top,0px)}
+.topbar-inner{height:68px;max-width:900px;margin:auto;padding:0 18px;display:flex;align-items:center;gap:10px}
+.header-left,.header-right{min-width:90px;display:flex;align-items:center;gap:8px}
+.header-right{justify-content:flex-end}.header-middle{min-width:0;flex:1;text-align:center}
+.header-title{font-size:1.12rem;font-weight:800;letter-spacing:-.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header-subtitle{font-size:.61rem;color:var(--faint);letter-spacing:.17em;font-weight:750}
+.brand-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:1.7rem}
+.icon-btn{border:1px solid var(--border);color:var(--text);background:var(--surface-alt);min-width:39px;min-height:39px;border-radius:11px;display:inline-grid;place-items:center;font-size:1.25rem}
+.icon-btn:hover{border-color:var(--border-strong);background:var(--surface-high)}
+.is-hidden{display:none!important}
+.main-content{flex:1;width:100%;max-width:900px;margin:0 auto;padding:29px 20px calc(70px + env(safe-area-inset-bottom,0px));outline:none}
+.app-footer{max-width:900px;width:100%;margin:0 auto;padding:14px 20px calc(16px + env(safe-area-inset-bottom,0px));text-align:center;color:var(--faint);letter-spacing:.10em;font-size:.61rem;font-weight:700;border-top:1px solid var(--border)}
+.eyebrow{font-size:.7rem;letter-spacing:.14em;font-weight:800;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px}
+.page-title{font-size:clamp(1.8rem,4vw,2.35rem);line-height:1.12;letter-spacing:-.055em;font-weight:820;margin:0 0 10px}
+.page-description{color:var(--muted);margin:0;max-width:640px}
+.page-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.stack{display:grid;gap:14px}.stack-sm{display:grid;gap:9px}.stack-lg{display:grid;gap:22px}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px;box-shadow:0 3px 15px rgba(0,0,0,.025);min-width:0}
+.card.tight{padding:14px}.card.compact{padding:16px}
+.section-title{font-size:1rem;font-weight:760;letter-spacing:-.018em;margin-bottom:13px}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.hero{border:1px solid rgba(78,216,181,.27);background:linear-gradient(120deg,var(--accent-soft),transparent 60%),var(--surface);border-radius:22px;padding:26px 23px;position:relative;overflow:hidden}
+.hero::after{content:'✦';position:absolute;right:-12px;top:-50px;font-size:200px;line-height:1;color:var(--accent);opacity:.06;pointer-events:none}
+.hero-kicker{color:var(--accent);text-transform:uppercase;font-size:.67rem;letter-spacing:.16em;font-weight:830;margin-bottom:12px}
+.hero h1{margin:0 0 10px;font-size:clamp(2.1rem,6vw,3.2rem);letter-spacing:-.064em;line-height:1.03}
+.hero p{max-width:540px;color:var(--muted);margin:0 0 18px}
+.hero-stats{display:flex;gap:28px;flex-wrap:wrap;margin-top:22px}
+.hero-stat-value{font-size:1.44rem;font-weight:820;letter-spacing:-.04em;line-height:1.2;color:var(--text)}
+.hero-stat-label{font-size:.73rem;color:var(--muted)}
+.menu-link{display:flex;align-items:center;gap:15px;width:100%;padding:17px 18px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:15px;text-align:left;min-height:68px;transition:background .15s,border-color .15s,transform .15s}
+.menu-link:hover{background:var(--surface-alt);border-color:var(--border-strong);transform:translateY(-1px)}
+.menu-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--surface-alt);font-size:1.28rem;flex:0 0 auto}
+.menu-label{font-size:1rem;font-weight:730}.menu-description{font-size:.77rem;color:var(--muted);line-height:1.4}
+.menu-arrow{margin-left:auto;font-size:1.28rem;color:var(--faint)}
+.stat-card{min-height:121px;display:flex;flex-direction:column;justify-content:center}
+.stat-label{font-size:.77rem;color:var(--muted);margin-bottom:6px}
+.stat-value{font-size:clamp(1.3rem,3vw,2.0rem);font-weight:810;color:var(--text)!important;letter-spacing:-.045em;line-height:1.2;overflow-wrap:anywhere}
+.stat-detail{font-size:.7rem;color:var(--faint);margin-top:6px}
+.progress-track{height:11px;background:var(--surface-high);border-radius:100px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);border-radius:100px;transition:width .25s;min-width:0}
+.progress-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:.76rem;margin:8px 0 0}
+.btn{border:1px solid var(--border-strong);background:var(--surface-alt);color:var(--text);border-radius:11px;padding:10px 15px;font-weight:685;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;text-align:center;line-height:1.2;text-decoration:none}
+.btn:hover:not(:disabled){background:var(--surface-high);border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.btn.primary:hover:not(:disabled){filter:brightness(.92);background:var(--accent)}
+.btn.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--border));background:color-mix(in srgb,var(--red) 9%,var(--surface))}
+.btn.small{min-height:35px;padding:7px 10px;font-size:.77rem}.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.block{width:100%}.btn.link{padding:0;min-height:0;background:none;border:0;color:var(--accent)}
+.field{display:grid;gap:5px;min-width:0}.field>label,.field-label{font-size:.76rem;font-weight:720;color:var(--muted)}
+.input,.select,.textarea{width:100%;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface-alt);color:var(--text);min-height:43px;padding:10px 12px;outline:none}
+.input:focus,.select:focus,.textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.textarea{resize:vertical;min-height:82px}.input[type=color]{padding:5px;height:43px;min-width:80px}
+.input[type=checkbox]{width:18px;height:18px;min-height:0;accent-color:var(--accent);flex:0 0 auto}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+.input-hint{color:var(--faint);font-size:.73rem}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full-span{grid-column:1 / -1}
+.checkbox-row{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:35px;color:var(--text)}
+.category-choice{display:flex;align-items:center;gap:8px;background:var(--surface-alt);border:1px solid var(--border);padding:8px;border-radius:10px;min-width:0}
+.category-choice label{display:flex;align-items:center;gap:7px;flex:1;min-width:0;overflow:hidden;font-size:.81rem}
+.category-choice .input{width:82px;min-height:36px;padding:7px;text-align:center}
+.choice-grid{display:grid;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 9px;background:var(--surface-alt);border:1px solid var(--border);font-size:.72rem;font-weight:690;color:var(--muted);white-space:nowrap;max-width:100%}
+.pill.accent{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));background:var(--accent-soft);color:var(--accent)}
+.pill.danger{color:var(--red)}
+.dot{width:8px;height:8px;display:inline-block;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.list-card{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;padding:16px 18px;border:1px solid var(--border);border-radius:14px;background:var(--surface);min-width:0}
+.list-main{min-width:0;flex:1}.list-title{font-weight:735;line-height:1.4;overflow-wrap:anywhere}.list-sub{font-size:.78rem;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.list-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.list-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.inline-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.empty{border:1px dashed var(--border-strong);background:var(--surface);border-radius:16px;padding:30px 20px;text-align:center}
+.empty-icon{font-size:1.6rem;margin-bottom:9px}.empty-title{font-weight:760;margin-bottom:6px}.empty p{color:var(--muted);margin:0 auto 15px;max-width:450px}
+.tip{border:1px solid var(--border);border-left:3px solid var(--accent);background:var(--surface);border-radius:12px;padding:14px 16px;color:var(--muted);font-size:.84rem}
+.notice{color:var(--orange);font-size:.8rem}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.chart{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));align-items:center;gap:5px;height:155px;padding:12px 0 0;position:relative}
+.chart:before{content:'';position:absolute;left:0;right:0;top:65px;border-top:1px dashed var(--border-strong)}
+.chart-col{height:137px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
+.chart-up,.chart-down{width:70%;max-width:30px;min-height:0;border-radius:5px 5px 1px 1px;background:var(--accent)}
+.chart-down{border-radius:1px 1px 5px 5px;background:var(--red)}
+.chart-half{height:54px;display:flex;justify-content:flex-end;flex-direction:column;align-items:center;width:100%}
+.chart-half.bottom{justify-content:flex-start}.chart-date{font-size:.63rem;color:var(--faint);margin-top:9px;white-space:nowrap}
+.chart-col.today .chart-date{color:var(--accent);font-weight:800}
+.metric-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.metric-row .metric-main{font-size:1.08rem;font-weight:780}
+.timeline{display:grid;gap:10px}.timeline-date{font-size:.75rem;letter-spacing:.08em;color:var(--muted);font-weight:760;text-transform:uppercase;margin:9px 0 0}
+.timeline-row{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:12px;padding:13px 15px;background:var(--surface)}
+.timeline-name{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.89rem}.timeline-pts{font-weight:800;white-space:nowrap}.timeline-pts.neg{color:var(--red)}.timeline-pts.pos{color:var(--positive)}
+.due-late{color:var(--red)}.due-now{color:var(--accent)}.due-soon{color:var(--orange)}
+.stage{border:1px solid var(--border);background:var(--surface);border-radius:15px;padding:16px;display:grid;gap:10px}
+.stage.done{border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}.stage.locked{opacity:.75}
+.stage-top{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.stage-number{width:32px;height:32px;border-radius:10px;background:var(--surface-high);display:grid;place-items:center;color:var(--accent);font-weight:800;flex:0 0 auto}
+.stage-option{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:0}
+.step-title{font-weight:680;overflow-wrap:anywhere}.step-label{color:var(--muted);font-size:.75rem}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:.76rem}
+.milestone-card{border:1px solid var(--border);border-radius:13px;padding:15px;background:var(--surface);display:grid;gap:10px}
+.milestone-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.milestone-target{font-weight:740}.milestone-progress{font-size:.83rem;color:var(--muted)}
+.category-line{width:4px;background:var(--accent);border-radius:6px;align-self:stretch;flex:0 0 4px}
+.modal-root{position:fixed;inset:0;z-index:99;display:grid;place-items:center;padding:calc(20px + env(safe-area-inset-top,0px)) 14px calc(20px + env(safe-area-inset-bottom,0px))}
+.modal-overlay{position:absolute;inset:0;background:rgba(3,8,14,.77);backdrop-filter:blur(6px)}
+.modal-panel{position:relative;background:var(--surface);color:var(--text);border:1px solid var(--border-strong);box-shadow:var(--shadow);border-radius:20px;width:min(100%,580px);max-height:100%;overflow:auto;overscroll-behavior:contain;padding:24px}
+.modal-panel.wide{width:min(100%,680px)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px}
+.modal-title{font-size:1.26rem;font-weight:800;letter-spacing:-.03em;margin:0}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:20px}
+.modal-panel details{border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:10px}
+.modal-panel summary{cursor:pointer;font-weight:710}
+.modal-panel details>div{padding-top:12px}
+#toastMount{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);width:min(calc(100% - 30px),480px);z-index:110;pointer-events:none}
+.toast{background:var(--surface-high);color:var(--text);border:1px solid var(--border-strong);padding:13px 16px;border-radius:13px;box-shadow:var(--shadow);font-weight:630;font-size:.86rem}
+.toast.error{border-color:var(--red)}
+.chat-box{height:330px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--surface-alt);border-radius:15px;border:1px solid var(--border)}
+.chat-bubble{max-width:86%;border:1px solid var(--border);border-radius:14px;padding:11px 13px;background:var(--surface);white-space:pre-wrap;font-size:.9rem}
+.chat-bubble.me{align-self:flex-end;background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
+.chat-bubble.bot{align-self:flex-start}
+.chat-row{display:flex;gap:8px}.chat-row .input{flex:1}
+.hr{height:1px;background:var(--border);margin:16px 0}
+.error-screen{padding:22px;border:1px solid var(--red);border-radius:16px;background:var(--surface)}
+@media(max-width:690px){
+  .main-content{padding:22px 14px calc(54px + env(safe-area-inset-bottom,0px))}
+  .topbar-inner{height:62px;padding:0 12px}.header-left,.header-right{min-width:84px;gap:6px}
+  .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .page-head{flex-direction:column;gap:15px}.page-actions{justify-content:flex-start}
+  .card{padding:16px}.hero{padding:22px 18px}
+  .list-card{flex-wrap:wrap}.list-actions{justify-content:flex-start;width:100%;padding-left:0}
+  .modal-panel{padding:18px}.stat-card{min-height:110px}
+}
+@media(max-width:420px){
+  .kpi-grid{gap:7px}.kpi-grid .card{padding:12px}.stat-value{font-size:1.25rem}
+  .hero-stats{gap:18px}.form-grid{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}
+  .header-title{font-size:1rem}.header-subtitle{font-size:.54rem;letter-spacing:.12em}
+  .stat-label{font-size:.72rem}.page-title{font-size:1.9rem}.card{padding:15px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="header-left">
+          <button id="backBtn" class="icon-btn is-hidden" type="button" aria-label="Zurück" title="Zurück">←</button>
+          <span id="brandMark" class="brand-mark" aria-hidden="true">✦</span>
+        </div>
+        <div class="header-middle">
+          <div id="headerTitle" class="header-title">Life RPG</div>
+          <div class="header-subtitle">MAKE PROGRESS VISIBLE</div>
+        </div>
+        <div class="header-right">
+          <button id="themeBtn" class="icon-btn" type="button" aria-label="Design wechseln" title="Hell / Dunkel">☀</button>
+          <button id="homeBtn" class="icon-btn" type="button" aria-label="Hauptmenü" title="Hauptmenü">☰</button>
+        </div>
+      </div>
+    </header>
+    <main id="mainContent" class="main-content" tabindex="-1">
+      <div id="screen" aria-live="polite"></div>
+    </main>
+    <footer class="app-footer">LIFE RPG · LOCAL FIRST <span aria-hidden="true">·</span> DEINE DATEN, DEINE REGELN</footer>
+  </div>
+  <div id="modalMount"></div>
+  <div id="toastMount" role="status" aria-live="polite"></div>
+<script>
+/* Life RPG - domain logic. No DOM, no external libraries. */
+(function (root, factory) {
+  const core = factory();
+  if (typeof module === 'object' && module.exports) module.exports = core;
+  root.LifeRPGCore = core;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const STORAGE_KEY = 'lifeRPG_stable_v1';
+  const SCHEMA_VERSION = 1;
+  const MISC_ID = 'cat_misc';
+  const DAY_MS = 86400000;
+  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+  const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const round = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
+  const uid = (prefix) => `${prefix}_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)}`;
+  const isISODate = (x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')) && !Number.isNaN(Date.parse(x + 'T00:00:00Z')) && new Date(Date.parse(x + 'T00:00:00Z')).toISOString().slice(0, 10) === x;
+  function dateLocal(d = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  function dayNumber(iso) { return Math.floor(Date.parse(iso + 'T00:00:00Z') / DAY_MS); }
+  function dateFromDay(day) { return new Date(day * DAY_MS).toISOString().slice(0, 10); }
+  function dayDiff(a, b) { return dayNumber(b) - dayNumber(a); }
+  function addDays(iso, count) { return dateFromDay(dayNumber(iso) + Number(count)); }
+  const clone = (value) => typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value));
+
+  function newState(today = dateLocal()) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      meta: { createdOn: today, updatedAt: new Date().toISOString() },
+      settings: {
+        theme: 'dark', euroPerPoint: 0.10, levelBase: 100, levelGrowth: 0.10,
+        dailyGoal: 3, negativeFactor: 2, streakStep: 0.05, streakCap: 1.25,
+        questXpDecay: 15
+      },
+      categories: [
+        { id: MISC_ID, name: 'Sonstige', type: 'positive', color: '#64748b', archivedAt: null, system: true },
+        { id: 'cat_sport', name: 'Sport', type: 'positive', color: '#22c7a3', archivedAt: null },
+        { id: 'cat_gesundheit', name: 'Gesundheit', type: 'positive', color: '#7b8cff', archivedAt: null },
+        { id: 'cat_alltag', name: 'Alltag', type: 'positive', color: '#f2aa63', archivedAt: null },
+        { id: 'cat_kreativ', name: 'Kreativität', type: 'positive', color: '#be86fa', archivedAt: null },
+        { id: 'cat_rueckschritte', name: 'Rückschritte', type: 'negative', color: '#ee7381', archivedAt: null }
+      ],
+      quests: [], specials: [], missions: [], rewards: [], events: []
+    };
+  }
+
+  function normalizeState(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Ungültiges Datenformat.');
+    if (raw.schemaVersion !== SCHEMA_VERSION) throw new Error(`Inkompatibles Datenschema (${String(raw.schemaVersion)}). Unterstützt: ${SCHEMA_VERSION}.`);
+    const fresh = newState();
+    const state = { ...fresh, ...raw };
+    state.settings = { ...fresh.settings, ...(raw.settings || {}) };
+    state.meta = { ...fresh.meta, ...(raw.meta || {}) };
+    for (const key of ['categories', 'quests', 'specials', 'missions', 'rewards', 'events']) {
+      if (!Array.isArray(raw[key])) throw new Error(`Datenfeld '${key}' fehlt oder ist beschädigt.`);
+      state[key] = raw[key];
+      const ids = new Set();
+      for (const entry of state[key]) {
+        if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' || !entry.id) throw new Error(`Ungültiger Eintrag in ${key}.`);
+        if (ids.has(entry.id)) throw new Error(`Doppelte ID in ${key}.`);
+        ids.add(entry.id);
+      }
+    }
+    if (!state.categories.some(c => c.id === MISC_ID && !c.archivedAt)) throw new Error('Systemkategorie Sonstige fehlt.');
+    function validAllocations(arr, label) {
+      if (!Array.isArray(arr)) throw new Error(`Ungültige Kategoriezuordnung: ${label}.`);
+      for (const a of arr) {
+        if (!a || typeof a.categoryId !== 'string' || !state.categories.some(c => c.id === a.categoryId) || !Number.isFinite(Number(a.multiplier)) || num(a.multiplier) < 0 || num(a.multiplier) > 100) {
+          throw new Error(`Ungültiger Kategorien-Multiplikator: ${label}.`);
+        }
+      }
+    }
+    for (const c of state.categories) {
+      if (typeof c.name !== 'string' || !c.name.trim() || !['positive','negative'].includes(c.type)) throw new Error('Ungültige Kategorie.');
+    }
+    for (const q of state.quests) {
+      if (typeof q.name !== 'string' || !q.name.trim() || !(num(q.points) > 0) || !isISODate(q.createdOn)) throw new Error('Ungültige Quest.');
+      validAllocations(q.allocations || [], `Quest ${q.name}`);
+      validAllocations(q.links || [], `Quest-Zusatzwirkung ${q.name}`);
+      if (q.penaltyEnabled && (!(num(q.penaltyDays) >= 1) || !(num(q.penaltyRepeatDays) >= 1))) throw new Error('Inaktivitätsregeln einer Quest beschädigt.');
+    }
+    for (const item of state.specials) {
+      if (typeof item.name !== 'string' || !item.name.trim() || !(num(item.points) > 0) || !(num(item.cooldownDays) >= 1) || !isISODate(item.createdOn)) throw new Error('Ungültige Sonderaufgabe.');
+      validAllocations(item.allocations || [], `Sonderaufgabe ${item.name}`);
+    }
+    for (const mission of state.missions) {
+      if (typeof mission.name !== 'string' || !mission.name.trim() || !Array.isArray(mission.stages)) throw new Error('Ungültige Mission.');
+      const stageIds = new Set();
+      for (const stage of mission.stages) {
+        if (!stage || !stage.id || stageIds.has(stage.id) || !Array.isArray(stage.options) || !stage.options.length) throw new Error('Missionsstufe beschädigt.');
+        stageIds.add(stage.id);
+        const optionIds = new Set();
+        for (const option of stage.options) {
+          if (!option || !option.id || optionIds.has(option.id) || typeof option.name !== 'string' || !option.name.trim() || !(num(option.points) > 0)) throw new Error('Missionsaufgabe beschädigt.');
+          optionIds.add(option.id);
+        }
+      }
+    }
+    for (const reward of state.rewards) {
+      if (typeof reward.name !== 'string' || !reward.name.trim() || !(num(reward.cost) >= 1)) throw new Error('Ungültige Belohnung.');
+    }
+    const eventTypes = new Set(['quest','special','mission-step','manual','redeem']);
+    for (const event of state.events) {
+      if (!eventTypes.has(event.type) || !isISODate(event.date) || !event.snapshot || typeof event.snapshot !== 'object' || !event.createdAt) throw new Error('Log-Eintrag beschädigt.');
+      if (event.type === 'mission-step' && (!event.stageId || !event.optionId)) throw new Error('Missionslog beschädigt.');
+      if ((event.type === 'quest' || event.type === 'special') &&
+        (typeof event.snapshot.name !== 'string' || !Number.isFinite(Number(event.snapshot.basePoints)) || !Array.isArray(event.snapshot.allocations) ||
+         event.snapshot.allocations.some(a => !a || !a.categoryId || !['positive','negative'].includes(a.type) || !Number.isFinite(Number(a.multiplier))))) {
+        throw new Error('Historische Quest-Buchung beschädigt.');
+      }
+      if ((event.type === 'manual' || event.type === 'redeem') && !Number.isFinite(Number(event.snapshot.points))) throw new Error('Manuelle Buchung beschädigt.');
+      if (event.type === 'mission-step' && !Number.isFinite(Number(event.snapshot.basePoints))) throw new Error('Missionspunkte beschädigt.');
+    }
+    if (!Number.isFinite(Number(state.settings.levelBase)) || num(state.settings.levelBase) < 10) throw new Error('Level-Basis ungültig.');
+    if (num(state.settings.levelGrowth) < 0 || num(state.settings.levelGrowth) > 1) throw new Error('Level-Wachstum ungültig.');
+    return state;
+  }
+
+  function createQuestSnapshot(state, quest, basePoints) {
+    const allocations = [...(quest.allocations || []), ...(quest.links || [])].filter(a => state.categories.some(c => c.id === a.categoryId && !c.archivedAt))
+      .map(a => {
+        const category = state.categories.find(c => c.id === a.categoryId);
+        return { categoryId: category.id, categoryName: category.name, type: category.type, multiplier: clamp(num(a.multiplier, 1), 0, 100) };
+      });
+    if (!allocations.length) allocations.push({ categoryId: MISC_ID, categoryName: 'Sonstige', type: 'positive', multiplier: 1 });
+    return {
+      name: quest.name, basePoints: Math.abs(num(basePoints ?? quest.points, 0)),
+      isBoss: !!quest.isBoss, allocations,
+      negativeFactor: num(state.settings.negativeFactor, 2),
+      streakEnabled: !!quest.streakEnabled,
+      streakStep: num(state.settings.streakStep, 0.05),
+      streakCap: num(state.settings.streakCap, 1.25)
+    };
+  }
+
+  function newQuestEvent(state, quest, date, pointsOverride) {
+    return {
+      id: uid('ev'), type: 'quest', date, createdAt: new Date().toISOString(), refId: quest.id,
+      snapshot: createQuestSnapshot(state, quest, pointsOverride), voidedAt: null
+    };
+  }
+  function newSpecialEvent(state, special, date) {
+    return {
+      id: uid('ev'), type: 'special', date, createdAt: new Date().toISOString(), refId: special.id,
+      snapshot: createQuestSnapshot(state, { ...special, isBoss: false, streakEnabled: false }, special.points), voidedAt: null
+    };
+  }
+  function newMissionEvent(mission, stage, option, date) {
+    return {
+      id: uid('ev'), type: 'mission-step', date, createdAt: new Date().toISOString(), refId: mission.id,
+      stageId: stage.id, optionId: option.id,
+      snapshot: { name: `${mission.name}: ${option.name}`, basePoints: Math.abs(num(option.points)) }, voidedAt: null
+    };
+  }
+  function newManualEvent(date, name, points) {
+    return { id: uid('ev'), type: 'manual', date, createdAt: new Date().toISOString(),
+      snapshot: { name, points: num(points) }, voidedAt: null };
+  }
+  function newRedeemEvent(date, reward) {
+    return { id: uid('ev'), type: 'redeem', date, createdAt: new Date().toISOString(), refId: reward.id,
+      snapshot: { name: `Belohnung: ${reward.name}`, points: -Math.abs(num(reward.cost)) }, voidedAt: null };
+  }
+
+  function seriesThreshold(name, index) {
+    const sets = {
+      quests: { thresholds: [100, 200, 500, 1000, 2500, 5000, 10000], rewards: [100, 400, 2500, 5000, 15000, 30000, 65000] },
+      boss: { thresholds: [10, 20, 50, 100, 250, 500, 1000], rewards: [100, 200, 2500, 5000, 12500, 30000, 65000] },
+      missions: { thresholds: [5, 10, 20, 50, 100, 250, 500], rewards: [200, 500, 1200, 4000, 10000, 25000, 60000] },
+      category: { thresholds: [500, 1000, 2500, 5000, 10000, 25000], rewards: [50, 150, 500, 1200, 3000, 8000] }
+    };
+    const series = sets[name];
+    if (!series) throw new Error('Unbekannte Meilensteinreihe.');
+    const last = series.thresholds.length - 1;
+    if (index <= last) return { target: series.thresholds[index], reward: series.rewards[index] };
+    const power = index - last;
+    return {
+      target: Math.round(series.thresholds[last] * Math.pow(2, power)),
+      reward: Math.round(series.rewards[last] * Math.pow(1.9, power))
+    };
+  }
+  function achievedSeries(name, value) {
+    const items = [];
+    for (let i = 0; i < 100 && value >= seriesThreshold(name, i).target; i++) {
+      items.push({ ...seriesThreshold(name, i), index: i });
+    }
+    return items;
+  }
+  function nextSeries(name, value) {
+    const count = achievedSeries(name, value).length;
+    return { ...seriesThreshold(name, count), index: count, current: value, completed: count };
+  }
+
+  function levelInfo(points, base = 100, growth = 0.10) {
+    const earned = Math.max(0, num(points));
+    let rem = earned, need = Math.max(10, num(base, 100)), level = 1;
+    const g = clamp(num(growth, 0.1), 0, 1);
+    while (rem >= need && level < 1000) {
+      rem -= need; level += 1; need = Math.max(10, Math.round(need * (1 + g)));
+    }
+    return { level, remaining: round(rem), need, progress: clamp(rem / need, 0, 1), total: earned };
+  }
+  function questLevelInfo(xp) { return levelInfo(xp, 100, 0.1); }
+
+  function derivedPenalties(state, allQuestDoneDays, today) {
+    const rows = [];
+    for (const quest of state.quests) {
+      if (!quest.penaltyEnabled || !num(quest.penaltyDays) || !num(quest.penaltyPoints)) continue;
+      const start = [quest.createdOn || state.meta.createdOn, quest.penaltySince || quest.createdOn || today].sort().at(-1);
+      const end = quest.archivedAt && quest.archivedAt.slice(0, 10) < today ? quest.archivedAt.slice(0, 10) : today;
+      if (!isISODate(start) || end < start) continue;
+      const period = Math.max(1, Math.round(num(quest.penaltyDays)));
+      const repeatDays = Math.max(1, Math.round(num(quest.penaltyRepeatDays, period)));
+      const completions = [...new Set(allQuestDoneDays[quest.id] || [])].filter(d => d >= start && d <= end).sort();
+      let prev = start;
+      let count = 0;
+      for (const done of [...completions, addDays(end, 1)]) {
+        let cursor = addDays(prev, period);
+        while (cursor < done && cursor <= end && count++ < 1500) {
+          rows.push({ id: `auto:penalty:${quest.id}:${cursor}`, date: cursor, createdAt: `${cursor}T23:55:00Z`,
+            type: 'penalty', name: `Inaktivität: ${quest.name}`, points: -Math.abs(num(quest.penaltyPoints)),
+            categoryPoints: [], virtual: true, refId: quest.id });
+          cursor = addDays(cursor, repeatDays);
+        }
+        prev = done;
+        if (count > 1500) break;
+      }
+    }
+    return rows;
+  }
+
+  function derive(state, today = dateLocal()) {
+    const originalEvents = (state.events || []).filter(e => !e.voidedAt && isISODate(e.date) && e.date <= today)
+      .slice().sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt).localeCompare(String(b.createdAt)) );
+    const allQuestDoneDays = {};
+    const questXpRaw = {};
+    const lastQuestDate = {};
+    const questStreak = {};
+    const specialLastDate = {};
+    const missions = {};
+    const cats = {};
+    const catNames = {};
+    for (const cat of state.categories) { cats[cat.id] = 0; catNames[cat.id] = cat.name; }
+    const activity = [];
+    const mainEvents = [];
+    let questCount = 0, bossCount = 0;
+
+    for (const e of originalEvents) {
+      const snap = e.snapshot || {};
+      const common = { id: e.id, date: e.date, createdAt: e.createdAt, refId: e.refId, sourceId: e.id, virtual: false, categoryPoints: [] };
+      let item;
+      if (e.type === 'quest' || e.type === 'special') {
+        const base = Math.abs(num(snap.basePoints));
+        const negative = (snap.allocations || []).some(a => a.type === 'negative');
+        let mult = 1;
+        if (e.type === 'quest') {
+          const prev = lastQuestDate[e.refId];
+          const streak = prev === e.date ? (questStreak[e.refId] || 1) : prev && dayDiff(prev, e.date) === 1 ? (questStreak[e.refId] || 1) + 1 : 1;
+          questStreak[e.refId] = streak;
+          lastQuestDate[e.refId] = e.date;
+          (allQuestDoneDays[e.refId] ||= []).push(e.date);
+          if (snap.streakEnabled && !negative) mult = clamp(1 + (streak - 1) * num(snap.streakStep, 0.05), 1, num(snap.streakCap, 1.25));
+          if (!negative) {
+            if (snap.isBoss) bossCount += 1;
+            else questCount += 1;
+          }
+          if (!negative) questXpRaw[e.refId] = (questXpRaw[e.refId] || 0) + base * mult;
+        } else {
+          if (!specialLastDate[e.refId] || specialLastDate[e.refId] < e.date) specialLastDate[e.refId] = e.date;
+        }
+        const globalPoints = negative ? -Math.abs(round(base * num(snap.negativeFactor, 2))) : round(base * mult);
+        const categoryPoints = (snap.allocations || []).map(a => ({
+          categoryId: a.categoryId, categoryName: a.categoryName,
+          points: round(base * num(a.multiplier, 1) * (negative ? 1 : mult))
+        }));
+        if (!categoryPoints.length) categoryPoints.push({ categoryId: MISC_ID, categoryName: 'Sonstige', points: round(base * mult) });
+        item = { ...common, type: e.type, name: snap.name || 'Aufgabe', points: globalPoints, basePoints: base,
+          isBoss: !!snap.isBoss, streak: e.type === 'quest' ? questStreak[e.refId] : 0, multiplier: mult, negative, categoryPoints };
+      } else if (e.type === 'mission-step') {
+        const mission = state.missions.find(m => m.id === e.refId);
+        const stepIndex = mission?.stages?.findIndex(st => st.id === e.stageId) ?? -1;
+        const progress = (missions[e.refId] ||= { stages: {}, validEvents: [] });
+        const eligible = mission && stepIndex >= 0 && !progress.stages[e.stageId] && mission.stages.slice(0, stepIndex).every(s => progress.stages[s.id]);
+        if (eligible) {
+          progress.stages[e.stageId] = { eventId: e.id, optionId: e.optionId, date: e.date, points: Math.abs(num(snap.basePoints)) };
+          progress.validEvents.push(e.id);
+        }
+        item = { ...common, type: 'mission-step', name: snap.name || 'Missionsschritt', points: eligible ? Math.abs(num(snap.basePoints)) : 0,
+          basePoints: Math.abs(num(snap.basePoints)), invalid: !eligible };
+      } else if (e.type === 'manual' || e.type === 'redeem') {
+        item = { ...common, type: e.type, name: snap.name || 'Eintrag', points: num(snap.points), basePoints: num(snap.points) };
+      }
+      if (item) {
+        mainEvents.push(item);
+        activity.push(item);
+      }
+    }
+
+    const penaltyEvents = derivedPenalties(state, allQuestDoneDays, today);
+    activity.push(...penaltyEvents);
+
+    // Completion bonuses depend solely on currently valid mission steps.
+    const missionBonusEvents = [];
+    const completedMissions = [];
+    for (const mission of state.missions) {
+      const progress = missions[mission.id] ||= { stages: {}, validEvents: [] };
+      progress.completed = (mission.stages || []).length > 0 && mission.stages.every(s => !!progress.stages[s.id]);
+      progress.doneCount = Object.keys(progress.stages).length;
+      if (progress.completed) {
+        completedMissions.push({ id: mission.id, mission });
+        const steps = Object.values(progress.stages);
+        const last = steps.map(s => s.date).sort().at(-1) || today;
+        const reward = round(steps.reduce((a, s) => a + s.points, 0) * 4);
+        const rec = { id: `auto:mission:${mission.id}`, date: last, createdAt: `${last}T23:56:00Z`, type: 'mission-bonus',
+          name: `Mission geschafft: ${mission.name}`, points: reward, categoryPoints: [], virtual: true, refId: mission.id };
+        missionBonusEvents.push(rec);
+        activity.push(rec);
+      }
+    }
+
+    // Award milestones once per currently achieved threshold, deterministically and without storing duplicate bonus entries.
+    const milestoneEvents = [];
+    const running = { quests: 0, boss: 0, missions: 0 };
+    const runningCats = {};
+    const categoryLookup = Object.fromEntries(state.categories.map(c => [c.id, c]));
+    const progressSources = [...mainEvents, ...missionBonusEvents].sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt).localeCompare(String(b.createdAt)) );
+    function addAward(kind, subkey, threshold, reward, date, label) {
+      if (!reward) return;
+      milestoneEvents.push({ id: `auto:milestone:${kind}:${subkey}:${threshold}`, date, createdAt: `${date}T23:57:00Z`,
+        type: 'milestone', name: label, points: reward, categoryPoints: [], virtual: true, refId: subkey });
+    }
+    for (const item of progressSources) {
+      if (item.type === 'quest' && !item.negative) {
+        const key = item.isBoss ? 'boss' : 'quests';
+        const before = running[key]++;
+        const next = nextSeries(key, before);
+        if (running[key] >= next.target) {
+          addAward(key, 'global', next.target, next.reward, item.date,
+            `${key === 'boss' ? 'Bossquests' : 'Quests'}: ${next.target} erreicht`);
+        }
+      } else if (item.type === 'mission-bonus') {
+        const before = running.missions++;
+        const next = nextSeries('missions', before);
+        if (running.missions >= next.target) addAward('missions', 'global', next.target, next.reward, item.date, `Missionen: ${next.target} abgeschlossen`);
+      }
+      for (const cp of item.categoryPoints || []) {
+        const before = runningCats[cp.categoryId] || 0;
+        const after = before + cp.points;
+        runningCats[cp.categoryId] = after;
+        const c = categoryLookup[cp.categoryId];
+        if (c && c.type !== 'negative') {
+          let next = nextSeries('category', before);
+          let ix = next.index;
+          while (after >= next.target && ix < 100) {
+            addAward('category', cp.categoryId, next.target, next.reward, item.date, `${c.name}: ${next.target} Kategoriepunkte`);
+            ix += 1;
+            next = seriesThreshold('category', ix);
+          }
+        }
+      }
+    }
+    activity.push(...milestoneEvents);
+
+    // Category totals based on historically snapshotted allocation, stable when quests are edited or archived.
+    for (const e of mainEvents) {
+      for (const cp of e.categoryPoints || []) {
+        cats[cp.categoryId] = round((cats[cp.categoryId] || 0) + cp.points);
+        catNames[cp.categoryId] ||= cp.categoryName;
+      }
+    }
+
+    const questXp = {};
+    const questLevels = {};
+    for (const quest of state.quests) {
+      let decay = 0;
+      if (quest.xpDecayEnabled) {
+        const start = [quest.createdOn || today, quest.xpDecaySince || quest.createdOn || today].sort().at(-1);
+        const end = quest.archivedAt && quest.archivedAt.slice(0, 10) < today ? quest.archivedAt.slice(0, 10) : today;
+        const done = new Set(allQuestDoneDays[quest.id] || []);
+        if (start < end) {
+          const missed = Math.max(0, dayDiff(start, end) - [...done].filter(d => d > start && d <= end).length);
+          decay = missed * Math.max(0, num(state.settings.questXpDecay, 15));
+        }
+      }
+      const xp = Math.max(0, round((questXpRaw[quest.id] || 0) - decay));
+      questXp[quest.id] = xp;
+      questLevels[quest.id] = questLevelInfo(xp);
+    }
+
+    activity.sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt)) || b.id.localeCompare(a.id));
+    const earned = round(activity.reduce((s, e) => s + num(e.points), 0));
+    const level = levelInfo(earned, state.settings.levelBase, state.settings.levelGrowth);
+    const netSaved = Math.max(0, round(earned * num(state.settings.euroPerPoint, 0.1)));
+
+    const dailyCounts = {};
+    for (const e of mainEvents) {
+      if (e.type === 'quest' || e.type === 'special' || e.type === 'mission-step') dailyCounts[e.date] = (dailyCounts[e.date] || 0) + (e.invalid || e.negative ? 0 : 1);
+    }
+    const history = [];
+    for (let k = 13; k >= 0; k--) {
+      const day = addDays(today, -k);
+      history.push({ date: day, points: round(activity.filter(e => e.date === day).reduce((s, e) => s + num(e.points), 0)), actions: dailyCounts[day] || 0 });
+    }
+    return {
+      today, activity, mainEvents, penaltyEvents, milestoneEvents, missionBonusEvents,
+      points: earned, savings: netSaved, level,
+      questCount, bossCount, missionCount: completedMissions.length, dailyCounts, history,
+      categories: cats, categoryNames: catNames, questXp, questLevels, lastQuestDate,
+      questStreak, specialLastDate, missionProgress: missions, allQuestDoneDays,
+      milestones: {
+        quests: nextSeries('quests', questCount), boss: nextSeries('boss', bossCount),
+        missions: nextSeries('missions', completedMissions.length),
+        categories: Object.fromEntries(state.categories.map(c => [c.id, nextSeries('category', cats[c.id] || 0)]))
+      }
+    };
+  }
+
+  function dueItems(state, view, today = dateLocal()) {
+    const result = [];
+    for (const q of state.quests.filter(q => !q.archivedAt)) {
+      const last = view.lastQuestDate[q.id] || null;
+      if (q.penaltyEnabled && num(q.penaltyDays) > 0) {
+        const start = [q.createdOn || today, q.penaltySince || q.createdOn || today].sort().at(-1);
+        const reference = last && last > start ? last : start;
+        const dueDate = addDays(reference, num(q.penaltyDays));
+        result.push({ id: q.id, kind: 'quest', name: q.name, dueDate,
+          daysLeft: dayDiff(today, dueDate), lastDone: last, points: q.points,
+          label: `Inaktivität: -${num(q.penaltyPoints)} Pkt.` });
+      } else if (q.streakEnabled && last) {
+        const dueDate = addDays(last, 1);
+        result.push({ id: q.id, kind: 'quest', name: q.name, dueDate,
+          daysLeft: dayDiff(today, dueDate), lastDone: last, points: q.points,
+          label: `Serie: ${view.questStreak[q.id] || 1} Tage` });
+      }
+    }
+    for (const s of state.specials.filter(s => !s.archivedAt)) {
+      const last = view.specialLastDate[s.id];
+      const dueDate = last ? addDays(last, num(s.cooldownDays, 1)) : s.initialLockUntil || s.createdOn || today;
+      result.push({ id: s.id, kind: 'special', name: s.name, dueDate,
+        daysLeft: dayDiff(today, dueDate), lastDone: last || null, points: s.points, label: 'Wiederkehrende Aufgabe' });
+    }
+    return result.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name));
+  }
+
+  function canCompleteSpecial(state, view, s, date) {
+    if (!s || s.archivedAt) return { ok: false, reason: 'Diese Aufgabe ist archiviert.' };
+    if (!isISODate(date) || date > dateLocal()) return { ok: false, reason: 'Datum ist ungültig oder liegt in der Zukunft.' };
+    const latest = (state.events || []).filter(e => e.type === 'special' && e.refId === s.id && !e.voidedAt && e.date <= date)
+      .map(e => e.date).sort().at(-1);
+    const until = latest ? addDays(latest, num(s.cooldownDays, 1)) : s.initialLockUntil || s.createdOn || date;
+    if (date < until) return { ok: false, reason: `Erst ab ${until} wieder verfügbar.` };
+    return { ok: true };
+  }
+  function canCompleteMissionStage(state, view, m, stage, date) {
+    if (!m || m.archivedAt || !stage) return { ok: false, reason: 'Mission nicht verfügbar.' };
+    if (!isISODate(date) || date > dateLocal()) return { ok: false, reason: 'Ungültiges Datum.' };
+    const ix = m.stages.findIndex(s => s.id === stage.id);
+    const progress = view.missionProgress[m.id] || { stages: {} };
+    if (progress.stages[stage.id]) return { ok: false, reason: 'Stufe bereits abgeschlossen.' };
+    if (!m.stages.slice(0, ix).every(s => progress.stages[s.id])) return { ok: false, reason: 'Vorherige Stufe zuerst abschließen.' };
+    return { ok: true };
+  }
+  function voidEvent(state, id, at = new Date().toISOString()) {
+    const event = state.events.find(e => e.id === id && !e.voidedAt);
+    if (!event) return [];
+    const affected = [event];
+    if (event.type === 'mission-step') {
+      const m = state.missions.find(m => m.id === event.refId);
+      const index = m?.stages?.findIndex(s => s.id === event.stageId) ?? -1;
+      if (index >= 0) {
+        const stagesToVoid = new Set(m.stages.slice(index).map(s => s.id));
+        for (const e of state.events) {
+          if (e.id !== id && !e.voidedAt && e.type === 'mission-step' && e.refId === m.id && stagesToVoid.has(e.stageId)) affected.push(e);
+        }
+      }
+    }
+    affected.forEach(e => e.voidedAt = at);
+    return affected.map(e => e.id);
+  }
+  function restoreEvents(state, ids) {
+    const affected = [];
+    for (const id of ids) {
+      const e = state.events.find(x => x.id === id && x.voidedAt);
+      if (e) { e.voidedAt = null; affected.push(id); }
+    }
+    return affected;
+  }
+  function normalizeName(value) { return String(value || '').trim().replace(/\s+/g, ' '); }
+  function safeColor(value) { return /^#[0-9a-fA-F]{6}$/.test(String(value)) ? value : '#64748b'; }
+
+  return {
+    STORAGE_KEY, SCHEMA_VERSION, MISC_ID, num, round, clamp, uid, isISODate, dateLocal, addDays, dayDiff,
+    clone, newState, normalizeState, normalizeName, safeColor, createQuestSnapshot,
+    newQuestEvent, newSpecialEvent, newMissionEvent, newManualEvent, newRedeemEvent,
+    derive, dueItems, canCompleteSpecial, canCompleteMissionStage, voidEvent, restoreEvents,
+    seriesThreshold, achievedSeries, nextSeries, levelInfo, questLevelInfo
+  };
+});
+
+</script>
+<script>
+/* Life RPG UI - one event delegation layer, no monkey-patching/duplicate handlers. */
+(function () {
+  'use strict';
+  const C = window.LifeRPGCore;
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const h = value => String(value ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[x]));
+  const pts = n => (Number(n) > 0 ? '+' : '') + new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(Number(n) || 0);
+  const number = n => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(Number(n) || 0);
+  const money = n => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
+  const dateLabel = d => { const [y,m,day] = String(d||'').split('-'); return y && m && day ? `${day}.${m}.${y}` : String(d||''); };
+  const today = () => C.dateLocal();
+  const el = $('#screen');
+  let state = null, snapshot = null, derivedDate = null, route = { name: 'menu', params: {} }, stack = [];
+  let importPending = null;
+  const ui = { logFilter: '', showVoided: false, showArchived: false, logDate: today(), undoIds: [], chat: [{ me: false, text: 'Hallo! Ich kann Quests eintragen, den Punktestand anzeigen und fällige Aufgaben finden. Schreibe „Hilfe“ für Befehle.' }] };
+
+  const MENU = [
+    ['dashboard','◫','Dashboard','Statistiken, Level & heute'],
+    ['log','▤','Log','Eintragen, Verlauf & Rückgängig'],
+    ['catalog','✦','Katalog','Quests & Bossquests verwalten'],
+    ['categories','◈','Kategorien','Punkte, Multiplikatoren & Zuordnung'],
+    ['specials','↻','Sonderaufgaben','Cooldowns & wiederkehrende Aufgaben'],
+    ['missions','◇','Missionen','Stufen, Alternativen & Bonus'],
+    ['milestones','⬡','Meilensteine','Nächste Ziele & Quest-Level'],
+    ['continuity','◷','Kontinuität','Fälligkeiten, Streaks & Strafen'],
+    ['rewards','🎁','Belohnungen','Eigene Prämien gegen Punkte'],
+    ['chat','✧','Schnellassistent','Kurze Befehle ohne KI-Konto'],
+    ['settings','⚙','Einstellungen','Regeln, Daten & Backup']
+  ];
+  const NAMES = Object.fromEntries(MENU.map(m => [m[0],m[2]]));
+  const active = list => list.filter(item => !item.archivedAt);
+  const catById = id => state.categories.find(c => c.id === id);
+  const questById = id => state.quests.find(q => q.id === id);
+  const modalMount = $('#modalMount');
+
+  function boot() {
+    try {
+      const raw = localStorage.getItem(C.STORAGE_KEY);
+      if (raw !== null) state = C.normalizeState(JSON.parse(raw));
+      else {
+        const created = C.newState(today());
+        localStorage.setItem(C.STORAGE_KEY, JSON.stringify(created));
+        state = C.normalizeState(created);
+      }
+    } catch (error) {
+      showCritical(error);
+      return;
+    }
+    applyTheme();
+    document.addEventListener('click', onClick);
+    document.addEventListener('submit', onSubmit);
+    document.addEventListener('input', onInput);
+    document.addEventListener('change', onChange);
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && $('.modal-root')) closeModal(); });
+    render();
+  }
+
+  function showCritical(error) {
+    $('#headerTitle').textContent = 'Datenschutz / Fehler';
+    el.innerHTML = `<div class="error-screen stack"><div class="eyebrow">Datenintegrität</div>
+      <h1>Die Daten konnten nicht sicher geladen werden.</h1>
+      <p class="muted">${h(error.message)}. Bestehende Daten wurden <strong>nicht überschrieben</strong>.</p>
+      <div class="inline-actions"><button class="btn" id="criticalExport">Gespeicherte Rohdaten sichern</button>
+      <button class="btn danger" id="criticalReset">Neustart (Daten überschreiben)</button></div></div>`;
+    $('#criticalExport').onclick = () => downloadFile('life-rpg-rohdaten.txt', localStorage.getItem(C.STORAGE_KEY) || '', 'text/plain');
+    $('#criticalReset').onclick = () => {
+      if (prompt('Zum Löschen der alten Daten LÖSCHEN eingeben:') !== 'LÖSCHEN') return;
+      const created = C.newState(today());
+      try { localStorage.setItem(C.STORAGE_KEY, JSON.stringify(created)); location.reload(); }
+      catch (e) { alert('Speichern fehlgeschlagen: ' + e.message); }
+    };
+  }
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', state.settings.theme === 'light' ? 'light' : 'dark');
+    $('#themeBtn').textContent = state.settings.theme === 'light' ? '☾' : '☀';
+    $('meta[name="theme-color"]').content = state.settings.theme === 'light' ? '#ffffff' : '#141c2b';
+  }
+  function currentView() {
+    const stamp = today();
+    if (!snapshot || derivedDate !== stamp) { snapshot = C.derive(state, stamp); derivedDate = stamp; }
+    return snapshot;
+  }
+  function commit(mutator, label) {
+    try {
+      const draft = C.clone(state);
+      mutator(draft);
+      draft.meta.updatedAt = new Date().toISOString();
+      C.normalizeState(draft);
+      // Write-ahead: never announce success if persistence fails.
+      localStorage.setItem(C.STORAGE_KEY, JSON.stringify(draft));
+      state = draft;
+      snapshot = null;
+      applyTheme();
+      render();
+      if (label) toast(label);
+      return true;
+    } catch (error) { console.error(error); toast('Nicht gespeichert: ' + error.message, true); return false; }
+  }
+  function toast(message, error = false) {
+    const mount = $('#toastMount');
+    mount.innerHTML = `<div class="toast ${error ? 'error' : ''}">${h(message)}</div>`;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { mount.innerHTML = ''; }, 3900);
+  }
+  function go(name, params = {}) {
+    if (!['menu', ...MENU.map(m => m[0]),'category-detail','quest-detail','mission-detail'].includes(name)) return;
+    stack.push({name:route.name, params:{...route.params}});
+    route = {name, params};
+    closeModal(); render(); window.scrollTo({top:0,behavior:'instant'});
+  }
+  function home() { stack = []; route = {name:'menu',params:{}}; closeModal(); render(); window.scrollTo(0,0); }
+  function back() { route = stack.pop() || {name:'menu',params:{}}; closeModal(); render(); window.scrollTo(0,0); }
+  function render() {
+    const view = currentView();
+    const heading = route.name.endsWith('-detail') ? ({'category-detail':'Kategorie','quest-detail':'Quest','mission-detail':'Mission'}[route.name]) : NAMES[route.name] || 'Life RPG';
+    $('#headerTitle').textContent = route.name === 'menu' ? 'Life RPG' : heading;
+    $('#backBtn').classList.toggle('is-hidden', route.name === 'menu');
+    $('#brandMark').classList.toggle('is-hidden', route.name !== 'menu');
+    const renderers = {
+      menu: renderMenu, dashboard:renderDashboard,log:renderLog,catalog:renderCatalog,
+      categories:renderCategories,specials:renderSpecials,missions:renderMissions,
+      milestones:renderMilestones,continuity:renderContinuity,rewards:renderRewards,
+      chat:renderChat,settings:renderSettings,'category-detail':renderCategoryDetail,
+      'quest-detail':renderQuestDetail,'mission-detail':renderMissionDetail
+    };
+    el.innerHTML = renderers[route.name](view);
+  }
+  function page(title, description, actions = '', eyebrow = 'DEIN FORTSCHRITT') {
+    return `<div class="page-head"><div><div class="eyebrow">${h(eyebrow)}</div><h1 class="page-title">${h(title)}</h1><p class="page-description">${h(description)}</p></div>${actions ? `<div class="page-actions">${actions}</div>`:''}</div>`;
+  }
+  function empty(title, description, act = '') { return `<div class="empty"><div class="empty-icon">✧</div><div class="empty-title">${h(title)}</div><p>${h(description)}</p>${act}</div>`; }
+  function stat(label, value, detail = '') { return `<div class="card stat-card"><div class="stat-label">${h(label)}</div><div class="stat-value mono">${h(value)}</div><div class="stat-detail">${h(detail)}</div></div>`; }
+  function progress(current, target) { const percent = C.clamp(target ? current / target * 100 : 0, 0, 100); return `<div class="progress-track"><div class="progress-fill" style="width:${percent.toFixed(2)}%"></div></div>`; }
+  function catPills(assigns = []) {
+    if (!assigns.length) return `<span class="pill">Sonstige ×1</span>`;
+    return assigns.map(a => { const cat = catById(a.categoryId); return `<span class="pill"><span class="dot" style="background:${C.safeColor(cat?.color)}"></span>${h(cat?.name || 'Archivierte Kategorie')} ×${number(a.multiplier || 1)}</span>`; }).join('');
+  }
+  function tip(text) { return `<div class="tip">${h(text)}</div>`; }
+  function actionAttr(id) { return h(id); }
+
+  function renderMenu(view) {
+    const d = C.dueItems(state,view,today()).filter(x => x.daysLeft <= 1).length;
+    return `<div class="stack-lg">
+      <section class="hero">
+        <div class="hero-kicker">YOUR LIFE. YOUR LEVEL.</div>
+        <h1>Fortschritt statt<br>Autopilot.</h1>
+        <p>Halte deine Gewohnheiten, Ziele und Erfolge fest – und mach jeden Fortschritt sichtbar.</p>
+        <div class="inline-actions"><button class="btn primary" data-nav="dashboard">Dashboard öffnen →</button><button class="btn" data-act="new-quest">+ Erste Quest</button></div>
+        <div class="hero-stats"><div><div class="hero-stat-value mono">${number(view.points)} XP</div><div class="hero-stat-label">Punktestand</div></div>
+          <div><div class="hero-stat-value mono">LVL ${view.level.level}</div><div class="hero-stat-label">Aktuelles Level</div></div>
+          <div><div class="hero-stat-value mono">${d}</div><div class="hero-stat-label">Zeitnahe Aufgaben</div></div></div>
+      </section>
+      <div><div class="section-head"><h2 class="section-title" style="margin:0">Deine Bereiche</h2><span class="pill">${MENU.length} Bereiche</span></div>
+      <div class="stack-sm">${MENU.map(m=>`<button class="menu-link" data-nav="${m[0]}"><span class="menu-icon">${m[1]}</span><span><div class="menu-label">${m[2]}</div><div class="menu-description">${m[3]}</div></span><span class="menu-arrow">›</span></button>`).join('')}</div></div>
+    </div>`;
+  }
+  function renderDashboard(view) {
+    const todayCount = view.dailyCounts[today()] || 0;
+    const goal = Math.max(1, C.num(state.settings.dailyGoal, 3));
+    const due = C.dueItems(state,view,today()).filter(x => x.daysLeft <= 1 && x.daysLeft >= -999).slice(0,4);
+    const doneToday = new Set(view.mainEvents.filter(e => e.type === 'quest' && e.date === today()).map(e => e.refId));
+    const quick = active(state.quests).filter(q=>!doneToday.has(q.id)).slice(0,5);
+    const maxAbs = Math.max(1, ...view.history.map(d=>Math.abs(d.points)));
+    const chart = view.history.map(d => {
+      const up = Math.max(0,d.points), down = Math.max(0,-d.points);
+      const label = d.date.slice(8);
+      return `<div class="chart-col ${d.date===today()?'today':''}" title="${dateLabel(d.date)}: ${pts(d.points)} Punkte">
+        <div class="chart-half"><div class="chart-up" style="height:${Math.max(0,up/maxAbs*52)}px"></div></div>
+        <div class="chart-half bottom"><div class="chart-down" style="height:${Math.max(0,down/maxAbs*52)}px"></div></div>
+        <div class="chart-date">${label}</div></div>`;
+    }).join('');
+    return `<div class="stack-lg">${page('Dein Dashboard','Dein Fortschritt auf einen Blick.',`<button class="btn primary" data-nav="log">+ Eintragen</button>`)}
+    <div class="kpi-grid">${stat('Punkte', number(view.points),`${view.questCount + view.bossCount} Quest-Erledigungen`)}${stat('Level', String(view.level.level),`${Math.round(view.level.progress*100)} % Fortschritt`)}${stat('Sparstand',money(view.savings),`${money(state.settings.euroPerPoint)} je Punkt`)}</div>
+    <div class="grid-2"><div class="card"><div class="section-title">Nächstes Level</div><div class="metric-row"><span class="metric-main">Level ${view.level.level+1}</span><span class="pill accent">${number(Math.max(0,view.level.need-view.level.remaining))} XP fehlen</span></div><div style="margin-top:12px">${progress(view.level.remaining,view.level.need)}</div><div class="progress-meta"><span>${number(view.level.remaining)} / ${number(view.level.need)} XP</span><span>${Math.round(view.level.progress*100)} %</span></div></div>
+      <div class="card"><div class="section-title">Tagesziel</div><div class="metric-row"><span class="metric-main">${todayCount} / ${goal} Aktionen</span><span class="pill ${todayCount>=goal?'accent':''}">${todayCount>=goal?'Geschafft':'Heute'}</span></div><div style="margin-top:12px">${progress(todayCount,goal)}</div><div class="progress-meta"><span>Quests, Sonderaufgaben, Missionen</span><span>${Math.min(100,Math.round(todayCount/goal*100))} %</span></div></div></div>
+    <div class="card"><div class="section-head"><h2 class="section-title" style="margin:0">Letzte 14 Tage</h2><span class="pill">Netto-Punkte</span></div><div class="chart" role="img" aria-label="Punktestand-Veränderungen der letzten 14 Tage">${chart}</div><div class="legend"><span><span style="color:var(--accent)">■</span> Positiv</span><span><span style="color:var(--red)">■</span> Abzug</span></div></div>
+    <div class="grid-2"><div class="card"><div class="section-head"><h2 class="section-title" style="margin:0">Jetzt erledigen</h2><button class="btn small ghost" data-nav="catalog">Katalog</button></div><div class="stack-sm">${quick.length?quick.map(q=>`<div class="metric-row"><div style="min-width:0"><div class="list-title">${h(q.name)}</div><div class="list-sub">${number(q.points)} Basis-Punkte</div></div><button class="btn small primary" data-act="log-quest" data-id="${actionAttr(q.id)}">+ Erledigt</button></div>`).join(''):empty('Noch keine offenen Quests','Lege eine Quest im Katalog an.',`<button class="btn small primary" data-act="new-quest">Quest anlegen</button>`)}</div></div>
+    <div class="card"><div class="section-head"><h2 class="section-title" style="margin:0">Kontinuität</h2><button class="btn small ghost" data-nav="continuity">Alle</button></div><div class="stack-sm">${due.length?due.map(item=>`<div class="metric-row"><div><div class="list-title">${h(item.name)}</div><div class="list-sub ${item.daysLeft<0?'due-late':item.daysLeft===0?'due-now':'due-soon'}">${item.daysLeft<0?Math.abs(item.daysLeft)+' Tage überfällig':item.daysLeft===0?'Heute fällig':'Morgen fällig'}</div></div><button class="btn small" data-act="${item.kind==='quest'?'log-quest':'complete-special'}" data-id="${actionAttr(item.id)}">Erledigen</button></div>`).join(''):`<p class="muted">Keine unmittelbar fälligen Aufgaben.</p>`}</div></div></div>
+    <div class="card"><div class="section-head"><h2 class="section-title" style="margin:0">Nächste Meilensteine</h2><button class="btn small ghost" data-nav="milestones">Alle</button></div><div class="grid-3">${[['Quests',view.milestones.quests,view.questCount],['Bossquests',view.milestones.boss,view.bossCount],['Missionen',view.milestones.missions,view.missionCount]].map(([label,m,count])=>`<div><div class="stat-label">${label}</div><div class="list-title mono">${count} / ${number(m.target)}</div><div style="margin:7px 0">${progress(count,m.target)}</div><div class="list-sub">Bonus ${pts(m.reward)} XP</div></div>`).join('')}</div></div></div>`;
+  }
+
+  function logEntryForm() {
+    const questList = active(state.quests);
+    return `<form data-form="log-quest" class="stack-sm">
+      <div class="form-grid"><div class="field"><label for="logDate">Datum</label><input class="input" type="date" id="logDate" name="date" max="${today()}" value="${ui.logDate}"></div>
+      <div class="field"><label for="logQuest">Quest</label><select class="select" id="logQuest" name="questId" required>${questList.length ? questList.map(q=>`<option value="${h(q.id)}">${h(q.isBoss?'♛ ':'')}${h(q.name)} (${number(q.points)} XP)</option>`).join('') : '<option value="">Noch keine Quest angelegt</option>'}</select></div></div>
+      <div class="form-grid"><div class="field"><label for="logOverride">Punkte überschreiben (optional)</label><input class="input" id="logOverride" type="number" step="0.01" min="0.01" name="pointsOverride" placeholder="Aus Katalog übernehmen"></div>
+      <div class="field" style="justify-content:end"><button class="btn primary block" type="submit" ${questList.length?'':'disabled'}>+ Quest eintragen</button></div></div>
+      <p class="input-hint">Buchungen verwenden die jeweils gültigen Kategorien und Regeln als Snapshot. Spätere Änderungen verändern alte Einträge nicht.</p>
+    </form>`;
+  }
+  function renderLog(view) {
+    const all = [...view.activity];
+    if (ui.showVoided) {
+      state.events.filter(e=>e.voidedAt).forEach(e=> all.push({ id:e.id,date:e.date,type:e.type,name:e.snapshot?.name || 'Gelöschter Eintrag',points:0,voided:true,virtual:false }));
+      all.sort((a,b)=>b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    }
+    const search = ui.logFilter.toLocaleLowerCase('de');
+    const shown = all.filter(e => !search || String(e.name).toLocaleLowerCase('de').includes(search) || e.date.includes(search) || e.type.includes(search));
+    let lastDate='';
+    const entries = shown.slice(0,350).map(e=>{
+      const header = e.date!==lastDate?`<div class="timeline-date">${dateLabel(e.date)}</div>`:'';
+      lastDate=e.date;
+      const kind = ({quest:'Quest',special:'Sonderaufgabe','mission-step':'Missionsschritt','mission-bonus':'Missionsbonus',milestone:'Meilenstein',penalty:'Inaktivitätsstrafe',manual:'Manuell',redeem:'Eingelöste Belohnung'})[e.type]||e.type;
+      return `${header}<div class="timeline-row ${e.voided?'muted':''}">
+        <span class="menu-icon" style="width:32px;height:32px;flex:0 0 32px;font-size:.95rem">${e.voided?'↶':e.type==='milestone'?'✧':e.type==='penalty'?'!':e.type==='mission-bonus'?'◈':'●'}</span>
+        <div class="timeline-name"><strong>${h(e.name)}</strong><div class="small muted">${h(kind)}${e.virtual?' · automatisch':e.voided?' · gelöscht':''}${e.streak>1?' · Serie '+e.streak:''}</div></div>
+        <span class="timeline-pts mono ${e.points<0?'neg':'pos'}">${e.voided?'—':pts(e.points)}</span>
+        ${e.voided ? `<button class="btn small" data-act="restore-event" data-id="${h(e.id)}">↶</button>` : !e.virtual ? `<button class="btn small ghost" data-act="delete-event" data-id="${h(e.id)}" title="Eintrag rückgängig">✕</button>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="stack-lg">${page('Logbuch','Jede Aktion wird nachvollziehbar und rückgängig buchbar erfasst.',`<button class="btn" data-act="open-manual">+ Freier Eintrag</button>`)}
+      <div class="card"><h2 class="section-title">Quest buchen</h2>${logEntryForm()}</div>
+      <div class="card"><div class="section-head"><h2 class="section-title" style="margin:0">Verlauf</h2><div class="inline-actions"><span class="pill">${view.activity.length} Buchungen</span><button class="btn small" data-act="undo-last">↶ Letztes rückgängig</button></div></div>
+        <div class="form-grid"><div class="field"><label for="logSearch">Suchen</label><input id="logSearch" class="input" placeholder="Name, Datum, Art ..." value="${h(ui.logFilter)}"></div>
+        <label class="checkbox-row" style="align-self:end"><input type="checkbox" id="showVoided" ${ui.showVoided?'checked':''}> Gelöschte anzeigen</label></div>
+        <div id="logHistory" class="timeline" style="margin-top:15px">${entries || empty('Noch keine Buchungen','Lege zuerst eine Quest an und trage sie ein.')}</div>
+        ${shown.length>350?'<p class="input-hint">Es werden maximal 350 Treffer angezeigt. Export enthält sämtliche Buchungen.</p>':''}
+      </div></div>`;
+  }
+  function questRow(q, view) {
+    const lvl = view.questLevels[q.id] || C.questLevelInfo(0);
+    const warning = q.penaltyEnabled ? `<span class="pill danger">Inaktivität: ${q.penaltyDays} Tage</span>`:'';
+    return `<article class="list-card"><div class="list-main">
+      <div class="list-title">${q.isBoss?'♛ ':''}${h(q.name)} <span class="pill accent">${number(q.points)} XP</span></div>
+      <div class="list-sub">Quest-Level ${lvl.level} · ${number(view.questXp[q.id] || 0)} Quest-XP ${q.streakEnabled?' · Streak aktiv':''}</div>
+      <div class="list-tags">${catPills(q.allocations || [])}${warning}${q.links?.length?'<span class="pill">+ Zusatz-Kategorieeffekte</span>':''}</div>
+      </div><div class="list-actions"><button class="btn small primary" data-act="log-quest" data-id="${h(q.id)}">+ Erledigt</button><button class="btn small" data-act="quest-detail" data-id="${h(q.id)}">Details</button>
+      <button class="btn small" data-act="edit-quest" data-id="${h(q.id)}">Bearb.</button><button class="btn small danger" data-act="archive-quest" data-id="${h(q.id)}">Archiv</button></div></article>`;
+  }
+  function renderCatalog(view) {
+    const list = active(state.quests);
+    const archived = state.quests.filter(q=>q.archivedAt);
+    return `<div class="stack-lg">${page('Quest-Katalog','Alle Aufgaben zentral verwalten. Eine Quest kann mehrere Kategorien und unterschiedliche Multiplikatoren haben.',`<button class="btn primary" data-act="new-quest">+ Neue Quest</button>`)}
+      ${tip('Eine negative Kategorie macht eine Erledigung zu einem globalen Punkteabzug (Standard: ×2). Kategoriepunkte werden separat positiv gezählt. Historische Buchungen bleiben beim Bearbeiten erhalten.')}
+      <div class="stack-sm">${list.length?list.map(q=>questRow(q,view)).join(''):empty('Noch keine Quests','Erstelle deine erste Quest, damit du sie im Log auswählen kannst.',`<button class="btn primary" data-act="new-quest">Quest anlegen</button>`)}</div>
+      ${archived.length ? `<div class="card compact"><button class="btn block" data-act="toggle-archived">${ui.showArchived?'Archiv ausblenden':'Archivierte Quests anzeigen ('+archived.length+')'}</button>${ui.showArchived?`<div class="stack-sm" style="margin-top:12px">${archived.map(q=>`<div class="metric-row"><span class="muted">${h(q.name)}</span><button class="btn small" data-act="restore-quest" data-id="${h(q.id)}">Wiederherstellen</button></div>`).join('')}</div>`:''}</div>`:''}
+      </div>`;
+  }
+  function renderQuestDetail(view) {
+    const q = questById(route.params.id);
+    if (!q) return empty('Quest nicht gefunden','Die Quest wurde entfernt oder ist im Import nicht vorhanden.');
+    const xp = view.questXp[q.id] || 0, lvl = view.questLevels[q.id] || C.questLevelInfo(0);
+    const events = view.mainEvents.filter(e=>e.refId===q.id && e.type==='quest');
+    const allocations = [...(q.allocations||[]),...(q.links||[])];
+    return `<div class="stack-lg">${page(q.name,'Quest-Details, Kategorieeffekte und individuelles Level.',`<button class="btn primary" data-act="log-quest" data-id="${h(q.id)}" ${q.archivedAt?'disabled':''}>+ Erledigt</button><button class="btn" data-act="edit-quest" data-id="${h(q.id)}">Bearbeiten</button>`,'QUEST-DETAIL')}
+      <div class="kpi-grid">${stat('Quest-Level',lvl.level,`${number(lvl.remaining)} / ${number(lvl.need)} XP`)}${stat('Quest-XP',number(xp),'Nettostand inkl. optionalem Verfall')}${stat('Erledigungen',number(events.length),`${number(q.points)} Basis-Punkte`)}</div>
+      <div class="card"><div class="section-title">Level-Fortschritt</div>${progress(lvl.remaining,lvl.need)}<div class="progress-meta"><span>Level ${lvl.level}</span><span>Level ${lvl.level+1}</span></div></div>
+      <div class="card stack-sm"><div class="section-title">Regeln</div><div class="list-tags">${catPills(allocations)}</div>
+        <div class="small muted">${q.isBoss?'Bossquest':'Normale Quest'} · ${q.streakEnabled?'Täglicher Streak aktiv':'Kein Streak'} · ${q.xpDecayEnabled?'Quest-XP-Verfall aktiv':'Kein XP-Verfall'}</div>
+        ${q.penaltyEnabled?`<div class="small">Inaktivität: -${number(q.penaltyPoints)} globale Punkte alle ${number(q.penaltyRepeatDays||q.penaltyDays)} Tage nach ${number(q.penaltyDays)} Tagen ohne Erledigung.</div>`:''}
+      </div><div class="card"><div class="section-title">Letzte Erledigungen</div><div class="stack-sm">${events.length?events.slice(-12).reverse().map(e=>`<div class="metric-row"><span>${dateLabel(e.date)}</span><strong class="mono">${pts(e.points)} XP</strong></div>`).join(''):'Noch keine Erledigungen.'}</div></div></div>`;
+  }
+  function renderCategories(view) {
+    const list = active(state.categories);
+    const archived = state.categories.filter(c=>c.archivedAt);
+    const rows = list.map(cat=>{
+      const total = view.categories[cat.id]||0, m = view.milestones.categories[cat.id];
+      const assignedCount = active(state.quests).filter(q=>(q.allocations||[]).some(a=>a.categoryId===cat.id)).length;
+      return `<div class="list-card"><div class="category-line" style="background:${C.safeColor(cat.color)}"></div><div class="list-main"><div class="list-title">${h(cat.name)} ${cat.type==='negative'?'<span class="pill danger">Negativ</span>':''}</div><div class="list-sub">${number(total)} Kategoriepunkte · ${assignedCount} Quests zugewiesen</div><div style="margin-top:10px">${progress(total,m.target)}</div><div class="list-sub">Nächster Meilenstein: ${number(m.target)} · ${cat.type==='negative'?'nur Dokumentation':pts(m.reward)+' XP Bonus'}</div></div>
+      <div class="list-actions"><button class="btn small" data-act="category-detail" data-id="${h(cat.id)}">Details</button>${cat.system?'':`<button class="btn small" data-act="edit-category" data-id="${h(cat.id)}">Bearb.</button><button class="btn small danger" data-act="archive-category" data-id="${h(cat.id)}">Archiv</button>`}</div></div>`;
+    }).join('');
+    return `<div class="stack-lg">${page('Kategorien','Fortschritte bleiben selbst dann erhalten, wenn du Quest-Einstellungen später veränderst.',`<button class="btn primary" data-act="new-category">+ Kategorie</button>`)}
+      <div class="stack-sm">${rows}</div>
+      ${tip('„Sonstige“ erfasst Quests ohne Kategorie. Negative Kategorien zählen ihre eigenen Punkte, erzeugen aber bewusst keine positiven globalen Meilenstein-Boni für negatives Verhalten.')}
+      ${archived.length?`<div class="card"><div class="section-title">Archivierte Kategorien</div>${archived.map(c=>`<div class="metric-row"><span>${h(c.name)}</span><button class="btn small" data-act="restore-category" data-id="${h(c.id)}">Wiederherstellen</button></div>`).join('')}</div>`:''}</div>`;
+  }
+  function renderCategoryDetail(view) {
+    const cat = catById(route.params.id);
+    if (!cat) return empty('Kategorie nicht gefunden','Die Kategorie ist nicht vorhanden.');
+    const total = view.categories[cat.id] || 0, ms = view.milestones.categories[cat.id]||C.nextSeries('category',total);
+    const assigned = active(state.quests).filter(q=>(q.allocations||[]).some(a=>a.categoryId===cat.id) || (cat.id===C.MISC_ID && !(q.allocations||[]).length));
+    const logs = view.mainEvents.filter(e=>(e.categoryPoints||[]).some(x=>x.categoryId===cat.id));
+    return `<div class="stack-lg">${page(cat.name,cat.type==='negative'?'Negative Kategorie: Erfassung ohne globale Erfolgsprämien.':'Alle zugeordneten Quests und nächste Kategorie-Meilensteine.',cat.system?'':`<button class="btn" data-act="edit-category" data-id="${h(cat.id)}">Bearbeiten</button>`,'KATEGORIE-DETAIL')}
+      <div class="kpi-grid">${stat('Kategoriepunkte',number(total),'Historisch aufsummiert')}${stat('Quests',number(assigned.length),'Aktive Zuordnungen')}${stat('Nächstes Ziel',number(ms.target),cat.type==='negative'?'Ohne Bonus':pts(ms.reward)+' XP Bonus')}</div>
+      <div class="card"><div class="section-title">Meilenstein-Fortschritt</div>${progress(total,ms.target)}<div class="progress-meta"><span>${number(total)} Punkte</span><span>${number(ms.target)} Punkte</span></div></div>
+      <div><h2 class="section-title">Quests</h2><div class="stack-sm">${assigned.length?assigned.map(q=>`<div class="list-card"><div><div class="list-title">${h(q.name)}</div><div class="list-sub">${number(view.questXp[q.id]||0)} Quest-XP · Level ${view.questLevels[q.id]?.level||1}</div></div><button class="btn small" data-act="quest-detail" data-id="${h(q.id)}">Ansehen</button></div>`).join(''):empty('Keine Quests','Diese Kategorie hat noch keine aktiven Aufgaben.')}</div></div>
+      <div class="card"><div class="section-title">Letzte Kategorie-Buchungen</div><div class="stack-sm">${logs.length?logs.slice(-10).reverse().map(e=>`<div class="metric-row"><span>${h(e.name)} <span class="muted small">${dateLabel(e.date)}</span></span><strong class="mono">${pts(e.categoryPoints.filter(cp=>cp.categoryId===cat.id).reduce((a,cp)=>a+cp.points,0))}</strong></div>`).join(''):'Noch keine Buchungen.'}</div></div></div>`;
+  }
+
+  function renderSpecials(view) {
+    const list = active(state.specials);
+    const due = C.dueItems(state,view,today());
+    return `<div class="stack-lg">${page('Sonderaufgaben','Wiederkehrende Aufgaben sind erst nach Ablauf ihres Cooldowns erneut verfügbar.',`<button class="btn primary" data-act="new-special">+ Sonderaufgabe</button>`)}
+      <div class="stack-sm">${list.length?list.map(s=>{
+        const item=due.find(d=>d.kind==='special' && d.id===s.id);
+        const isAvailable=item && item.daysLeft<=0;
+        return `<div class="list-card"><div class="list-main"><div class="list-title">${h(s.name)} <span class="pill accent">${number(s.points)} XP</span></div>
+          <div class="list-sub">Cooldown: ${s.cooldownDays} ${s.cooldownDays===1?'Tag':'Tage'} · ${isAvailable?'Jetzt verfügbar':'Verfügbar ab '+dateLabel(item?.dueDate)}</div>
+          <div class="list-tags">${catPills(s.allocations)}</div></div><div class="list-actions"><button class="btn small primary" data-act="complete-special" data-id="${h(s.id)}" ${isAvailable?'':'disabled'}>✓ Erledigt</button>
+          <button class="btn small" data-act="edit-special" data-id="${h(s.id)}">Bearb.</button><button class="btn small danger" data-act="archive-special" data-id="${h(s.id)}">Archiv</button></div></div>`;
+      }).join(''):empty('Keine Sonderaufgaben','Lege z. B. „Pflanzen gießen“ mit einem Cooldown von sieben Tagen an.',`<button class="btn primary" data-act="new-special">Anlegen</button>`)}</div>
+      ${state.specials.some(s=>s.archivedAt)?`<div class="card"><div class="section-title">Archiv</div>${state.specials.filter(s=>s.archivedAt).map(s=>`<div class="metric-row"><span>${h(s.name)}</span><button class="btn small" data-act="restore-special" data-id="${h(s.id)}">Wiederherstellen</button></div>`).join('')}</div>`:''}</div>`;
+  }
+  function renderMissions(view) {
+    const list = active(state.missions);
+    return `<div class="stack-lg">${page('Missionen','Erstelle mehrstufige Projekte mit alternativen Lösungswegen. Jede abgeschlossene Mission bringt einen 4×-Bonus.',`<button class="btn primary" data-act="new-mission">+ Mission</button>`)}
+      <div class="stack-sm">${list.length?list.map(m=>missionRowFixed(m,view)).join(''):empty('Keine Missionen','Lege eine Mission an. Danach kannst du Stufen und alternative Aufgaben hinzufügen.',`<button class="btn primary" data-act="new-mission">Mission anlegen</button>`)}</div>
+      ${state.missions.some(m=>m.archivedAt)?`<div class="card"><div class="section-title">Archiv</div>${state.missions.filter(m=>m.archivedAt).map(m=>`<div class="metric-row"><span>${h(m.name)}</span><button class="btn small" data-act="restore-mission" data-id="${h(m.id)}">Wiederherstellen</button></div>`).join('')}</div>`:''}</div>`;
+  }
+  function missionRowFixed(m, view) {
+    const mp=view.missionProgress[m.id] || {stages:{},doneCount:0,completed:false};
+    return `<div class="list-card"><div class="list-main"><div class="list-title">${h(m.name)} ${mp.completed?'<span class="pill accent">Abgeschlossen</span>':''}</div>
+      <div class="list-sub">${mp.doneCount||0} / ${m.stages.length} Stufen · ${mp.completed?'Bonus automatisch verbucht':'4× Abschluss-Bonus nach allen Stufen'}</div>
+      <div style="margin-top:10px">${progress(mp.doneCount||0,Math.max(1,m.stages.length))}</div></div>
+      <div class="list-actions"><button class="btn small" data-act="mission-detail" data-id="${h(m.id)}">Öffnen</button><button class="btn small" data-act="edit-mission" data-id="${h(m.id)}">Bearb.</button><button class="btn small danger" data-act="archive-mission" data-id="${h(m.id)}">Archiv</button></div></div>`;
+  }
+  function renderMissionDetail(view) {
+    const m = state.missions.find(x=>x.id===route.params.id);
+    if (!m) return empty('Mission nicht gefunden','Diese Mission existiert nicht.');
+    const mp = view.missionProgress[m.id] || {stages:{},doneCount:0,completed:false};
+    const amount = Object.values(mp.stages).reduce((a,s)=>a + Number(s.points||0),0);
+    const stages = m.stages.map((stage,index)=>{
+      const done=mp.stages[stage.id]; const locked = index>0 && !mp.stages[m.stages[index-1].id];
+      return `<div class="stage ${done?'done':''} ${locked?'locked':''}"><div class="stage-top"><div class="inline-actions"><span class="stage-number">${done?'✓':index+1}</span>
+        <div><div class="list-title">Stufe ${index+1}</div><div class="step-label">${done?'Abgeschlossen am '+dateLabel(done.date):locked?'Gesperrt, bis Stufe '+index+' erledigt ist':'Wähle eine Option'}</div></div></div>
+        <div class="inline-actions">${!done && !locked?`<button class="btn small" data-act="add-option" data-id="${h(m.id)}" data-stage="${h(stage.id)}">+ Alternative</button>`:''}
+        ${!done?`<button class="btn small danger" data-act="delete-stage" data-id="${h(m.id)}" data-stage="${h(stage.id)}">Stufe entfernen</button>`:''}</div></div>
+        <div class="stack-sm">${stage.options.map(opt=>`<div class="stage-option"><div><div class="step-title">${h(opt.name)}</div><div class="step-label">${number(opt.points)} XP</div></div>
+          <div class="inline-actions">${done?(done.optionId===opt.id?'<span class="pill accent">Gewählt ✓</span>':'<span class="pill">Alternative</span>'):!locked?`<button class="btn small primary" data-act="complete-stage" data-id="${h(m.id)}" data-stage="${h(stage.id)}" data-option="${h(opt.id)}">Erledigt</button>`:''}
+          ${!done?`<button class="btn small ghost" data-act="edit-option" data-id="${h(m.id)}" data-stage="${h(stage.id)}" data-option="${h(opt.id)}">Bearb.</button>`:''}
+          ${!done && stage.options.length>1?`<button class="btn small danger" data-act="delete-option" data-id="${h(m.id)}" data-stage="${h(stage.id)}" data-option="${h(opt.id)}">✕</button>`:''}</div></div>`).join('')}</div></div>`;
+    }).join('');
+    return `<div class="stack-lg">${page(m.name,m.description||'Mission mit geordneten Stufen und alternativen Wegen.',`<button class="btn" data-act="edit-mission" data-id="${h(m.id)}">Einstellungen</button><button class="btn primary" data-act="add-stage" data-id="${h(m.id)}" ${mp.completed||m.archivedAt?'disabled':''}>+ Stufe</button>`,'MISSION-DETAIL')}
+      <div class="grid-3">${stat('Fortschritt',`${mp.doneCount||0} / ${m.stages.length}`,'Abgeschlossene Stufen')}${stat('Teilpunkte',number(amount),'Bisher verdient')}${stat('Mission-Bonus',number(mp.completed?amount*4:0),mp.completed?'Automatisch gutgeschrieben':'4× Teilpunkte bei Abschluss')}</div>
+      <div>${mp.completed?`<div class="tip">Mission abgeschlossen. Der Bonus ist genau einmal in den Punktestand eingerechnet. Werden Stufen rückgängig gemacht, entfällt der Bonus automatisch.</div>`:tip('Innerhalb einer Stufe reicht eine von mehreren Alternativen. Erst dann wird die nächste Stufe freigeschaltet.')}</div>
+      <div class="stack-sm">${stages || empty('Keine Stufen','Erstelle die erste Aufgabe für deine Mission.',`<button class="btn primary" data-act="add-stage" data-id="${h(m.id)}">+ Erste Stufe</button>`)}</div></div>`;
+  }
+  function milestoneBox(label, val, next, sub) {
+    return `<div class="milestone-card"><div class="milestone-top"><div class="milestone-target">${h(label)}</div><span class="pill accent">+${number(next.reward)} XP</span></div>
+      <div class="milestone-progress mono">${number(val)} / ${number(next.target)}</div>${progress(val,next.target)}<div class="list-sub">${h(sub)} · ${next.completed} Meilensteine erreicht</div></div>`;
+  }
+  function renderMilestones(view) {
+    return `<div class="stack-lg">${page('Meilensteine','Die nächste Stufe jeder Reihe erscheint automatisch. Belohnungen werden exakt einmal pro erreichtem Schwellenwert berechnet.')}
+      <section><h2 class="section-title">Globale Meilensteine</h2><div class="grid-3">${milestoneBox('Quests',view.questCount,view.milestones.quests,'Normale Aufgaben')}${milestoneBox('Bossquests',view.bossCount,view.milestones.boss,'Schwierige Aufgaben')}${milestoneBox('Missionen',view.missionCount,view.milestones.missions,'Vollständig abgeschlossen')}</div></section>
+      <section><h2 class="section-title">Kategorien</h2><div class="grid-2">${active(state.categories).map(c=>{
+        const v=view.categories[c.id]||0, next=view.milestones.categories[c.id];
+        return `<div class="milestone-card"><div class="milestone-top"><button class="btn link" data-act="category-detail" data-id="${h(c.id)}">${h(c.name)}</button><span class="pill">${c.type==='negative'?'ohne XP-Bonus':pts(next.reward)+' XP'}</span></div><div class="milestone-progress">${number(v)} / ${number(next.target)}</div>${progress(v,next.target)}</div>`;
+      }).join('')}</div></section>
+      <section><h2 class="section-title">Quest-Level</h2><div class="stack-sm">${active(state.quests).length?active(state.quests).map(q=>{
+        const xp=view.questXp[q.id]||0, lvl=view.questLevels[q.id]||C.questLevelInfo(0);
+        return `<div class="list-card"><div class="list-main"><div class="list-title">${h(q.name)} <span class="pill accent">Level ${lvl.level}</span></div><div class="list-sub">${number(xp)} Quest-XP · nächstes Level benötigt ${number(lvl.need-lvl.remaining)} XP</div><div style="margin-top:8px">${progress(lvl.remaining,lvl.need)}</div></div><button class="btn small" data-act="quest-detail" data-id="${h(q.id)}">Details</button></div>`;
+      }).join(''):empty('Noch keine Quest-Level','Lege Quests an, um ihren individuellen Fortschritt zu sehen.')}</div></section>
+      ${tip('Systemboni sind berechnete, im Log sichtbare Buchungen. Sie werden nicht zusätzlich als neue „erledigte Quest“ gezählt. Rückgängig wirkt auch auf darauf basierende Meilensteine.')}
+      </div>`;
+  }
+  function renderContinuity(view) {
+    const due = C.dueItems(state,view,today());
+    const decay = active(state.quests).filter(q=>q.xpDecayEnabled);
+    return `<div class="stack-lg">${page('Kontinuität','Fällige Aufgaben, Serien und anstehende Inaktivitätsstrafen auf einen Blick.')}
+      <div class="stack-sm">${due.length?due.map(item=>{
+        const status=item.daysLeft<0?`Seit ${Math.abs(item.daysLeft)} ${Math.abs(item.daysLeft)===1?'Tag':'Tagen'} fällig`:item.daysLeft===0?'Heute fällig':`In ${item.daysLeft} Tagen fällig`;
+        return `<div class="list-card"><div class="list-main"><div class="list-title">${h(item.name)}</div><div class="list-sub ${item.daysLeft<0?'due-late':item.daysLeft===0?'due-now':'due-soon'}">${status} · ${h(item.label)}</div><div class="list-tags"><span class="pill">${item.kind==='special'?'Sonderaufgabe':'Quest'}</span><span class="pill">${number(item.points)} XP</span></div></div>
+          <button class="btn small primary" data-act="${item.kind==='special'?'complete-special':'log-quest'}" data-id="${h(item.id)}" ${item.kind==='special'&&item.daysLeft>0?'disabled':''}>✓ Erledigt</button></div>`;
+      }).join(''):empty('Keine Fälligkeiten','Aktiviere in Quests Inaktivitätsregeln oder lege wiederkehrende Sonderaufgaben an.')}</div>
+      <div class="card"><div class="section-title">Quest-XP-Verfall</div>${decay.length?`<div class="stack-sm">${decay.map(q=>`<div class="metric-row"><span>${h(q.name)}</span><span class="pill">${number(view.questXp[q.id]||0)} XP · -${number(state.settings.questXpDecay)}/Fehltag</span></div>`).join('')}</div>`:'<p class="muted">Bei keiner Quest aktiviert. Optionaler Verfall wird erst ab Aktivierung berechnet und nicht rückwirkend vor Aufgabenerstellung.</p>'}</div>
+      ${tip('Inaktivitätsabzüge sind deterministisch: je Fälligkeitszyklus genau ein Abzug, unabhängig davon, wie oft du die App öffnest. Hinterlegte Erledigungen korrigieren die Berechnung automatisch.')}
+      </div>`;
+  }
+  function renderRewards(view) {
+    return `<div class="stack-lg">${page('Belohnungen','Lege eigene Prämien fest und löse sie gegen deinen Punktestand ein.',`<button class="btn primary" data-act="new-reward">+ Belohnung</button>`)}
+      <div class="card"><div class="stat-label">Verfügbare Punkte</div><div class="stat-value mono">${number(view.points)}</div><div class="list-sub">Einlösen zieht Punkte ab. Bereits eingelöste Belohnungen bleiben im Log nachvollziehbar.</div></div>
+      <div class="stack-sm">${active(state.rewards).length?active(state.rewards).map(r=>`<div class="list-card"><div class="list-main"><div class="list-title">🎁 ${h(r.name)}</div><div class="list-sub">Kosten: ${number(r.cost)} Punkte</div></div><div class="list-actions"><button class="btn small primary" data-act="redeem-reward" data-id="${h(r.id)}" ${view.points>=r.cost?'':'disabled'}>Einlösen</button><button class="btn small" data-act="edit-reward" data-id="${h(r.id)}">Bearb.</button><button class="btn small danger" data-act="archive-reward" data-id="${h(r.id)}">Archiv</button></div></div>`).join(''):empty('Noch keine Belohnungen','Zum Beispiel: Kinobesuch, neues Werkzeug oder ein Ausflug.',`<button class="btn primary" data-act="new-reward">Belohnung anlegen</button>`)}</div>
+      ${state.rewards.some(r=>r.archivedAt)?`<div class="card"><div class="section-title">Archiv</div>${state.rewards.filter(r=>r.archivedAt).map(r=>`<div class="metric-row"><span>${h(r.name)}</span><button class="btn small" data-act="restore-reward" data-id="${h(r.id)}">Wiederherstellen</button></div>`).join('')}</div>`:''}</div>`;
+  }
+  function renderChat() {
+    return `<div class="stack-lg">${page('Schnellassistent','Einfache Befehle direkt auf dem Gerät – ohne Cloud, ohne KI-Dienst.')}
+      <div class="card stack-sm"><div class="chat-box" id="chatBox">${ui.chat.map(msg=>`<div class="chat-bubble ${msg.me?'me':'bot'}">${h(msg.text)}</div>`).join('')}</div>
+      <form data-form="chat" class="chat-row"><input class="input" name="message" id="chatInput" placeholder="z. B. /log Sport, Punkte, Fällig ..." autocomplete="off" required><button class="btn primary" type="submit">Senden</button></form></div>
+      ${tip('Befehle: „Hilfe“, „Punkte“, „Level“, „Fällig“, „/log QUESTNAME“. Buchungen werden wie im Log gespeichert und sind rückgängig machbar.')}</div>`;
+  }
+  function renderSettings(view) {
+    const bytes = new Blob([JSON.stringify(state)]).size;
+    return `<div class="stack-lg">${page('Einstellungen','Anpassbare Regeln, sichere Datensicherung und gezielte Bereinigung.')}
+      <form data-form="settings" class="card stack"><h2 class="section-title">Allgemeine Regeln</h2><div class="form-grid">
+        ${fieldNumber('€ pro Punkt','euroPerPoint',state.settings.euroPerPoint,'0.01','0','1000')}
+        ${fieldNumber('Tagesziel (Aktionen)','dailyGoal',state.settings.dailyGoal,'1','1','100')}
+        ${fieldNumber('Level-Basis (XP)','levelBase',state.settings.levelBase,'1','10','100000')}
+        ${fieldNumber('Level-Wachstum (z. B. 0.10)','levelGrowth',state.settings.levelGrowth,'0.01','0','1')}
+        ${fieldNumber('Negativ-Faktor (z. B. 2)','negativeFactor',state.settings.negativeFactor,'0.1','1','20')}
+        ${fieldNumber('Streak-Bonus je Tag (z. B. 0.05)','streakStep',state.settings.streakStep,'0.01','0','1')}
+        ${fieldNumber('Maximaler Streak-Multiplikator','streakCap',state.settings.streakCap,'0.05','1','10')}
+        ${fieldNumber('Quest-XP-Verfall pro Fehltag','questXpDecay',state.settings.questXpDecay,'1','0','10000')}
+        </div><button class="btn primary" type="submit">Regeln speichern</button></form>
+      <div class="card stack-sm"><h2 class="section-title">Datensicherung</h2><div class="inline-actions"><button class="btn primary" data-act="export">Backup als JSON herunterladen</button>
+        <label class="btn" for="importFile" style="cursor:pointer">Backup importieren</label><input id="importFile" type="file" accept="application/json,.json" style="display:none"></div>
+        <div class="list-sub">Format v${state.schemaVersion} · ${number(state.events.length)} gespeicherte Aktionen · ca. ${number(bytes/1024)} KB. Daten liegen nur in diesem Browser bzw. unter dieser Webseitenadresse.</div>
+        <div class="tip">Wichtig: Ein anderer Browser, ein neues Gerät oder eine geänderte GitHub-Pages-Adresse teilt diesen Speicher nicht. Vor Updates und Gerätewechseln ein JSON-Backup exportieren.</div></div>
+      <div class="card stack-sm"><h2 class="section-title">Bereiche zurücksetzen</h2><p class="muted">Beim Archivieren verschwinden Elemente aus den aktiven Listen. Historische Punkte und Buchungen bleiben erhalten.</p>
+        <div class="inline-actions">${[['quests','Quest-Katalog'],['specials','Sonderaufgaben'],['missions','Missionen'],['rewards','Belohnungen'],['categories','Eigene Kategorien']].map(([key,label])=>`<button class="btn small" data-act="archive-all" data-type="${key}">${label} archivieren</button>`).join('')}</div>
+        <div class="hr"></div><p class="muted">Nur die Buchungen entfernen: Alle Punkte, Meilensteine und Missionsabschlüsse werden neu aus dem dann leeren Log berechnet.</p>
+        <button class="btn danger" data-act="reset-log">Verlauf und Punkte löschen</button></div>
+      <div class="card stack-sm"><h2 class="section-title">Vollständiger Neustart</h2><p class="muted">Löscht alle Daten dieser App in diesem Browser. Erstelle vorher ein Backup.</p>
+      <button class="btn danger" data-act="reset-all">Alle App-Daten löschen</button></div>
+      ${tip('Diese Version hat eine feste zentrale Datenstruktur. Erweiterungen sollen Funktionen ergänzen, nicht mehrfach bestehende Render- oder Speicherroutinen überschreiben.')}
+      </div>`;
+  }
+  function fieldNumber(label,name,value,step,min,max) { return `<div class="field"><label for="set_${name}">${h(label)}</label><input class="input" id="set_${name}" name="${name}" type="number" required step="${step}" min="${min}" max="${max}" value="${h(value)}"></div>`; }
+
+  // ---------- Modal forms ----------
+  function modal(title, body, kind = '') {
+    modalMount.innerHTML = `<div class="modal-root"><div class="modal-overlay" data-act="close-modal"></div><div class="modal-panel ${kind}" role="dialog" aria-modal="true" aria-label="${h(title)}">
+      <div class="modal-header"><h2 class="modal-title">${h(title)}</h2><button type="button" class="icon-btn" data-act="close-modal" aria-label="Schließen">×</button></div>${body}</div></div>`;
+    const focus = $('.modal-panel input:not([type=checkbox]), .modal-panel textarea, .modal-panel select');
+    if (focus) focus.focus();
+  }
+  function closeModal() { modalMount.innerHTML = ''; }
+  function modalFooter(text = 'Speichern') { return `<div class="modal-actions"><button type="button" class="btn" data-act="close-modal">Abbrechen</button><button class="btn primary" type="submit">${h(text)}</button></div>`; }
+  function categoryChoices(name, selected = []) {
+    const cats = active(state.categories).filter(c=>c.id!==C.MISC_ID);
+    if (!cats.length) return '<p class="muted small">Noch keine Kategorien vorhanden.</p>';
+    return `<div class="choice-grid">${cats.map(c=>{
+      const match=selected.find(a=>a.categoryId===c.id);
+      return `<div class="category-choice"><label><input type="checkbox" name="${h(name)}" value="${h(c.id)}" ${match?'checked':''}>
+        <span class="dot" style="background:${C.safeColor(c.color)}"></span><span style="overflow-wrap:anywhere">${h(c.name)}${c.type==='negative'?' (−)':''}</span></label>
+        <input class="input" type="number" data-mult-for="${h(name)}" data-id="${h(c.id)}" step="0.05" min="0" max="100" value="${h(match?.multiplier??1)}" aria-label="Multiplikator für ${h(c.name)}" title="Multiplikator"></div>`;
+    }).join('')}</div>`;
+  }
+  function readAllocations(form, name) {
+    return $$(`input[name="${name}"]:checked`,form).map(box=>{
+      const inp = $(`input[data-mult-for="${name}"][data-id="${CSS.escape(box.value)}"]`,form);
+      const multiplier = Number(inp?.value);
+      if (!Number.isFinite(multiplier) || multiplier<0 || multiplier>100) throw new Error('Multiplikator muss zwischen 0 und 100 liegen.');
+      return {categoryId:box.value,multiplier};
+    });
+  }
+  function modalCategory(id) {
+    const c=state.categories.find(x=>x.id===id), editing=!!c;
+    modal(editing?'Kategorie bearbeiten':'Neue Kategorie',`<form data-form="category" data-id="${h(id||'')}" class="stack-sm">
+      <div class="field"><label>Name</label><input class="input" name="name" maxlength="80" required value="${h(c?.name||'')}" placeholder="z. B. Lernen"></div>
+      <div class="form-grid"><div class="field"><label>Art</label><select class="select" name="type"><option value="positive" ${c?.type!=='negative'?'selected':''}>Positiv</option><option value="negative" ${c?.type==='negative'?'selected':''}>Negativ</option></select></div>
+      <div class="field"><label>Farbe</label><input class="input" type="color" name="color" value="${C.safeColor(c?.color||'#22c7a3')}"></div></div>
+      ${tip('Negative Kategorien erfassen eigenes Wachstum, ziehen bei der Quest-Erledigung aber globale Punkte ab. Keine automatischen Bonuserträge durch negative Aktionen.')}
+      ${modalFooter(editing?'Änderungen speichern':'Kategorie anlegen')}</form>`);
+  }
+  function modalQuest(id) {
+    const q=questById(id), editing=!!q;
+    modal(editing?'Quest bearbeiten':'Neue Quest',`<form data-form="quest" data-id="${h(id||'')}" class="stack-sm">
+      <div class="field"><label>Questname</label><input class="input" name="name" maxlength="100" required value="${h(q?.name||'')}" placeholder="z. B. 45 Minuten Krafttraining"></div>
+      <div class="form-grid"><div class="field"><label>Basis-Punkte</label><input class="input" name="points" required type="number" min="0.01" max="100000" step="0.01" value="${h(q?.points??20)}"></div>
+        <div class="field"><label>Quest-Art</label><select class="select" name="isBoss"><option value="0" ${q?.isBoss?'':'selected'}>Normale Quest</option><option value="1" ${q?.isBoss?'selected':''}>Bossquest</option></select></div></div>
+      <div class="field-label">Kategorien & Multiplikatoren (optional)</div>${categoryChoices('categoryPick',q?.allocations||[])}
+      <details><summary>Zusatz-Kategorieeffekte – nur für diese Quest</summary><div>${categoryChoices('linkPick',q?.links||[])}<p class="input-hint">Zusätzliche Kategoriepunkte, ohne globale Verknüpfung. Wähle eine Kategorie nicht gleichzeitig oben und hier aus.</p></div></details>
+      <details ${q?.penaltyEnabled?'open':''}><summary>Inaktivität & Strafpunkte</summary><div class="stack-sm"><label class="checkbox-row"><input type="checkbox" name="penaltyEnabled" ${q?.penaltyEnabled?'checked':''}> Inaktivitätsstrafe aktivieren</label>
+        <div class="form-grid"><div class="field"><label>Erste Frist (Tage)</label><input class="input" type="number" min="1" max="3650" step="1" name="penaltyDays" value="${h(q?.penaltyDays??7)}"></div>
+        <div class="field"><label>Strafe je Zyklus (Punkte)</label><input class="input" type="number" min="0" max="100000" step="0.01" name="penaltyPoints" value="${h(q?.penaltyPoints??10)}"></div>
+        <div class="field full-span"><label>Weitere Strafe nach je X Tagen</label><input class="input" type="number" min="1" max="3650" step="1" name="penaltyRepeatDays" value="${h(q?.penaltyRepeatDays??q?.penaltyDays??7)}"></div></div></div></details>
+      <details ${q?.streakEnabled||q?.xpDecayEnabled?'open':''}><summary>Kontinuität & Quest-Level</summary><div class="stack-sm"><label class="checkbox-row"><input type="checkbox" name="streakEnabled" ${q?.streakEnabled?'checked':''}> Täglicher Streak-Multiplikator</label>
+      <label class="checkbox-row"><input type="checkbox" name="xpDecayEnabled" ${q?.xpDecayEnabled?'checked':''}> ${number(state.settings.questXpDecay)} Quest-XP je Fehltag ab Aktivierung abziehen</label></div></details>
+      ${modalFooter(editing?'Quest speichern':'Quest anlegen')}</form>`,'wide');
+  }
+  function modalSpecial(id) {
+    const s=state.specials.find(x=>x.id===id),editing=!!s;
+    modal(editing?'Sonderaufgabe bearbeiten':'Neue Sonderaufgabe',`<form data-form="special" data-id="${h(id||'')}" class="stack-sm">
+      <div class="field"><label>Name</label><input class="input" name="name" maxlength="100" required value="${h(s?.name||'')}" placeholder="z. B. Pflanzen gießen"></div>
+      <div class="form-grid"><div class="field"><label>Punkte</label><input class="input" type="number" name="points" min="0.01" max="100000" step="0.01" required value="${h(s?.points??15)}"></div>
+      <div class="field"><label>Cooldown (Tage)</label><input class="input" type="number" name="cooldownDays" min="1" max="3650" step="1" required value="${h(s?.cooldownDays??7)}"></div>
+      <div class="field full-span"><label>Erstmalig verfügbar ab (leer = sofort)</label><input class="input" type="date" name="initialLockUntil" value="${h(s?.initialLockUntil||'')}"></div></div>
+      <div class="field-label">Kategorien & Multiplikatoren</div>${categoryChoices('categoryPick',s?.allocations||[])}
+      ${modalFooter(editing?'Sonderaufgabe speichern':'Sonderaufgabe anlegen')}</form>`);
+  }
+  function modalMission(id) {
+    const m=state.missions.find(x=>x.id===id);
+    modal(m?'Mission bearbeiten':'Neue Mission',`<form data-form="mission" data-id="${h(id||'')}" class="stack-sm">
+      <div class="field"><label>Name</label><input class="input" name="name" maxlength="100" required value="${h(m?.name||'')}" placeholder="z. B. Ersten Klimmzug schaffen"></div>
+      <div class="field"><label>Beschreibung (optional)</label><textarea class="textarea" name="description" maxlength="1000" placeholder="Ziel und Vorgehen">${h(m?.description||'')}</textarea></div>
+      ${!m?'<p class="input-hint">Anschließend kannst du innerhalb der Mission Stufen und Alternativen hinzufügen.</p>':''}
+      ${modalFooter(m?'Mission speichern':'Mission erstellen')}</form>`);
+  }
+  function modalStage(missionId,stageId,optionId) {
+    const mission=state.missions.find(m=>m.id===missionId);
+    if (!mission) return;
+    const stage=mission.stages.find(s=>s.id===stageId);
+    const option=stage?.options.find(o=>o.id===optionId);
+    const title=option? 'Aufgabe bearbeiten':stage?'Alternative hinzufügen':'Neue Missionsstufe';
+    modal(title,`<form data-form="stage" data-id="${h(missionId)}" data-stage="${h(stageId||'')}" data-option="${h(optionId||'')}" class="stack-sm">
+      <div class="field"><label>Aufgabenname</label><input class="input" name="name" maxlength="100" required value="${h(option?.name||'')}" placeholder="z. B. 20 saubere Liegestütze"></div>
+      <div class="field"><label>Punkte</label><input class="input" name="points" type="number" min="0.01" max="100000" step="0.01" required value="${h(option?.points??25)}"></div>
+      ${stage&&!option?tip('Diese Option ist eine Alternative in derselben Stufe. Es muss nur eine der Optionen erledigt werden, um die nächste Stufe freizuschalten.'):''}
+      ${modalFooter(option?'Änderungen speichern':stage?'Alternative anlegen':'Stufe anlegen')}</form>`);
+  }
+  function modalReward(id) {
+    const r=state.rewards.find(r=>r.id===id);
+    modal(r?'Belohnung bearbeiten':'Neue Belohnung',`<form data-form="reward" data-id="${h(id||'')}" class="stack-sm">
+      <div class="field"><label>Name</label><input class="input" name="name" maxlength="100" required placeholder="z. B. Kinobesuch" value="${h(r?.name||'')}"></div>
+      <div class="field"><label>Punktekosten</label><input class="input" name="cost" type="number" min="1" max="1000000" required step="1" value="${h(r?.cost??100)}"></div>
+      ${modalFooter(r?'Belohnung speichern':'Belohnung anlegen')}</form>`);
+  }
+  function modalManual() {
+    modal('Freier Log-Eintrag',`<form data-form="manual" class="stack-sm">
+      <div class="field"><label>Beschreibung</label><input class="input" name="name" required maxlength="100" placeholder="z. B. Manuelle Korrektur"></div>
+      <div class="form-grid"><div class="field"><label>Datum</label><input class="input" name="date" type="date" max="${today()}" value="${ui.logDate}" required></div>
+      <div class="field"><label>Punkte (+ oder −)</label><input class="input" name="points" type="number" step="0.01" required placeholder="z. B. -20"></div></div>
+      ${tip('Freie Einträge wirken auf den globalen Punktestand, nicht auf die Anzahl erledigter Quests oder Kategorie-Meilensteine.')}
+      ${modalFooter('Eintrag speichern')}</form>`);
+  }
+
+  // ---------- All interactions are wired exactly once ----------
+  function onClick(event) {
+    const b=event.target.closest('[data-act],[data-nav]');
+    if (!b || b.disabled) return;
+    if (b.dataset.nav) { go(b.dataset.nav); return; }
+    const act=b.dataset.act, id=b.dataset.id, stageId=b.dataset.stage, optionId=b.dataset.option;
+    const entity = (type) => state[type].find(x=>x.id===id);
+    const archive = (type) => {
+      const item=entity(type); if (!item) return;
+      if (type === 'categories' && active(state.quests).some(q => [...(q.allocations || []), ...(q.links || [])].some(a => a.categoryId === id))) {
+        toast('Kategorie ist noch Quests zugeordnet. Entferne diese Zuordnung zuerst, damit zukünftige Punkteberechnungen nicht unbemerkt wechseln.', true);
+        return;
+      }
+      if (!confirm(`„${item.name}“ archivieren? Bestehende Punkte und Buchungen bleiben erhalten.`)) return;
+      commit(s=>{ const entry=s[type].find(x=>x.id===id); entry.archivedAt=new Date().toISOString(); },'Archiviert.');
+    };
+    const restore = (type) => commit(s=>{
+      const item=s[type].find(x=>x.id===id); if(!item) throw Error('Eintrag fehlt.');
+      item.archivedAt=null;
+      if(type==='quests') { item.penaltySince=today(); item.xpDecaySince=today(); }
+    },'Wiederhergestellt.');
+    switch (act) {
+      case 'close-modal': closeModal(); break;
+      case 'new-category': modalCategory(); break;
+      case 'edit-category': modalCategory(id); break;
+      case 'archive-category': archive('categories'); break;
+      case 'restore-category': restore('categories'); break;
+      case 'new-quest': modalQuest(); break;
+      case 'edit-quest': modalQuest(id); break;
+      case 'archive-quest': archive('quests'); break;
+      case 'restore-quest': restore('quests'); break;
+      case 'quest-detail': go('quest-detail',{id}); break;
+      case 'category-detail': go('category-detail',{id}); break;
+      case 'toggle-archived': ui.showArchived=!ui.showArchived; render(); break;
+      case 'log-quest': logQuest(id,today()); break;
+      case 'open-manual': modalManual(); break;
+      case 'delete-event': deleteEvent(id); break;
+      case 'restore-event': restoreEvent([id]); break;
+      case 'undo-last': undoLast(); break;
+      case 'new-special': modalSpecial(); break;
+      case 'edit-special': modalSpecial(id); break;
+      case 'archive-special': archive('specials'); break;
+      case 'restore-special': restore('specials'); break;
+      case 'complete-special': completeSpecial(id); break;
+      case 'new-mission': modalMission(); break;
+      case 'edit-mission': modalMission(id); break;
+      case 'mission-detail': go('mission-detail',{id}); break;
+      case 'archive-mission': archive('missions'); break;
+      case 'restore-mission': restore('missions'); break;
+      case 'add-stage': modalStage(id); break;
+      case 'add-option': modalStage(id,stageId); break;
+      case 'edit-option': modalStage(id,stageId,optionId); break;
+      case 'delete-stage': deleteStage(id,stageId); break;
+      case 'delete-option': deleteOption(id,stageId,optionId); break;
+      case 'complete-stage': completeStage(id,stageId,optionId); break;
+      case 'new-reward': modalReward(); break;
+      case 'edit-reward': modalReward(id); break;
+      case 'archive-reward': archive('rewards'); break;
+      case 'restore-reward': restore('rewards'); break;
+      case 'redeem-reward': redeemReward(id); break;
+      case 'export': exportState(); break;
+      case 'reset-all': resetAll(); break;
+      case 'reset-log': resetLog(); break;
+      case 'archive-all': archiveAll(b.dataset.type); break;
+      default: console.warn('Unbekannte Aktion',act);
+    }
+  }
+  function onSubmit(event) {
+    const form=event.target.closest('form[data-form]');
+    if (!form) return;
+    event.preventDefault();
+    const type=form.dataset.form, id=form.dataset.id;
+    const data=new FormData(form);
+    const str=(name)=>C.normalizeName(data.get(name));
+    const asNum=(name)=>Number(data.get(name));
+    const checked=(name)=>data.get(name)==='on';
+    if (type==='log-quest') {
+      const qid=str('questId');
+      const override=str('pointsOverride');
+      ui.logDate=str('date')||today();
+      logQuest(qid,ui.logDate,override===''?undefined:Number(override));
+      return;
+    }
+    if (type==='category') {
+      const name=str('name'); if (!name) return toast('Name erforderlich.',true);
+      const other=active(state.categories).find(c=>c.name.toLocaleLowerCase('de')===name.toLocaleLowerCase('de') && c.id!==id);
+      if (other) return toast('Diese Kategorie gibt es bereits.',true);
+      const color=C.safeColor(str('color')),type=str('type');
+      if (commit(s=>{
+        const cat = id ? s.categories.find(c=>c.id===id) : null;
+        if(id&&!cat) throw Error('Kategorie nicht gefunden.');
+        if(cat){ if(cat.system) throw Error('Systemkategorie kann nicht verändert werden.'); Object.assign(cat,{name,color,type}); }
+        else s.categories.push({id:C.uid('cat'),name,color,type,archivedAt:null});
+      },id?'Kategorie gespeichert.':'Kategorie angelegt.')) closeModal();
+      return;
+    }
+    if (type==='quest') {
+      const name=str('name'),points=asNum('points');
+      if (!name||!(points>0)||points>100000) return toast('Name und gültige Punkte angeben.',true);
+      if (active(state.quests).some(q=>q.name.toLocaleLowerCase('de')===name.toLocaleLowerCase('de') && q.id!==id)) return toast('Questname bereits vorhanden.',true);
+      let allocations,links;
+      try { allocations=readAllocations(form,'categoryPick'); links=readAllocations(form,'linkPick'); }
+      catch(e){ return toast(e.message,true); }
+      if (links.some(l=>allocations.some(a=>a.categoryId===l.categoryId))) return toast('Eine Kategorie nicht doppelt zuweisen (oben und Zusatzwirkung).',true);
+      const pEnabled=checked('penaltyEnabled'),pDays=asNum('penaltyDays'),pPts=asNum('penaltyPoints'),pRepeat=asNum('penaltyRepeatDays');
+      if(pEnabled&&(!Number.isInteger(pDays)||pDays<1||!Number.isFinite(pPts)||pPts<0||!Number.isInteger(pRepeat)||pRepeat<1)) return toast('Ungültige Inaktivitätsregeln.',true);
+      const sEnabled=checked('streakEnabled'),xEnabled=checked('xpDecayEnabled');
+      const now=today();
+      if(commit(s=>{
+        let q=id?s.quests.find(q=>q.id===id):null;
+        if(id&&!q) throw Error('Quest nicht gefunden.');
+        if(!q){q={id:C.uid('quest'),createdOn:now,archivedAt:null,penaltySince:now,xpDecaySince:now}; s.quests.push(q);}
+        const changedPenalty=q.penaltyEnabled!==pEnabled||q.penaltyDays!==pDays||q.penaltyPoints!==pPts||q.penaltyRepeatDays!==pRepeat;
+        if(changedPenalty) q.penaltySince=now;
+        if(!q.xpDecayEnabled&&xEnabled) q.xpDecaySince=now;
+        Object.assign(q,{name,points,isBoss:str('isBoss')==='1',allocations,links,
+          penaltyEnabled:pEnabled,penaltyDays:pEnabled?pDays:0,penaltyPoints:pEnabled?pPts:0,
+          penaltyRepeatDays:pEnabled?pRepeat:0,streakEnabled:sEnabled,xpDecayEnabled:xEnabled});
+      },id?'Quest gespeichert.':'Quest angelegt.')) closeModal();
+      return;
+    }
+    if (type==='special') {
+      const name=str('name'),points=asNum('points'),days=asNum('cooldownDays'),initial=str('initialLockUntil');
+      if(!name||!(points>0)||!Number.isInteger(days)||days<1||days>3650) return toast('Name, Punkte und Cooldown prüfen.',true);
+      if(initial&&!C.isISODate(initial)) return toast('Ungültiges Startdatum.',true);
+      let allocations;
+      try{allocations=readAllocations(form,'categoryPick');}catch(e){return toast(e.message,true);}
+      if(commit(s=>{
+        let item=id?s.specials.find(x=>x.id===id):null;
+        if(id&&!item) throw Error('Sonderaufgabe fehlt.');
+        if(!item){item={id:C.uid('special'),createdOn:today(),archivedAt:null};s.specials.push(item);}
+        Object.assign(item,{name,points,cooldownDays:days,initialLockUntil:initial||null,allocations});
+      },id?'Sonderaufgabe gespeichert.':'Sonderaufgabe angelegt.')) closeModal();
+      return;
+    }
+    if (type==='mission') {
+      const name=str('name'),description=str('description');
+      if(!name) return toast('Missionsname erforderlich.',true);
+      if(commit(s=>{
+        let item=id?s.missions.find(x=>x.id===id):null;
+        if(id&&!item) throw Error('Mission fehlt.');
+        if(!item){item={id:C.uid('mission'),createdOn:today(),archivedAt:null,stages:[]};s.missions.push(item);}
+        item.name=name; item.description=description;
+      },id?'Mission gespeichert.':'Mission angelegt.')) closeModal();
+      return;
+    }
+    if (type==='stage') {
+      const mId=id,stageId=form.dataset.stage,optionId=form.dataset.option;
+      const name=str('name'),points=asNum('points');
+      if(!name||!(points>0)) return toast('Aufgabenname und Punkte erforderlich.',true);
+      const mp=currentView().missionProgress[mId];
+      if(mp?.completed) return toast('Abgeschlossene Missionen können nicht verändert werden. Zuerst Log-Einträge rückgängig machen.',true);
+      if(stageId&&mp?.stages[stageId]) return toast('Erledigte Stufen nicht nachträglich verändern.',true);
+      if(commit(s=>{
+        const mission=s.missions.find(m=>m.id===mId); if(!mission) throw Error('Mission fehlt.');
+        let stage=stageId?mission.stages.find(x=>x.id===stageId):null;
+        if(stageId&&!stage) throw Error('Stufe fehlt.');
+        if(!stage){stage={id:C.uid('stage'),options:[]};mission.stages.push(stage);}
+        let option=optionId?stage.options.find(x=>x.id===optionId):null;
+        if(optionId&&!option) throw Error('Option fehlt.');
+        if(!option){option={id:C.uid('opt')};stage.options.push(option);}
+        option.name=name;option.points=points;
+      },optionId?'Aufgabe gespeichert.':stageId?'Alternative angelegt.':'Stufe angelegt.')) closeModal();
+      return;
+    }
+    if (type==='reward') {
+      const name=str('name'),cost=asNum('cost');
+      if(!name||!Number.isInteger(cost)||cost<1) return toast('Name und gültige Punktekosten erforderlich.',true);
+      if(commit(s=>{
+        let item=id?s.rewards.find(x=>x.id===id):null;
+        if(id&&!item) throw Error('Belohnung fehlt.');
+        if(!item){item={id:C.uid('reward'),archivedAt:null};s.rewards.push(item);}
+        item.name=name;item.cost=cost;
+      },id?'Belohnung gespeichert.':'Belohnung angelegt.')) closeModal();
+      return;
+    }
+    if (type==='manual') {
+      const name=str('name'),points=asNum('points'),date=str('date');
+      if(!name||!Number.isFinite(points)||!C.isISODate(date)||date>today()) return toast('Beschreibung, Punkte und Datum prüfen.',true);
+      if(commit(s=>s.events.push(C.newManualEvent(date,name,points)),'Freier Eintrag gespeichert.')) closeModal();
+      return;
+    }
+    if (type==='settings') {
+      const conf={};
+      for (const key of ['euroPerPoint','dailyGoal','levelBase','levelGrowth','negativeFactor','streakStep','streakCap','questXpDecay']) conf[key]=asNum(key);
+      if(Object.values(conf).some(x=>!Number.isFinite(x))||conf.euroPerPoint<0||conf.dailyGoal<1||conf.levelBase<10||conf.levelGrowth<0||conf.levelGrowth>1||conf.negativeFactor<1||conf.streakStep<0||conf.streakCap<1||conf.questXpDecay<0) return toast('Ungültige Einstellungswerte.',true);
+      commit(s=>Object.assign(s.settings,conf),'Einstellungen gespeichert.');
+      return;
+    }
+    if (type==='chat') {
+      const message=str('message');
+      if(!message) return;
+      chatSend(message);
+      return;
+    }
+  }
+  function onInput(event) {
+    if(event.target.id==='logSearch') {
+      const box=event.target, start=box.selectionStart,end=box.selectionEnd;
+      ui.logFilter=box.value;render();
+      const next=$('#logSearch');next?.focus(); if(next&&start!==null) next.setSelectionRange(start,end);
+    }
+  }
+  function onChange(event) {
+    if(event.target.id==='logDate') ui.logDate=event.target.value;
+    if(event.target.id==='showVoided') {ui.showVoided=event.target.checked;render();}
+    if(event.target.id==='importFile') importState(event.target.files?.[0]);
+  }
+  $('#backBtn').addEventListener('click',back);
+  $('#homeBtn').addEventListener('click',home);
+  $('#themeBtn').addEventListener('click',()=>commit(s=>{s.settings.theme=s.settings.theme==='dark'?'light':'dark';},'Design gewechselt.'));
+
+  // ---------- State-changing commands ----------
+  function validDate(d){return C.isISODate(d)&&d<=today();}
+  function logQuest(id, date = today(), override) {
+    const q=questById(id);
+    if(!q||q.archivedAt) return toast('Quest nicht gefunden oder archiviert.',true);
+    if(!validDate(date)) return toast('Das Datum darf nicht in der Zukunft liegen.',true);
+    if(override!==undefined && (!Number.isFinite(override)||override<=0||override>100000)) return toast('Ungültige Punktzahl.',true);
+    commit(s=>{ const item=s.quests.find(x=>x.id===id);s.events.push(C.newQuestEvent(s,item,date,override));},`„${q.name}“ gebucht.`);
+  }
+  function completeSpecial(id) {
+    const s=state.specials.find(x=>x.id===id), date=today();
+    const eligibility=C.canCompleteSpecial(state,currentView(),s,date);
+    if(!eligibility.ok) return toast(eligibility.reason,true);
+    commit(d=>{ const item=d.specials.find(x=>x.id===id);d.events.push(C.newSpecialEvent(d,item,date));},`„${s.name}“ erledigt.`);
+  }
+  function completeStage(id,stageId,optionId) {
+    const m=state.missions.find(x=>x.id===id),stage=m?.stages.find(x=>x.id===stageId),opt=stage?.options.find(x=>x.id===optionId);
+    if(!opt) return toast('Aufgabe fehlt.',true);
+    const eligibility=C.canCompleteMissionStage(state,currentView(),m,stage,today());
+    if(!eligibility.ok) return toast(eligibility.reason,true);
+    commit(s=>s.events.push(C.newMissionEvent(m,stage,opt,today())),`Stufe abgeschlossen. ${m.stages.at(-1).id===stageId?'Missionsbonus automatisch berechnet.':''}`);
+  }
+  function deleteStage(id,stageId) {
+    const m=state.missions.find(x=>x.id===id);
+    if(!m||currentView().missionProgress[id]?.stages[stageId]) return toast('Erledigte Stufen nicht entfernen.',true);
+    const later=m.stages.slice(m.stages.findIndex(s=>s.id===stageId)+1);
+    if(later.some(s=>currentView().missionProgress[id]?.stages[s.id])) return toast('Spätere Stufen sind schon erledigt.',true);
+    if(!confirm('Diese Stufe und ihre alternativen Aufgaben entfernen?')) return;
+    commit(s=>{const mission=s.missions.find(m=>m.id===id);mission.stages=mission.stages.filter(st=>st.id!==stageId);},'Stufe entfernt.');
+  }
+  function deleteOption(id,stageId,optionId) {
+    const m=state.missions.find(x=>x.id===id),stage=m?.stages.find(x=>x.id===stageId);
+    if(!stage||stage.options.length<=1||currentView().missionProgress[id]?.stages[stageId]) return toast('Option kann nicht entfernt werden.',true);
+    if(!confirm('Alternative entfernen?')) return;
+    commit(s=>{const st=s.missions.find(m=>m.id===id).stages.find(st=>st.id===stageId);st.options=st.options.filter(o=>o.id!==optionId);},'Alternative entfernt.');
+  }
+  function deleteEvent(id) {
+    const event=state.events.find(e=>e.id===id&&!e.voidedAt);
+    if(!event)return;
+    if(!confirm(`Buchung „${event.snapshot?.name||'Eintrag'}“ rückgängig machen? Bei Missionsschritten werden auch spätere Stufen dieser Mission zurückgenommen.`))return;
+    let removed=[];
+    if(commit(s=>{removed=C.voidEvent(s,id);if(!removed.length)throw Error('Buchung fehlt.');},'Buchung rückgängig.'))ui.undoIds=removed;
+  }
+  function undoLast() {
+    const e=state.events.filter(e=>!e.voidedAt).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))||b.id.localeCompare(a.id))[0];
+    if(!e)return toast('Keine aktive Buchung vorhanden.',true);
+    let removed=[];
+    if(commit(s=>{removed=C.voidEvent(s,e.id);},'Letzte Buchung rückgängig.'))ui.undoIds=removed;
+  }
+  function restoreEvent(ids) {
+    if(commit(s=>{ const count=C.restoreEvents(s,ids).length;if(!count)throw Error('Nichts zum Wiederherstellen.');},'Buchung wiederhergestellt.'))ui.undoIds=[];
+  }
+  function redeemReward(id) {
+    const reward=state.rewards.find(r=>r.id===id&&!r.archivedAt);
+    if(!reward) return toast('Belohnung nicht vorhanden.',true);
+    if(currentView().points<reward.cost)return toast('Nicht genügend Punkte.',true);
+    if(!confirm(`„${reward.name}“ für ${number(reward.cost)} Punkte einlösen?`))return;
+    commit(s=>s.events.push(C.newRedeemEvent(today(),reward)),'Belohnung eingelöst.');
+  }
+  function archiveAll(type) {
+    const valid=['quests','specials','missions','rewards','categories'];
+    if(!valid.includes(type))return;
+    if (type === 'categories' && active(state.quests).some(q => [...(q.allocations || []), ...(q.links || [])].some(a => a.categoryId !== C.MISC_ID))) {
+      return toast('Aktive Quests verwenden noch Kategorien. Bearbeite diese Quests zuerst; ein automatischer Wechsel des Punktsystems wäre riskant.', true);
+    }
+    if(!confirm(`Alle aktiven ${type==='categories'?'eigenen Kategorien':type} archivieren? Vorhandene Buchungen bleiben erhalten.`))return;
+    commit(s=>{ for(const x of s[type])if(!x.system)x.archivedAt=new Date().toISOString(); },'Bereich archiviert.');
+  }
+  function exportState() { downloadFile(`life-rpg-backup-${today()}.json`,JSON.stringify(state,null,2),'application/json');toast('Backup erstellt.'); }
+  function downloadFile(filename,content,type) {
+    const blob=new Blob([content],{type});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
+  }
+  async function importState(file) {
+    if(!file)return;
+    try {
+      if(file.size>15*1024*1024)throw Error('Backup ist zu groß (maximal 15 MB).');
+      const raw=await file.text(),incoming=C.normalizeState(JSON.parse(raw));
+      if(!confirm(`Backup importieren? Es enthält ${incoming.events.length} Aktionen und ${incoming.quests.length} Quests. Der aktuelle Stand wird ersetzt; vorher wird eine Sicherheitskopie heruntergeladen.`))return;
+      exportState();
+      localStorage.setItem(C.STORAGE_KEY,JSON.stringify(incoming));
+      state=incoming;snapshot=null;stack=[];route={name:'menu',params:{}};closeModal();applyTheme();render();
+      toast('Backup vollständig importiert.');
+    } catch(e){toast('Import fehlgeschlagen: '+e.message,true);}
+  }
+  function resetLog() {
+    if(prompt('Alle Buchungen inklusive aller Punkte und Missionsabschlüsse löschen? Zum Bestätigen VERLAUF eingeben:')!=='VERLAUF')return;
+    exportState();
+    commit(s=>{s.events=[];},'Buchungen zurückgesetzt.');
+  }
+  function resetAll() {
+    if(prompt('Kompletter Neustart: Alle Daten unwiderruflich überschreiben. Zum Bestätigen LÖSCHEN eingeben:')!=='LÖSCHEN')return;
+    exportState();
+    try {
+      const fresh=C.newState(today());localStorage.setItem(C.STORAGE_KEY,JSON.stringify(fresh));
+      state=fresh;snapshot=null;stack=[];ui.undoIds=[];route={name:'menu',params:{}};
+      applyTheme();render();toast('Neuer leerer Stand angelegt.');
+    }catch(e){toast('Neustart fehlgeschlagen: '+e.message,true);}
+  }
+  function chatSend(message) {
+    const view=currentView();
+    ui.chat.push({me:true,text:message});
+    const msg=message.trim(),lower=msg.toLocaleLowerCase('de');
+    let answer;
+    if(['hilfe','/help','help','?'].includes(lower))answer='Befehle:\n• Punkte – aktueller Stand\n• Level – Levelstatus\n• Fällig – dringende Aufgaben\n• /log QUESTNAME – passende Quest jetzt eintragen\n• /log kann nur existierende aktive Quests buchen.';
+    else if(/punkte|punktestand|sparstand|kontostand/.test(lower))answer=`Aktuell: ${number(view.points)} Punkte, ${money(view.savings)} Sparstand.`;
+    else if(/level|lvl/.test(lower))answer=`Du bist Level ${view.level.level}. Es fehlen ${number(view.level.need-view.level.remaining)} XP bis Level ${view.level.level+1}.`;
+    else if(/fällig|offen|heute/.test(lower)) {
+      const due=C.dueItems(state,view,today()).filter(x=>x.daysLeft<=0).slice(0,6);
+      answer=due.length?due.map(d=>`${d.name} (${d.daysLeft<0?'überfällig':'heute'})`).join('\n'):'Keine dringenden Aufgaben.';
+    } else if(lower.startsWith('/log ')){
+      const name=C.normalizeName(msg.slice(5));
+      const q=active(state.quests).find(q=>q.name.toLocaleLowerCase('de')===name.toLocaleLowerCase('de'));
+      if(!q)answer=`Quest „${name}“ nicht gefunden. Verwende den exakten Namen aus dem Katalog.`;
+      else {const ok=commit(s=>s.events.push(C.newQuestEvent(s,s.quests.find(x=>x.id===q.id),today())));answer=ok?`„${q.name}“ für heute eingetragen.`:'Speichern war nicht möglich.';}
+    } else answer='Das habe ich nicht erkannt. Schreibe „Hilfe“ für die verfügbaren Befehle.';
+    ui.chat.push({me:false,text:answer});
+    render();
+    const chat=$('#chatBox');if(chat)chat.scrollTop=chat.scrollHeight;
+    $('#chatInput')?.focus();
+  }
+  boot();
+})();
+
+</script>
+</body>
+</html>
