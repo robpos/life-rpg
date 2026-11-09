@@ -178,6 +178,27 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
   .stat-label{font-size:.72rem}.page-title{font-size:1.9rem}.card{padding:15px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+/* Expert Academy - responsive, theme-token based, no external dependencies. */
+.coach-hero{padding:25px 22px;display:grid;gap:14px;background:linear-gradient(115deg,var(--surface),var(--surface-alt))}
+.coach-hero h2{font-size:1.55rem;margin:2px 0 0;letter-spacing:-.04em;line-height:1.2}
+.coach-hero p{line-height:1.55;margin:0 0 8px}
+.coach-check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.coach-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.coach-check{display:flex;align-items:center;gap:8px;background:var(--surface-alt);border:1px solid var(--border);border-radius:10px;padding:11px 9px;font-size:.8rem;cursor:pointer;min-width:0}
+.coach-check input{accent-color:var(--accent);width:17px;height:17px;flex:0 0 auto}
+.coach-days .coach-check{display:grid;justify-items:center;gap:4px;padding:9px 2px;font-size:.74rem}
+.coach-session{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.coach-session summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:14px;flex-wrap:wrap}
+.coach-session summary::-webkit-details-marker{display:none}
+.coach-session summary::after{content:'⌄';margin-left:auto;color:var(--muted);font-size:1.1rem}
+.coach-session[open] summary::after{content:'⌃'}
+.coach-day{border:1px solid var(--border);color:var(--accent);border-radius:9px;padding:7px 8px;font-weight:760;font-size:.76rem}
+.coach-exercises{padding:5px 14px 14px;display:grid;gap:6px}
+.coach-exercise{border-top:1px solid var(--border);padding:11px 0;display:flex;justify-content:space-between;gap:13px;align-items:flex-start}
+.coach-exercise strong{font-size:.86rem}
+.coach-dose{white-space:nowrap;text-align:right;font-weight:750;color:var(--accent);font-size:.85rem}
+.coach-dose small{display:block;color:var(--muted);font-size:.69rem;font-weight:500}
+@media(max-width:420px){.coach-check-grid{grid-template-columns:1fr 1fr}.coach-check{font-size:.71rem;padding:10px 7px;gap:5px}.coach-days .coach-check{font-size:.68rem}.coach-session summary{gap:8px}}
 
 </style>
 </head>
@@ -251,7 +272,8 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
         { id: 'cat_kreativ', name: 'Kreativität', type: 'positive', color: '#be86fa', archivedAt: null },
         { id: 'cat_rueckschritte', name: 'Rückschritte', type: 'negative', color: '#ee7381', archivedAt: null }
       ],
-      quests: [], specials: [], missions: [], rewards: [], events: []
+      quests: [], specials: [], missions: [], rewards: [], events: [],
+      coaches: { sport: { profile:null, plan:null, feedback:[], apiUrl:'', installedPlanId:null } }
     };
   }
 
@@ -262,6 +284,9 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
     const state = { ...fresh, ...raw };
     state.settings = { ...fresh.settings, ...(raw.settings || {}) };
     state.meta = { ...fresh.meta, ...(raw.meta || {}) };
+    state.coaches = { ...fresh.coaches, ...(raw.coaches || {}) };
+    state.coaches.sport = { ...fresh.coaches.sport, ...(raw.coaches?.sport || {}) };
+    if (!Array.isArray(state.coaches.sport.feedback)) throw new Error('Trainerfeedback beschädigt.');
     for (const key of ['categories', 'quests', 'specials', 'missions', 'rewards', 'events']) {
       if (!Array.isArray(raw[key])) throw new Error(`Datenfeld '${key}' fehlt oder ist beschädigt.`);
       state[key] = raw[key];
@@ -709,6 +734,155 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
 
 </script>
 <script>
+/* Life RPG Coach: deterministic starter plans, strict client validation, no medical diagnosis. */
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.LifeRPGCoach=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
+'use strict';
+const DAY_NAMES={1:'Montag',2:'Dienstag',3:'Mittwoch',4:'Donnerstag',5:'Freitag',6:'Samstag',7:'Sonntag'};
+const EQUIPMENT={bodyweight:'Eigengewicht',bands:'Widerstandsbänder',dumbbells:'Kurzhanteln',barbell:'Langhantel',bench:'Bank',machines:'Kraftgeräte',cable:'Kabelzug',pullup:'Klimmzugstange',cardio:'Cardiogerät'};
+const GOALS={recomp:'Fett reduzieren & Muskeln aufbauen',muscle:'Muskelaufbau',fat:'Fettabbau',fitness:'Allgemeine Fitness',strength:'Kraft steigern'};
+const LEVELS={beginner:'Einsteiger',intermediate:'Fortgeschritten',advanced:'Erfahren'};
+const DIETS={mixed:'Mischkost',vegetarian:'Vegetarisch',vegan:'Vegan'};
+function err(m){throw Error(m);}
+function text(v,max=800){return String(v??'').trim().slice(0,max);}
+function dayValues(values){return [...new Set((Array.isArray(values)?values:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=7))].sort((a,b)=>a-b);}
+function normalizeProfile(raw){
+ if(!raw||typeof raw!=='object')err('Trainerprofil fehlt.');
+ const goal=GOALS[raw.goal]?raw.goal:'recomp',level=LEVELS[raw.level]?raw.level:'beginner';
+ const days=Number(raw.days),minutes=Number(raw.minutes),weight=raw.weightKg===''||raw.weightKg==null?null:Number(raw.weightKg);
+ if(!Number.isInteger(days)||days<1||days>6)err('Trainingstage: 1 bis 6 angeben.');
+ if(!Number.isInteger(minutes)||minutes<20||minutes>150)err('Trainingsdauer: 20 bis 150 Minuten.');
+ if(weight!==null&&(!Number.isFinite(weight)||weight<35||weight>300))err('Körpergewicht außerhalb des gültigen Bereichs.');
+ const equipment=[...new Set((Array.isArray(raw.equipment)?raw.equipment:[]).filter(x=>Object.hasOwn(EQUIPMENT,x)))];
+ const schedule=dayValues(raw.schedule);
+ const diet=DIETS[raw.diet]?raw.diet:'mixed';
+ const meals=Number(raw.meals);
+ if(!Number.isInteger(meals)||meals<2||meals>6)err('Mahlzeiten: 2 bis 6 angeben.');
+ const prep=Number(raw.prepMinutes);
+ if(![0,10,20,40].includes(prep))err('Zubereitungszeit ungültig.');
+ return {version:1,goal,level,days,minutes,weightKg:weight,
+  schedule,equipment:equipment.length?equipment:['bodyweight'],
+  restrictions:text(raw.restrictions,700),diet,meals,prepMinutes:prep,
+  foodAvailable:text(raw.foodAvailable,700),foodAvoid:text(raw.foodAvoid,400),
+  fridge:raw.fridge===false?false:true,
+  budget:['low','medium','flexible'].includes(raw.budget)?raw.budget:'medium',
+  weekNotes:text(raw.weekNotes,500)};
+}
+function pickDays(p){
+ const selected=p.schedule;
+ if(selected.length>=p.days)return selected.slice(0,p.days);
+ const recommended={1:[1],2:[2,5],3:[1,3,5],4:[1,2,4,6],5:[1,2,3,5,6],6:[1,2,3,4,5,6]}[p.days];
+ const combined=[...selected];for(const day of recommended)if(combined.length<p.days&&!combined.includes(day))combined.push(day);
+ for(let day=1;day<=7&&combined.length<p.days;day++)if(!combined.includes(day))combined.push(day);
+ return combined.sort((a,b)=>a-b);
+}
+function ex(name,sets,reps,tip,restSeconds=90){return {name,sets,reps,tip,restSeconds};}
+function planExercises(p,variant,adjust){
+ const eq=new Set(p.equipment),has=x=>eq.has(x),compact=p.minutes<40;
+ let push,pull,squat,hinge,core,other;
+ if(has('machines')||has('cable')){
+  push=ex('Brustpresse',2,'8–12','Schulterblätter kontrolliert, schmerzfrei bewegen');
+  pull=ex('Latzug oder Rudermaschine',2,'8–12','Langsam ablassen');
+  squat=ex('Beinpresse',2,'8–12','Bewegungsradius kontrollieren');
+  hinge=ex('Beinbeuger-Maschine',2,'10–15','Kein Schwung');
+  other=ex('Schulterpresse am Gerät',2,'8–12','Keine erzwungenen Endpositionen');
+ }else if(has('dumbbells')||has('barbell')){
+  const isD=has('dumbbells');
+  push=ex(isD?'Kurzhantel-Floorpress':'Liegestütze',2,'8–12','Stabil und kontrolliert');
+  pull=ex(isD?'Kurzhantel-Rudern':'Rudern mit Widerstandsband / Rucksack',2,'8–12','Rücken neutral halten');
+  squat=ex(isD?'Goblet Squats':'Kniebeugen',2,'8–12','Ruhige Ausführung');
+  hinge=ex(isD?'Kurzhantel-Rumänisches Kreuzheben':'Glute Bridge',2,'8–12','Bewegung aus der Hüfte');
+  other=ex(isD?'Kurzhantel-Schulterdrücken':'Liegestütze erhöht',2,'8–12','Schmerzfrei trainieren');
+ }else if(has('bands')){
+  push=ex('Liegestütze (erhöht möglich)',2,'6–12','Mit sicherer Höhe beginnen');
+  pull=ex('Bandrudern',2,'10–15','Band sicher befestigen');
+  squat=ex('Kniebeugen zur Bank',2,'8–12','Kontrolliert aufstehen');
+  hinge=ex('Glute Bridge',2,'10–15','Gesäß bewusst anspannen');
+  other=ex('Band-Außenrotation',2,'10–15','Leichtes Band wählen');
+ }else{
+  push=ex('Liegestütze an Tisch oder Wand',2,'6–12','Höhe an Leistungsstand anpassen');
+  pull=ex('Rucksackrudern mit sicherem Griff',2,'8–12','Nur bei stabilem Rucksack');
+  squat=ex('Kniebeugen zum Stuhl',2,'8–12','Ohne Schwung');
+  hinge=ex('Glute Bridge',2,'10–15','Ruhige Wiederholungen');
+  other=ex('Schulterblatt-Kontrolle im Stand',2,'10–15','Kleine kontrollierte Bewegungen');
+ }
+ if(has('pullup')&&variant===1)pull=ex('Unterstützte Klimmzüge / Negative',2,'3–6','Nur sauber und ohne Schwung',120);
+ core=variant===1?ex('Dead Bug',2,'8 je Seite','Rücken möglichst stabil halten',60):ex('Seitstütz',2,'20–35 s je Seite','Bei Bedarf auf Knien',60);
+ const base=variant===0?[squat,push,pull,hinge,core]:variant===1?[hinge,pull,push,squat,core]:[squat,pull,other,hinge,core];
+ const count=compact?4:p.minutes<65?5:6;
+ const selected=base.slice(0,Math.min(base.length,count));
+ if(count>5)selected.push(ex('Ruhiges Ausdauer-Finish',1,'6–10 min','Sprechen sollte weiterhin möglich sein',0));
+ const baseSets=p.level==='advanced'?3:p.level==='intermediate'?3:2;
+ for(const x of selected){if(x.name!=='Ruhiges Ausdauer-Finish')x.sets=Math.max(1,Math.min(4,baseSets+adjust));}
+ return selected;
+}
+const PANTRY_CATALOG=[
+ {name:'Vollkornwrap mit Bohnen und Mais',items:['Wraps','Bohnen','Mais'],fit:'vegan',cold:false,prep:10},
+ {name:'Haferflocken mit Nüssen und haltbarer Pflanzenmilch',items:['Haferflocken','Nüsse','Pflanzenmilch'],fit:'vegan',cold:false,prep:0},
+ {name:'Reis mit Linsen und Gemüse',items:['Reis','Linsen','Gemüse'],fit:'vegan',cold:false,prep:20},
+ {name:'Couscous mit Kichererbsen',items:['Couscous','Kichererbsen'],fit:'vegan',cold:false,prep:10},
+ {name:'Vollkornbrot mit Erdnussmus',items:['Vollkornbrot','Erdnussmus'],fit:'vegan',cold:false,prep:0},
+ {name:'Vollkornwrap mit Thunfisch und Mais',items:['Wraps','Thunfisch','Mais'],fit:'mixed',cold:false,prep:0},
+ {name:'Vollkornbrot mit Hüttenkäse und Tomaten',items:['Vollkornbrot','Hüttenkäse','Tomaten'],fit:'vegetarian',cold:true,prep:0},
+ {name:'Skyr oder Quark mit Haferflocken',items:['Skyr','Haferflocken'],fit:'vegetarian',cold:true,prep:0},
+ {name:'Rührei mit Vollkornbrot',items:['Eier','Vollkornbrot'],fit:'vegetarian',cold:true,prep:10},
+ {name:'Hähnchen mit Reis und Gemüse',items:['Hähnchen','Reis','Gemüse'],fit:'mixed',cold:true,prep:20}
+];
+function chooseMeals(p){
+ const words=p.foodAvailable.toLocaleLowerCase('de');
+ const avoid=p.foodAvoid.toLocaleLowerCase('de');
+ const allow=(m)=> (p.diet==='mixed'||m.fit==='vegan'||(p.diet==='vegetarian'&&m.fit==='vegetarian')) && (p.fridge||!m.cold) && (p.prepMinutes>=m.prep) && (!avoid || !m.items.some(i=>avoid.includes(i.toLocaleLowerCase('de'))));
+ const pool=PANTRY_CATALOG.filter(allow);
+ const available=words?pool.filter(m=>m.items.every(i=>words.includes(i.toLocaleLowerCase('de')))):pool;
+ const meals=available.slice(0,4).map(m=>({name:m.name,ingredients:m.items.join(', '),preparation:m.prep===0?'Ohne Kochen kombinieren':`${m.prep} Min. zubereiten`}));
+ const shopping=words&&meals.length<2?pool.slice(0,3).map(m=>m.items.filter(i=>!words.includes(i.toLocaleLowerCase('de')))).flat().filter((x,i,a)=>a.indexOf(x)===i).slice(0,8):[];
+ return {meals,shopping:shopping.join(', '),limited:!!words&&meals.length<2};
+}
+function latestAdjust(feedback){const recent=Array.isArray(feedback)?feedback.filter(f=>f&&['easy','good','hard'].includes(f.rating)).slice(-3):[];if(!recent.length)return 0;const h=recent.filter(f=>f.rating==='hard').length;const e=recent.filter(f=>f.rating==='easy').length;return h>=2?-1:e>=2?1:0;}
+function generateLocalPlan(input,feedback=[],idFn){
+ const p=normalizeProfile(input),adjust=latestAdjust(feedback);const days=pickDays(p);
+ const sessions=days.map((day,i)=>({day,name:`Ganzkörper ${['A','B','C'][i%3]}`,minutes:p.minutes,
+  exercises:planExercises(p,i%3,adjust)}));
+ const pantry=chooseMeals(p);
+ const protein=p.weightKg?`${Math.round(p.weightKg*1.4)}–${Math.round(p.weightKg*2.0)} g/Tag als Orientierungsrahmen für gesunde, trainierende Erwachsene; nicht als medizinische Vorgabe.`:'Protein zu jeder Hauptmahlzeit vorsehen. Ein individuell berechneter Grammwert setzt weitere Angaben voraus.';
+ const nutrition={focus:p.goal==='fat'?'Sättigung, regelmäßige Mahlzeiten und langfristig umsetzbare Portionsgrößen.':p.goal==='muscle'?'Ausreichende Energie, abwechslungsreiche Mahlzeiten und verteilte Proteinzufuhr.':'Alltagstaugliche Mahlzeiten, genügend Energie und verteilte Proteinzufuhr.',
+  proteinNote:protein,meals:pantry.meals,shoppingNotes:pantry.limited?`Mit deinen angegebenen Vorräten ist die Auswahl klein. Für weitere Gerichte gegebenenfalls ergänzen: ${pantry.shopping||'weitere passende Zutaten'}.`:'Vorgeschlagene Mahlzeiten auf Allergene und deine Angaben prüfen.'};
+ const warnings=['Dieser Plan ist eine allgemeine Trainingshilfe und ersetzt keine medizinische oder persönliche Fachberatung.',
+  'Trainiere technisch kontrolliert, beginne moderat und höre bei ungewohnten Schmerzen auf.'];
+ if(p.restrictions)warnings.push('Du hast Einschränkungen genannt. Die Regel-Variante kann diese nicht zuverlässig medizinisch beurteilen: Übungen vorab individuell fachlich prüfen.');
+ if(p.foodAvoid)warnings.push('Unverträglichkeiten/Allergene wurden nicht medizinisch geprüft. Zutaten und Verpackungen selbst kontrollieren.');
+ if(p.days>=5&&p.level==='beginner')warnings.push('Für Einsteiger sind viele Trainingstage gewählt. Wenn die Regeneration nicht reicht, Einheiten reduzieren.');
+ const tips=['Je Einheit 5–8 Minuten locker aufwärmen.','Belastung wählen, sodass etwa 2–3 technisch saubere Wiederholungen möglich bleiben.',
+  'Bei stabil guter Ausführung Wiederholungen zuerst steigern, dann das Gewicht in kleinen Schritten.',
+  'Einmal pro Woche Trainingsbelastung, Schlaf und Umsetzbarkeit kontrollieren.'];
+ return {id:idFn?idFn():`coach_${Date.now()}_${Math.random().toString(36).slice(2)}`,version:1,source:'regelbasiert',createdAt:new Date().toISOString(),title:'Dein persönlicher 4-Wochen-Startplan',
+  intro:`${GOALS[p.goal]} · ${p.days} Einheiten/Woche · je ${p.minutes} Minuten · ${LEVELS[p.level]}.`,sessions,nutrition,
+  progression:tips.join(' '),habits:['Wochencheck durchführen','Trainingsergebnisse kurz notieren'],
+  safetyNotes:warnings.join(' '),profileSnapshot:p};
+}
+function validatePlan(raw,profile){
+ const p=normalizeProfile(profile);if(!raw||typeof raw!=='object')err('Trainerplan fehlt.');
+ if(!Array.isArray(raw.sessions)||raw.sessions.length!==p.days)err('Anzahl Trainingseinheiten passt nicht zum Profil.');
+ const days=new Set(),sessions=raw.sessions.map(s=>{
+  const day=Number(s.day),minutes=Number(s.minutes);
+  if(!Number.isInteger(day)||day<1||day>7||days.has(day))err('Ungültige Trainingstage.');days.add(day);
+  if(!Number.isInteger(minutes)||minutes<20||minutes>p.minutes)err('Trainingsdauer außerhalb des Zeitbudgets.');
+  if(!Array.isArray(s.exercises)||!s.exercises.length||s.exercises.length>12)err('Übungsplan unvollständig.');
+  const exercises=s.exercises.map(x=>{const sets=Number(x.sets),rest=Number(x.restSeconds);if(!text(x.name,120)||!Number.isInteger(sets)||sets<1||sets>8||!text(x.reps,50)||!Number.isFinite(rest)||rest<0||rest>600)err('Übungsdaten ungültig.');return {name:text(x.name,120),sets,reps:text(x.reps,50),tip:text(x.tip,220),restSeconds:rest};});
+  return {day,name:text(s.name,100)||'Training',minutes,exercises};
+ }).sort((a,b)=>a.day-b.day);
+ const n=raw.nutrition;if(!n||!Array.isArray(n.meals)||n.meals.length>20)err('Ernährungsteil fehlt.');
+ return {id:text(raw.id,100)||`coach_${Date.now()}`,version:1,source:raw.source==='KI'?'KI':'regelbasiert',createdAt:new Date().toISOString(),
+  title:text(raw.title,150)||'Trainings- und Ernährungsplan',intro:text(raw.intro,600),sessions,
+  nutrition:{focus:text(n.focus,700),proteinNote:text(n.proteinNote,450),shoppingNotes:text(n.shoppingNotes,600),meals:n.meals.map(m=>({name:text(m.name,150),ingredients:text(m.ingredients,500),preparation:text(m.preparation,500)})).filter(m=>m.name)},
+  progression:text(raw.progression,1500),habits:Array.isArray(raw.habits)?raw.habits.slice(0,8).map(x=>text(x,140)):[],
+  safetyNotes:text(raw.safetyNotes,1600),profileSnapshot:p};
+}
+function normalizeCoach(raw){const o=raw&&typeof raw==='object'?raw:{};return {profile:o.profile||null,plan:o.plan||null,feedback:Array.isArray(o.feedback)?o.feedback:[],apiUrl:typeof o.apiUrl==='string'?o.apiUrl:'',installedPlanId:typeof o.installedPlanId==='string'?o.installedPlanId:null};}
+return {GOALS,LEVELS,DIETS,EQUIPMENT,DAY_NAMES,normalizeProfile,generateLocalPlan,validatePlan,normalizeCoach};
+});
+
+</script>
+<script>
 /* Life RPG UI - one event delegation layer, no monkey-patching/duplicate handlers. */
 (function () {
   'use strict';
@@ -724,10 +898,12 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
   const el = $('#screen');
   let state = null, snapshot = null, derivedDate = null, route = { name: 'menu', params: {} }, stack = [];
   let importPending = null;
-  const ui = { logFilter: '', showVoided: false, showArchived: false, logDate: today(), undoIds: [], chat: [{ me: false, text: 'Hallo! Ich kann Quests eintragen, den Punktestand anzeigen und fällige Aufgaben finden. Schreibe „Hilfe“ für Befehle.' }] };
+  const coachUI = { step: -1 }; // actual interview draft lives on ui
+  const ui = { coachStep:-1, coachDraft:null, logFilter: '', showVoided: false, showArchived: false, logDate: today(), undoIds: [], chat: [{ me: false, text: 'Hallo! Ich kann Quests eintragen, den Punktestand anzeigen und fällige Aufgaben finden. Schreibe „Hilfe“ für Befehle.' }] };
 
   const MENU = [
     ['dashboard','◫','Dashboard','Statistiken, Level & heute'],
+    ['coach','◉','Sport-Coach','Individuell trainieren & essen'],
     ['log','▤','Log','Eintragen, Verlauf & Rückgängig'],
     ['catalog','✦','Katalog','Quests & Bossquests verwalten'],
     ['categories','◈','Kategorien','Punkte, Multiplikatoren & Zuordnung'],
@@ -829,7 +1005,7 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
     $('#backBtn').classList.toggle('is-hidden', route.name === 'menu');
     $('#brandMark').classList.toggle('is-hidden', route.name !== 'menu');
     const renderers = {
-      menu: renderMenu, dashboard:renderDashboard,log:renderLog,catalog:renderCatalog,
+      menu: renderMenu, dashboard:renderDashboard,coach:renderCoach,log:renderLog,catalog:renderCatalog,
       categories:renderCategories,specials:renderSpecials,missions:renderMissions,
       milestones:renderMilestones,continuity:renderContinuity,rewards:renderRewards,
       chat:renderChat,settings:renderSettings,'category-detail':renderCategoryDetail,
@@ -857,7 +1033,7 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
         <div class="hero-kicker">YOUR LIFE. YOUR LEVEL.</div>
         <h1>Fortschritt statt<br>Autopilot.</h1>
         <p>Halte deine Gewohnheiten, Ziele und Erfolge fest – und mach jeden Fortschritt sichtbar.</p>
-        <div class="inline-actions"><button class="btn primary" data-nav="dashboard">Dashboard öffnen →</button><button class="btn" data-act="new-quest">+ Erste Quest</button></div>
+        <div class="inline-actions"><button class="btn primary" data-nav="dashboard">Dashboard öffnen →</button><button class="btn" data-nav="coach">◉ Sport-Coach starten</button></div>
         <div class="hero-stats"><div><div class="hero-stat-value mono">${number(view.points)} XP</div><div class="hero-stat-label">Punktestand</div></div>
           <div><div class="hero-stat-value mono">LVL ${view.level.level}</div><div class="hero-stat-label">Aktuelles Level</div></div>
           <div><div class="hero-stat-value mono">${d}</div><div class="hero-stat-label">Zeitnahe Aufgaben</div></div></div>
@@ -1109,6 +1285,140 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
   }
   function fieldNumber(label,name,value,step,min,max) { return `<div class="field"><label for="set_${name}">${h(label)}</label><input class="input" id="set_${name}" name="${name}" type="number" required step="${step}" min="${min}" max="${max}" value="${h(value)}"></div>`; }
 
+  // ---------- Sport & Ernährung: ein eigenständiges Trainer-Modul ----------
+  const Coach = window.LifeRPGCoach;
+  const coachData = () => Coach.normalizeCoach(state.coaches?.sport);
+  const coachDefaultProfile = () => ({goal:'recomp',level:'beginner',days:3,minutes:60,schedule:[1,3,5],
+    equipment:['bodyweight'],restrictions:'',diet:'mixed',meals:3,prepMinutes:20,fridge:true,
+    budget:'medium',foodAvailable:'',foodAvoid:'',weightKg:null,weekNotes:''});
+  function coachSelect(name,options,value) {
+    return `<select class="select" name="${h(name)}">${options.map(([id,label])=>`<option value="${h(id)}" ${String(value)===String(id)?'selected':''}>${h(label)}</option>`).join('')}</select>`;
+  }
+  const coachField = (name,label,content) => `<div class="field"><label for="coach_${h(name)}">${h(label)}</label>${content}</div>`;
+  const coachTextarea = (name,value,placeholder,max=700) => `<textarea class="textarea" id="coach_${h(name)}" name="${h(name)}" maxlength="${max}" placeholder="${h(placeholder)}">${h(value||'')}</textarea>`;
+  function coachWizard() {
+    const step=ui.coachStep,d=ui.coachDraft||coachDefaultProfile();
+    const headings=['Ziel & Zeitbudget','Geräte & Einschränkungen','Ernährung & Alltag','Vorräte & Feinschliff'];
+    let inner='';
+    if(step===0)inner=`<div class="form-grid">
+      ${coachField('goal','Was ist dein Hauptziel?',coachSelect('goal',Object.entries(Coach.GOALS),d.goal))}
+      ${coachField('level','Dein Trainingsstand',coachSelect('level',Object.entries(Coach.LEVELS),d.level))}
+      ${coachField('days','Wie oft pro Woche?',coachSelect('days',[1,2,3,4,5,6].map(n=>[n,n+'× pro Woche']),d.days))}
+      ${coachField('minutes','Wie viel Zeit pro Training?',coachSelect('minutes',[20,30,40,45,60,75,90,120,150].map(n=>[n,n+' Minuten']),d.minutes))}</div>`;
+    if(step===1)inner=`<div class="stack-sm"><div class="field-label">Welche Geräte sind wirklich verfügbar?</div><div class="coach-check-grid">
+      ${Object.entries(Coach.EQUIPMENT).map(([k,label])=>`<label class="coach-check"><input type="checkbox" name="equipment" value="${h(k)}" ${(d.equipment||[]).includes(k)?'checked':''}> ${h(label)}</label>`).join('')}</div>
+      <div class="field-label">An welchen Tagen kannst du trainieren? (optional)</div><div class="coach-days">
+      ${Object.entries(Coach.DAY_NAMES).map(([k,label])=>`<label class="coach-check"><input type="checkbox" name="schedule" value="${k}" ${(d.schedule||[]).map(Number).includes(Number(k))?'checked':''}> ${h(label.slice(0,2))}</label>`).join('')}</div>
+      ${coachField('restrictions','Beschwerden, Einschränkungen oder Übungen, die nicht gehen (optional)',coachTextarea('restrictions',d.restrictions,'Bitte nur Angaben machen, die du speichern möchtest.'))}
+      ${tip('Eine automatische Planung kann gesundheitliche Einschränkungen nicht medizinisch beurteilen. Bei Schmerzen oder relevanten Vorerkrankungen Fachperson einbeziehen.')}</div>`;
+    if(step===2)inner=`<div class="form-grid">
+      ${coachField('diet','Ernährungsweise',coachSelect('diet',Object.entries(Coach.DIETS),d.diet))}
+      ${coachField('meals','Mahlzeiten pro Tag',coachSelect('meals',[2,3,4,5,6].map(n=>[n,n+' Mahlzeiten']),d.meals))}
+      ${coachField('prepMinutes','Zeit zum Kochen',coachSelect('prepMinutes',[[0,'Ohne Kochen'],[10,'Max. 10 Minuten'],[20,'Max. 20 Minuten'],[40,'Max. 40 Minuten']],d.prepMinutes))}
+      ${coachField('fridge','Kühlmöglichkeit',coachSelect('fridge',[['yes','Kühlschrank vorhanden'],['no','Nur ungekühlte Vorräte']],d.fridge?'yes':'no'))}
+      ${coachField('budget','Budget für Lebensmittel',coachSelect('budget',[['low','Sparsam'],['medium','Mittel'],['flexible','Flexibel']],d.budget))}</div>`;
+    if(step===3)inner=`<div class="stack-sm">
+      ${coachField('foodAvailable','Welche Lebensmittel hast du aktuell zur Verfügung?',coachTextarea('foodAvailable',d.foodAvailable,'z. B. Vollkornwraps, Thunfisch, Mais, Reis, Linsen, Eier, Skyr ...'))}
+      ${coachField('foodAvoid','Was darfst/möchtest du nicht essen?',coachTextarea('foodAvoid',d.foodAvoid,'Unverträglichkeiten, Allergien, Lebensmittel, die du nicht magst ...',400))}
+      <div class="form-grid">${coachField('weightKg','Körpergewicht in kg (optional)',`<input class="input" id="coach_weightKg" name="weightKg" type="number" min="35" max="300" step="0.1" value="${h(d.weightKg??'')}" placeholder="Nicht erforderlich">`)}
+      ${coachField('weekNotes','Was ist sonst noch wichtig?',coachTextarea('weekNotes',d.weekNotes,'Schichtarbeit, Reise, Motivation ...',500))}</div>
+      ${tip('Dein Profil wird lokal im Browser gespeichert. Eine KI erhält es nur dann, wenn du ausdrücklich „KI-Plan erstellen“ auswählst.')}</div>`;
+    return `<div class="stack-lg">${page('Sport-Coach','Der Plan entsteht aus deinen tatsächlichen Möglichkeiten – nicht aus Standardvorgaben.', '', 'TRAINER-AKADEMIE')}
+      <div class="card stack"><div class="section-head"><h2 class="section-title" style="margin:0">${step+1}/4 · ${h(headings[step])}</h2><span class="pill">Erstgespräch</span></div>
+      ${progress(step+1,4)}<form data-form="coach-step" class="stack" id="coachInterview">${inner}<div class="inline-actions">
+      ${step>0?'<button type="button" class="btn" data-act="coach-previous">← Zurück</button>':''}
+      <button type="button" class="btn ghost" data-act="coach-cancel">Abbrechen</button><button type="submit" class="btn primary">${step===3?'Plan erstellen':'Weiter →'}</button></div></form></div></div>`;
+  }
+  function renderCoach(){
+    if(ui.coachStep>=0)return coachWizard();
+    const c=coachData(),p=c.profile,plan=c.plan;
+    if(!p)return `<div class="stack-lg">${page('Dein Sport-Coach','Training und Ernährung, zugeschnitten auf Geräte, Vorräte, Zeit und Ziel.','','TRAINER-AKADEMIE')}
+      <div class="coach-hero card"><span class="pill accent">NEU · ERSTGESPRÄCH</span><h2>Ein Plan, der zu deinem echten Alltag passt.</h2>
+      <p class="muted">Vier kurze Fragerunden zu Ziel, Trainingsstand, Geräten, Zeit, Essen und Einschränkungen. Danach erhältst du einen Wochenplan und kannst ihn mit einem Klick in Quests übernehmen.</p>
+      <button class="btn primary" data-act="coach-start">Persönlichen Plan erstellen →</button></div>
+      ${tip('Zunächst funktioniert der Coach vollständig offline mit nachvollziehbaren Trainingsregeln. Für frei formulierte KI-Pläne kann später ein geschützter KI-Server verbunden werden.')}
+      <div class="grid-3"><div class="card"><div class="list-title">Gesang</div><div class="list-sub">Später als Fachtrainer</div></div><div class="card"><div class="list-title">Finanzen</div><div class="list-sub">Später als Fachtrainer</div></div><div class="card"><div class="list-title">Disziplin</div><div class="list-sub">Später als Fachtrainer</div></div></div></div>`;
+    const kpis=`<div class="kpi-grid">${stat('Trainingstage',p.days,'pro Woche')}${stat('Zeit',p.minutes+' Min.','pro Einheit')}${stat('Geräte',p.equipment.length,'hinterlegt')}</div>`;
+    const sessions=plan?.sessions.map((session,i)=>`<details class="coach-session" ${i===0?'open':''}><summary><span class="coach-day">${h(Coach.DAY_NAMES[session.day])}</span><strong>${h(session.name)}</strong><span class="muted small">${session.minutes} Min.</span></summary>
+      <div class="coach-exercises">${session.exercises.map(ex=>`<div class="coach-exercise"><div><strong>${h(ex.name)}</strong><div class="list-sub">${h(ex.tip)}</div></div><div class="coach-dose">${ex.sets} × ${h(ex.reps)}<small>${ex.restSeconds?ex.restSeconds+' s Pause':''}</small></div></div>`).join('')}</div></details>`).join('')||'';
+    const meals=plan?.nutrition.meals.map(m=>`<div class="list-card"><div class="list-main"><div class="list-title">${h(m.name)}</div><div class="list-sub">${h(m.ingredients)} · ${h(m.preparation)}</div></div></div>`).join('')||'';
+    const installed=plan&&c.installedPlanId===plan.id;
+    return `<div class="stack-lg">${page('Sport & Ernährung','Dein persönlicher Trainer – Profil, Wochenplan, Ernährung und Fortschrittsanpassung.',`<button class="btn" data-act="coach-edit">Profil bearbeiten</button>`,'TRAINER-AKADEMIE')}
+      ${kpis}
+      <div class="card stack-sm"><div class="section-head"><h2 class="section-title" style="margin:0">${h(plan?.title||'Dein Plan')}</h2><span class="pill ${plan?.source==='KI'?'accent':''}">${h(plan?.source==='KI'?'KI-Vorschlag':'Regelbasiert · offline')}</span></div>
+      <p class="muted">${h(plan?.intro||'')}</p><div class="inline-actions"><button class="btn primary" data-act="coach-apply" ${installed?'disabled':''}>${installed?'✓ Quests bereits übernommen':'→ Als Quests & Mission übernehmen'}</button>
+      <button class="btn" data-act="coach-replan">Plan lokal neu berechnen</button></div>
+      ${installed?'<p class="input-hint">Trainingseinheiten stehen jetzt im Quest-Katalog und im Log. Die vierwöchige Check-in-Mission findest du unter Missionen.</p>':''}
+      <p class="input-hint">Die Erstellung verändert bestehende Quests zunächst nicht. Erst „Übernehmen“ aktualisiert die dafür vorgesehenen Trainer-Quests und archiviert überholte Trainer-Quests.</p></div>
+      <section class="stack-sm"><div class="section-head"><h2 class="section-title">Training · Wochenübersicht</h2><span class="pill">${plan?.sessions.length||0} Einheiten</span></div>${sessions}</section>
+      <div class="card stack-sm"><h2 class="section-title">Ernährungsplan</h2><p class="muted">${h(plan?.nutrition.focus||'')}</p><div class="tip">${h(plan?.nutrition.proteinNote||'')}</div>
+      ${meals||empty('Noch keine passende Mahlzeit','Die angegebenen Vorräte und Einschränkungen lassen keine zuverlässig passende Standardkombination zu. Nutze den KI-Modus oder passe deine Vorräte an.')}
+      ${plan?.nutrition.shoppingNotes?`<p class="input-hint">${h(plan.nutrition.shoppingNotes)}</p>`:''}</div>
+      <div class="card stack-sm"><h2 class="section-title">Steigerung & Regeneration</h2><p>${h(plan?.progression)}</p><h3 class="section-title">Sicherheits- und Einschränkungshinweise</h3><p class="muted small">${h(plan?.safetyNotes)}</p></div>
+      <div class="card stack-sm"><h2 class="section-title">Wochenfeedback → Plananpassung</h2><p class="muted">Wie fühlte sich die letzte Trainingswoche an? Dein nächster lokaler Plan berücksichtigt das Feedback.</p>
+      <div class="inline-actions"><button class="btn" data-act="coach-feedback" data-rating="hard">Zu schwer</button><button class="btn" data-act="coach-feedback" data-rating="good">Passend</button><button class="btn" data-act="coach-feedback" data-rating="easy">Zu leicht</button></div>
+      ${c.feedback.length?`<p class="input-hint">${c.feedback.length} Rückmeldungen gespeichert. Letzte: ${h(c.feedback.at(-1).rating==='hard'?'Zu schwer':c.feedback.at(-1).rating==='easy'?'Zu leicht':'Passend')}</p>`:''}</div>
+      <div class="card stack-sm"><h2 class="section-title">KI-Plan erstellen · optional</h2>
+      <p class="muted">Erfordert deinen eigenen geschützten Server und separat abgerechnete OpenAI-API-Nutzung. Dein KI-Zugang wird nicht im GitHub-Code gespeichert.</p>
+      <form data-form="coach-api" class="stack-sm"><div class="field"><label for="coach_api_url">HTTPS-Adresse deines eigenen KI-Servers</label>
+      <input id="coach_api_url" class="input" name="apiUrl" type="url" inputmode="url" placeholder="https://dein-coach.example.workers.dev" value="${h(c.apiUrl)}"></div>
+      <div class="inline-actions"><button class="btn" type="submit">Server-Adresse speichern</button><button class="btn primary" type="button" data-act="coach-ai" ${c.apiUrl?'':'disabled'}>✧ KI-Plan erstellen</button></div></form>
+      <p class="input-hint">Beim Klick auf „KI-Plan erstellen“ werden die Angaben aus deinem Trainerprofil an deinen Server gesendet. Zugangscode wird nur für diese Sitzung angefordert.</p></div>
+      <div class="card stack-sm"><h2 class="section-title">Weitere Fachtrainer</h2><div class="grid-3"><div>Gesang <span class="pill">in Planung</span></div><div>Finanzen <span class="pill">in Planung</span></div><div>Disziplin <span class="pill">in Planung</span></div></div></div>
+    </div>`;
+  }
+  function startCoach(){ui.coachDraft=C.clone(coachData().profile||coachDefaultProfile());ui.coachStep=0;render();}
+  function coachFeedback(rating){
+    if(!['hard','good','easy'].includes(rating))return;
+    const note=prompt('Zusätzliche Rückmeldung (optional):','');if(note===null)return;
+    commit(s=>{s.coaches.sport.feedback.push({at:new Date().toISOString(),rating,note:String(note).trim().slice(0,350)});},'Feedback gespeichert.');
+  }
+  function replanOffline(){
+    if(!coachData().profile)return toast('Zuerst Trainerprofil ausfüllen.',true);
+    commit(s=>{const c=s.coaches.sport;c.plan=Coach.generateLocalPlan(c.profile,c.feedback,()=>C.uid('coach'));},'Neuer Plan erstellt. Bitte prüfen und dann übernehmen.');
+  }
+  function coachApply(){
+    const c=coachData(),plan=c.plan;if(!plan)return toast('Noch kein Plan vorhanden.',true);
+    if(c.installedPlanId===plan.id)return toast('Dieser Plan wurde bereits übernommen.',true);
+    if(!confirm('Trainingsquests aus diesem Plan im Katalog anlegen oder aktualisieren? Überholte Trainer-Quests werden archiviert. Ein vorhandener 4-Wochen-Check-in bleibt mit seinem bisherigen Fortschritt bestehen.'))return;
+    commit(s=>{
+      const cs=s.coaches.sport;const dayKeys=new Set(plan.sessions.map(session=>'sport:workout:'+session.day));
+      for(const q of s.quests){if(q.coachKey?.startsWith('sport:workout:')&&!dayKeys.has(q.coachKey))q.archivedAt=new Date().toISOString();}
+      const sport=s.categories.find(c=>c.id==='cat_sport'&&!c.archivedAt) || s.categories.find(c=>c.id==='cat_gesundheit'&&!c.archivedAt);
+      for(const session of plan.sessions){
+        const key='sport:workout:'+session.day, name=`Training · ${Coach.DAY_NAMES[session.day]} · ${session.name}`;
+        let q=s.quests.find(q=>q.coachKey===key);if(!q){q={id:C.uid('quest'),createdOn:today(),archivedAt:null,penaltySince:today(),xpDecaySince:today()};s.quests.push(q);}
+        Object.assign(q,{name,points:Math.min(90,Math.max(25,Math.round(session.minutes*0.9))),isBoss:false,
+          allocations:sport?[{categoryId:sport.id,multiplier:1}]:[],links:[],
+          penaltyEnabled:false,penaltyDays:0,penaltyPoints:0,penaltyRepeatDays:0,streakEnabled:false,xpDecayEnabled:false,
+          description:`${session.exercises.map(ex=>ex.name+' '+ex.sets+'×'+ex.reps).join(' · ')}`,
+          coachKey:key,coachPlanId:plan.id,coachScheduleDay:session.day,archivedAt:null});
+      }
+      let m=s.missions.find(x=>x.coachKey==='sport:4week-checkin'&&!x.archivedAt);
+      if(!m){m={id:C.uid('mission'),createdOn:today(),archivedAt:null,coachKey:'sport:4week-checkin',
+        name:'Sport-Coach · 4-Wochen-Check-in',description:'Wöchentliche Trainingswoche reflektieren und Anpassungen notieren.',
+        stages:[1,2,3,4].map(n=>({id:C.uid('stage'),options:[{id:C.uid('option'),name:`Woche ${n}: Training und Ernährung reflektieren`,points:10}]}))};s.missions.push(m);}
+      cs.installedPlanId=plan.id;
+    },'Trainingsquests & Mission übernommen.');
+  }
+  async function coachAI(){
+    const c=coachData();if(!c.profile||!c.apiUrl)return;
+    if(!confirm('Dein vollständiges Sport- und Ernährungsprofil (einschließlich eventuell sensibler Freitexte) wird an deinen eigenen KI-Server und von dort an OpenAI übertragen. Fortfahren?'))return;
+    const token=prompt('Zugangscode deines KI-Servers (wird nicht gespeichert):','');if(!token)return;
+    try{
+      const url=new URL(c.apiUrl);if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('Nur gültige HTTPS-Serveradressen ohne Zugangsdaten verwenden.');
+      const ctrl=new AbortController();const timeout=setTimeout(()=>ctrl.abort(),60000);
+      toast('KI erstellt deinen Plan ...');
+      let response;
+      try {response=await fetch(url.origin+url.pathname.replace(/\/$/,'')+'/coach/plan',{method:'POST',signal:ctrl.signal,
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body:JSON.stringify({profile:c.profile,feedback:c.feedback.slice(-5)})});}finally{clearTimeout(timeout);}
+      const body=await response.json().catch(()=>({}));if(!response.ok)throw Error(body.error||`Server antwortete mit ${response.status}`);
+      const plan=Coach.validatePlan({...body.plan,source:'KI',id:C.uid('coach')},c.profile);
+      commit(s=>{s.coaches.sport.plan=plan;},'KI-Plan gespeichert. Bitte prüfen und bewusst übernehmen.');
+    }catch(error){toast('KI-Plan nicht erstellt: '+(error.name==='AbortError'?'Zeitüberschreitung':error.message),true);}
+  }
+
   // ---------- Modal forms ----------
   function modal(title, body, kind = '') {
     modalMount.innerHTML = `<div class="modal-root"><div class="modal-overlay" data-act="close-modal"></div><div class="modal-panel ${kind}" role="dialog" aria-modal="true" aria-label="${h(title)}">
@@ -1229,6 +1539,13 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
       if(type==='quests') { item.penaltySince=today(); item.xpDecaySince=today(); }
     },'Wiederhergestellt.');
     switch (act) {
+      case 'coach-start': case 'coach-edit': startCoach(); break;
+      case 'coach-previous': ui.coachStep=Math.max(0,ui.coachStep-1);render(); break;
+      case 'coach-cancel': ui.coachStep=-1;ui.coachDraft=null;render(); break;
+      case 'coach-replan': replanOffline(); break;
+      case 'coach-feedback': coachFeedback(b.dataset.rating); break;
+      case 'coach-apply': coachApply(); break;
+      case 'coach-ai': coachAI(); break;
       case 'close-modal': closeModal(); break;
       case 'new-category': modalCategory(); break;
       case 'edit-category': modalCategory(id); break;
@@ -1283,6 +1600,27 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
     const str=(name)=>C.normalizeName(data.get(name));
     const asNum=(name)=>Number(data.get(name));
     const checked=(name)=>data.get(name)==='on';
+    if(type==='coach-step'){
+      const draft=ui.coachDraft||coachDefaultProfile();
+      const pick=(key)=>data.get(key);
+      if(ui.coachStep===0){Object.assign(draft,{goal:pick('goal'),level:pick('level'),days:Number(pick('days')),minutes:Number(pick('minutes'))});}
+      if(ui.coachStep===1){draft.equipment=data.getAll('equipment');draft.schedule=data.getAll('schedule').map(Number);draft.restrictions=String(pick('restrictions')||'');}
+      if(ui.coachStep===2){Object.assign(draft,{diet:pick('diet'),meals:Number(pick('meals')),prepMinutes:Number(pick('prepMinutes')),fridge:pick('fridge')==='yes',budget:pick('budget')});}
+      if(ui.coachStep===3){Object.assign(draft,{foodAvailable:String(pick('foodAvailable')||''),foodAvoid:String(pick('foodAvoid')||''),weightKg:pick('weightKg')||null,weekNotes:String(pick('weekNotes')||'')});}
+      ui.coachDraft=draft;
+      if(ui.coachStep<3){ui.coachStep++;render();window.scrollTo(0,0);return;}
+      try{const profile=Coach.normalizeProfile(draft);
+        if(commit(s=>{const c=s.coaches.sport;c.profile=profile;c.plan=Coach.generateLocalPlan(profile,c.feedback,()=>C.uid('coach'));},'Dein Trainings- und Ernährungsplan ist erstellt.')){
+          ui.coachStep=-1;ui.coachDraft=null;render();window.scrollTo(0,0);
+        }
+      }catch(e){toast(e.message,true);}
+      return;
+    }
+    if(type==='coach-api'){
+      const apiUrl=String(data.get('apiUrl')||'').trim().replace(/\/$/,'');
+      if(apiUrl){try{const u=new URL(apiUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash)throw Error('HTTPS erforderlich.');}catch(e){return toast('Bitte eine gültige HTTPS-Adresse angeben.',true);}}
+      commit(s=>{s.coaches.sport.apiUrl=apiUrl;},'Server-Adresse gespeichert.');return;
+    }
     if (type==='log-quest') {
       const qid=str('questId');
       const override=str('pointsOverride');
